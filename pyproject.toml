@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rosemary"
+version = "2.0.0"
+description = "Rosemary is a CLI to be able to work on your development more easily."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "David Romero", email = "drorganvidez@us.es" }]
+license = { file = "LICENSE" }
+dependencies = [
+    "click",
+    "python-dotenv",
+]
+
+[project.scripts]
+rosemary = "rosemary.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rosemary*"] 
+
+[project.urls]
+Homepage = "https://github.com/diverso-lab/rosemary"
+Issues = "https://github.com/diverso-lab/rosemary/issues"
