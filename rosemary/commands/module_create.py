@@ -3,6 +3,8 @@ import click
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import os
 
+from rosemary.utils.path_utils import PathUtils
+
 
 def pascalcase(s):
     """Converts string to PascalCase."""
@@ -12,7 +14,9 @@ def pascalcase(s):
 def setup_jinja_env():
     """Configures and returns a Jinja environment."""
     env = Environment(
-        loader=FileSystemLoader(searchpath="./rosemary/templates"),
+        loader=FileSystemLoader(
+            searchpath=PathUtils.get_rosemary_templates_dir()
+        ),
         autoescape=select_autoescape(["html", "xml", "j2"]),
     )
     env.filters["pascalcase"] = pascalcase
@@ -27,14 +31,16 @@ def render_and_write_file(env, template_name, filename, context):
         f.write(content)
 
 
-@click.command("make:module", help="Creates a new module with a given name.")
+@click.command("module:create", help="Creates a new module with a given name.")
 @click.argument("name")
 def make_module(name):
-    modules_root_path = os.path.join(os.getenv("WORKING_DIR", ""), "app/modules")
-    module_path = f"{modules_root_path}/{name}"
+    modules_dir = PathUtils.get_modules_dir()
+    module_path = f"{modules_dir}/{name}"
 
     if os.path.exists(module_path):
-        click.echo(click.style(f"The module '{name}' already exists.", fg="red"))
+        click.echo(
+            click.style(f"The module '{name}' already exists.", fg="red")
+        )
         return
 
     env = setup_jinja_env()
@@ -50,7 +56,9 @@ def make_module(name):
         "services.py": "module_services.py.j2",
         "forms.py": "module_forms.py.j2",
         "seeders.py": "module_seeders.py.j2",
-        os.path.join("templates", name, "index.html"): "module_templates_index.html.j2",
+        os.path.join(
+            "templates", name, "index.html"
+        ): "module_templates_index.html.j2",
         "assets/js/scripts.js": "module_scripts.js.j2",
         "assets/js/webpack.config.js": "module_webpack.config.js.j2",
         "tests/test_unit.py": "module_tests_test_unit.py.j2",
@@ -86,13 +94,17 @@ def make_module(name):
                 os.path.join(module_path, filename), "a"
             ).close()  # Create empty file if there is no template.
 
-    click.echo(click.style(f"Module '{name}' created successfully.", fg="green"))
+    click.echo(
+        click.style(f"Module '{name}' created successfully.", fg="green")
+    )
 
     # Change the owner of the main folder of the module
     os.chown(module_path, 1000, 1000)
 
     # Change permissions to drwxrwxr-x (chmod 775)
-    os.chmod(module_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+    os.chmod(
+        module_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
+    )
 
     # Change the owner of all created files and directories to UID 1000 and GID 1000
     uid = 1000
@@ -103,7 +115,8 @@ def make_module(name):
             dir_path = os.path.join(root, dir_)
             os.chown(dir_path, uid, gid)
             os.chmod(
-                dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
+                dir_path,
+                stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH,
             )
 
         for file_ in files:
@@ -119,5 +132,7 @@ def make_module(name):
             )
 
     click.echo(
-        click.style(f"Module '{name}' permissions changed successfully.", fg="green")
+        click.style(
+            f"Module '{name}' permissions changed successfully.", fg="green"
+        )
     )

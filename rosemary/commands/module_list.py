@@ -1,7 +1,7 @@
 import click
 from flask.cli import with_appcontext
 
-from core.managers.module_manager import ModuleManager
+from flasky.core.managers.module_manager import ModuleManager
 
 
 @click.command(
@@ -14,12 +14,16 @@ def module_list():
 
     loaded_modules, ignored_modules = manager.get_modules()
 
-    click.echo(click.style(f"Loaded Modules ({len(loaded_modules)}):", fg="green"))
+    click.echo(
+        click.style(f"Loaded Modules ({len(loaded_modules)}):", fg="green")
+    )
     for module in loaded_modules:
         click.echo(f"- {module}")
 
     click.echo(
-        click.style(f"\nIgnored Modules ({len(ignored_modules)}):", fg="bright_yellow")
+        click.style(
+            f"\nIgnored Modules ({len(ignored_modules)}):", fg="bright_yellow"
+        )
     )
     for module in ignored_modules:
         click.echo(click.style(f"- {module}", fg="bright_yellow"))

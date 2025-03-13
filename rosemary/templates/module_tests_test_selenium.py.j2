@@ -1,8 +1,8 @@
 from selenium.common.exceptions import NoSuchElementException
 import time
 
-from core.environment.host import get_host_for_selenium_testing
-from core.selenium.common import initialize_driver, close_driver
+from flasky.core.environment.host import get_host_for_selenium_testing
+from flasky.core.selenium.common import initialize_driver, close_driver
 
 
 def test_{{ module_name }}_index():

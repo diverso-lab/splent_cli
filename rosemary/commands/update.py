@@ -6,12 +6,17 @@ import subprocess
 def create_temp_requirements(requirements_path, temp_requirements_path):
     """Create a temporary requirements file without versions and handle editable sources."""
     editable_package = None
-    with open(requirements_path, "r") as f, open(temp_requirements_path, "w") as temp_f:
+    with (
+        open(requirements_path) as f,
+        open(temp_requirements_path, "w") as temp_f,
+    ):
         for line in f:
             if line.startswith("-e"):
                 editable_package = line.strip()  # Store the editable package
             elif line.strip():
-                package = line.split("==")[0].strip()  # Remove version information
+                package = line.split("==")[
+                    0
+                ].strip()  # Remove version information
                 temp_f.write(package + "\n")
     return editable_package
 
@@ -46,7 +51,9 @@ def regenerate_requirements(requirements_path):
 def reinstall_editable_package(editable_package):
     """Reinstall the editable package."""
     if editable_package:
-        editable_path = editable_package.split()[1]  # Extract the path from '-e ./app'
+        editable_path = editable_package.split()[
+            1
+        ]  # Extract the path from '-e ./app'
         subprocess.run(
             ["pip", "install", "-e", editable_path],
             stdout=subprocess.DEVNULL,  # Suppress output
@@ -62,7 +69,9 @@ def clean_up(temp_requirements_path):
 
 def update_pip():
     """Update pip dependencies."""
-    requirements_path = os.path.join(os.getenv("WORKING_DIR", ""), "requirements.txt")
+    requirements_path = os.path.join(
+        os.getenv("WORKING_DIR", ""), "requirements.txt"
+    )
     temp_requirements_path = os.path.join(
         os.getenv("WORKING_DIR", ""), "temp_requirements.txt"
     )
@@ -84,7 +93,9 @@ def update_npm():
 
     if not os.path.exists(package_json_path):
         click.echo(
-            click.style("No package.json found. Skipping npm update.", fg="yellow")
+            click.style(
+                "No package.json found. Skipping npm update.", fg="yellow"
+            )
         )
         return
 
@@ -95,18 +106,15 @@ def update_npm():
         # Step 2: Install updated dependencies
         subprocess.run(["npm", "install"], cwd=working_dir)
 
-        click.echo(click.style("NPM dependencies updated successfully!", fg="green"))
+        click.echo(
+            click.style("NPM dependencies updated successfully!", fg="green")
+        )
     except subprocess.CalledProcessError as e:
         click.echo(click.style(f"Error during npm update: {e}", fg="red"))
 
 
-@click.group()
-def cli():
-    """Manage updates for pip and npm dependencies."""
-    pass
 
-
-@cli.command()
+@click.command("update", help="Upload all pip dependencies.")
 def update():
     """Update both pip and npm dependencies."""
     try:
@@ -114,7 +122,9 @@ def update():
         update_pip()
         click.echo("Updating npm dependencies...")
         update_npm()
-        click.echo(click.style("All dependencies updated successfully!", fg="green"))
+        click.echo(
+            click.style("All dependencies updated successfully!", fg="green")
+        )
     except Exception as e:
         click.echo(click.style(f"Error during update: {e}", fg="red"))
 
@@ -125,7 +135,9 @@ def update_pip_cmd():
     try:
         click.echo("Updating pip dependencies...")
         update_pip()
-        click.echo(click.style("Pip dependencies updated successfully!", fg="green"))
+        click.echo(
+            click.style("Pip dependencies updated successfully!", fg="green")
+        )
     except Exception as e:
         click.echo(click.style(f"Error during pip update: {e}", fg="red"))
 
@@ -136,7 +148,9 @@ def update_npm_cmd():
     try:
         click.echo("Updating npm dependencies...")
         update_npm()
-        click.echo(click.style("NPM dependencies updated successfully!", fg="green"))
+        click.echo(
+            click.style("NPM dependencies updated successfully!", fg="green")
+        )
     except Exception as e:
         click.echo(click.style(f"Error during npm update: {e}", fg="red"))
 

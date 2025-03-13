@@ -6,7 +6,8 @@ from datetime import datetime
 
 
 @click.command(
-    "db:dump", help="Creates a dump of the MariaDB database with credentials from .env."
+    "db:dump",
+    help="Creates a dump of the MariaDB database with credentials from .env.",
 )
 @click.argument("filename", required=False)
 def db_dump(filename):
@@ -32,9 +33,13 @@ def db_dump(filename):
 
     # Execute the command
     try:
-        subprocess.run(dump_cmd, shell=True, check=True, executable="/bin/bash")
+        subprocess.run(
+            dump_cmd, shell=True, check=True, executable="/bin/bash"
+        )
         click.echo(
-            click.style(f"Database dump created successfully: {filename}", fg="green")
+            click.style(
+                f"Database dump created successfully: {filename}", fg="green"
+            )
         )
     except subprocess.CalledProcessError as e:
         click.echo(click.style(f"Error creating database dump: {e}", fg="red"))

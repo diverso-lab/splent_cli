@@ -4,6 +4,8 @@ import importlib
 import click
 from dotenv import load_dotenv
 
+from rosemary.utils.path_utils import PathUtils
+
 load_dotenv()
 
 
@@ -13,9 +15,12 @@ def check_working_dir():
     if not working_dir:
         return
 
-    if working_dir in ["/app", "/vagrant", "/app/", "/vagrant/"] and not os.path.exists(
-        working_dir
-    ):
+    if working_dir in [
+        "/app",
+        "/vagrant",
+        "/app/",
+        "/vagrant/",
+    ] and not os.path.exists(working_dir):
 
         print(
             f"⚠️  WARNING: WORKING_DIR is set to '{working_dir}', but the directory does not exist."
@@ -34,7 +39,7 @@ def check_working_dir():
 
         print("\n💡 How to fix this issue:\n")
         print(
-            "  Option 1️⃣  Update your `.env` file and set WORKING_DIR=\"\" to run locally. "
+            '  Option 1️⃣  Update your `.env` file and set WORKING_DIR="" to run locally. '
             "Don't forget to type `source .env` to reload the environment variables."
         )
 
@@ -59,7 +64,9 @@ class RosemaryCLI(click.Group):
         rv = super().get_command(ctx, cmd_name)
         if rv is None:
             click.echo(f"No such command '{cmd_name}'.")
-            click.echo("Try 'rosemary --help' for a list of available commands.")
+            click.echo(
+                "Try 'rosemary --help' for a list of available commands."
+            )
         return rv
 
 
@@ -74,7 +81,7 @@ def load_commands(cli_group, commands_dir="rosemary/commands"):
         commands_dir = os.path.join("rosemary_cli", "rosemary", "commands")
 
     commands_path = os.path.abspath(commands_dir)
-    print(f"commands_path: {commands_path}")
+    commands_path = PathUtils.get_commands_path()
 
     for file in os.listdir(commands_path):
         if file.endswith(".py") and not file.startswith("__"):

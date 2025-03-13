@@ -2,13 +2,17 @@ import os
 import subprocess
 import click
 
+from rosemary.utils.path_utils import PathUtils
 
-@click.command("selenium", help="Executes Selenium tests based on the environment.")
+
+@click.command(
+    "selenium", help="Executes Selenium tests based on the environment."
+)
 @click.argument("module", required=False)
 def selenium(module):
     # Absolute paths
-    working_dir = os.getenv("WORKING_DIR", "")
-    modules_dir = os.path.join(working_dir, "app/modules")
+    working_dir = PathUtils.get_working_dir()
+    modules_dir = PathUtils.get_modules_dir()
 
     def validate_module(module):
         """Check if the module exists."""
@@ -16,7 +20,9 @@ def selenium(module):
             module_path = os.path.join(modules_dir, module)
             if not os.path.exists(module_path):
                 raise click.UsageError(f"Module '{module}' does not exist.")
-            selenium_test_path = os.path.join(module_path, "tests", "test_selenium.py")
+            selenium_test_path = os.path.join(
+                module_path, "tests", "test_selenium.py"
+            )
             if not os.path.exists(selenium_test_path):
                 raise click.UsageError(
                     f"Selenium test for module '{module}' does not exist at path "
@@ -34,12 +40,16 @@ def selenium(module):
             selenium_test_paths = []
             for module in os.listdir(modules_dir):
                 tests_dir = os.path.join(modules_dir, module, "tests")
-                selenium_test_path = os.path.join(tests_dir, "test_selenium.py")
+                selenium_test_path = os.path.join(
+                    tests_dir, "test_selenium.py"
+                )
                 if os.path.exists(selenium_test_path):
                     selenium_test_paths.append(selenium_test_path)
             test_command = ["python"] + selenium_test_paths
 
-        click.echo(f"Running Selenium tests with command: {' '.join(test_command)}")
+        click.echo(
+            f"Running Selenium tests with command: {' '.join(test_command)}"
+        )
         subprocess.run(test_command, check=True)
 
     # Validate module if provided
@@ -70,4 +80,6 @@ def selenium(module):
         )
 
     else:
-        click.echo(click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red"))
+        click.echo(
+            click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red")
+        )

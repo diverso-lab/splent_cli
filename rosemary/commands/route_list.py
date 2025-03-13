@@ -20,7 +20,11 @@ def route_list(module_name, group):
     if module_name:
         module_path = os.path.join(base_path, module_name)
         if not os.path.exists(module_path):
-            click.echo(click.style(f"Module '{module_name}' does not exist.", fg="red"))
+            click.echo(
+                click.style(
+                    f"Module '{module_name}' does not exist.", fg="red"
+                )
+            )
             return
         click.echo(f"Listing routes for the '{module_name}' module...")
         # Path filtering for a specific module
@@ -34,7 +38,8 @@ def route_list(module_name, group):
         if group:  # Group routes by module
             click.echo("Listing routes for all modules, grouped by module...")
             rules = sorted(
-                current_app.url_map.iter_rules(), key=lambda rule: rule.endpoint
+                current_app.url_map.iter_rules(),
+                key=lambda rule: rule.endpoint,
             )
             grouped_rules = defaultdict(list)
             for rule in rules:
@@ -47,7 +52,8 @@ def route_list(module_name, group):
         else:  # Lists all routes without grouping
             click.echo("Listing routes for all modules...")
             rules = sorted(
-                current_app.url_map.iter_rules(), key=lambda rule: rule.endpoint
+                current_app.url_map.iter_rules(),
+                key=lambda rule: rule.endpoint,
             )
             print_route_table(rules)
 
@@ -56,5 +62,7 @@ def print_route_table(rules):
     click.echo(f"{'Endpoint':<50} {'Methods':<30} {'Route':<100}")
     click.echo("-" * 180)
     for rule in rules:
-        methods = ", ".join(sorted(rule.methods.difference({"HEAD", "OPTIONS"})))
+        methods = ", ".join(
+            sorted(rule.methods.difference({"HEAD", "OPTIONS"}))
+        )
         click.echo(f"{rule.endpoint:<50} {methods:<30} {rule.rule:<100}")

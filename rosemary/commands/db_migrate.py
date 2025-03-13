@@ -10,7 +10,9 @@ def db_migrate():
     click.echo("Generating database migrations...")
     result_migrate = subprocess.run(["flask", "db", "migrate"])
     if result_migrate.returncode == 0:
-        click.echo(click.style("Migrations generated successfully.", fg="green"))
+        click.echo(
+            click.style("Migrations generated successfully.", fg="green")
+        )
     else:
         click.echo(
             click.style(

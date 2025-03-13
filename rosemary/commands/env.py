@@ -1,15 +1,17 @@
 # rosemary/commands/env.py
 
 import click
-import os
 from dotenv import dotenv_values
+
+from rosemary.utils.path_utils import PathUtils
 
 
 @click.command()
 def env():
     """Displays the current .env file values."""
     # Load the .env file
-    env_values = dotenv_values(os.path.join(os.getenv("WORKING_DIR", ""), ".env"))
+    env_dir = PathUtils.get_env_dir()
+    env_values = dotenv_values(env_dir)
 
     # Display keys and values
     for key, value in env_values.items():

@@ -3,6 +3,8 @@ import click
 from dotenv import dotenv_values
 from flask.cli import with_appcontext
 
+from rosemary.utils.path_utils import PathUtils
+
 
 @click.command(
     "compose:env",
@@ -11,8 +13,8 @@ from flask.cli import with_appcontext
 @with_appcontext
 def compose_env():
 
-    base_path = os.path.join(os.getenv("WORKING_DIR", ""), "app/modules")
-    root_env_path = os.path.join(os.getenv("WORKING_DIR", ""), ".env")
+    modules_dir = PathUtils.get_modules_dir()
+    root_env_path = PathUtils.get_env_dir()
 
     # Loads the current root .env variables into a dictionary
     root_env_vars = dotenv_values(root_env_path)
@@ -20,7 +22,7 @@ def compose_env():
     # Finds and processes all blueprints .env files
     module_env_paths = [
         os.path.join(root, ".env")
-        for root, dirs, files in os.walk(base_path)
+        for root, dirs, files in os.walk(modules_dir)
         if ".env" in files
     ]
     for env_path in module_env_paths:
@@ -42,5 +44,7 @@ def compose_env():
             root_env_file.write(f"{key}={value}\n")
 
     click.echo(
-        click.style("Successfully merged .env files without conflicts.", fg="green")
+        click.style(
+            "Successfully merged .env files without conflicts.", fg="green"
+        )
     )

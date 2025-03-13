@@ -6,7 +6,8 @@ import pkg_resources
 def get_metadata_value(metadata_lines, key):
     default_value = f"{key}: Unknown"
     line = next(
-        (line for line in metadata_lines if line.startswith(key)), default_value
+        (line for line in metadata_lines if line.startswith(key)),
+        default_value,
     )
     return (
         line.split(":", 1)[1].strip()
@@ -26,7 +27,11 @@ def info():
         author_email = get_metadata_value(metadata, "Author-email")
         description = get_metadata_value(metadata, "Summary")
     except FileNotFoundError:
-        author, author_email, description = "Unknown", "Unknown", "Not available"
+        author, author_email, description = (
+            "Unknown",
+            "Unknown",
+            "Not available",
+        )
 
     name = distribution.project_name
     version = distribution.version
@@ -63,5 +68,7 @@ def colorize_lyrics(lyrics):
 
 
 def decode_lyrics(encoded_lyrics):
-    decoded_lyrics = base64.b64decode(encoded_lyrics.encode("utf-8")).decode("utf-8")
+    decoded_lyrics = base64.b64decode(encoded_lyrics.encode("utf-8")).decode(
+        "utf-8"
+    )
     return decoded_lyrics

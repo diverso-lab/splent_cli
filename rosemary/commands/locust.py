@@ -24,7 +24,9 @@ def locust(module):
             module_path = os.path.join(modules_dir, module)
             if not os.path.exists(module_path):
                 raise click.UsageError(f"module '{module}' does not exist.")
-            locustfile_path = os.path.join(module_path, "tests", "locustfile.py")
+            locustfile_path = os.path.join(
+                module_path, "tests", "locustfile.py"
+            )
             if not os.path.exists(locustfile_path):
                 raise click.UsageError(
                     f"Locustfile for module '{module}' does not exist at path "
@@ -60,7 +62,9 @@ def locust(module):
         subprocess.run(build_command, check=True)
 
         # Define the locustfile path
-        locustfile_path = os.path.join(core_dir, "bootstraps/locustfile_bootstrap.py")
+        locustfile_path = os.path.join(
+            core_dir, "bootstraps/locustfile_bootstrap.py"
+        )
         if module:
             locustfile_path = f"{modules_dir}/{module}/tests/locustfile.py"
 
@@ -85,7 +89,9 @@ def locust(module):
         click.echo(f"Docker Run command: {' '.join(up_command)}")
         subprocess.run(up_command, check=True)
         click.echo(
-            click.style("Locust is running at http://localhost:8089", fg="green")
+            click.style(
+                "Locust is running at http://localhost:8089", fg="green"
+            )
         )
 
     def is_locust_running():
@@ -101,7 +107,9 @@ def locust(module):
             click.echo("Locust is already running.")
             return
 
-        locustfile_path = os.path.join(core_dir, "bootstraps/locustfile_bootstrap.py")
+        locustfile_path = os.path.join(
+            core_dir, "bootstraps/locustfile_bootstrap.py"
+        )
         if module:
             locustfile_path = os.path.join(
                 modules_dir, module, "tests", "locustfile.py"
@@ -115,7 +123,9 @@ def locust(module):
             stderr=subprocess.DEVNULL,
         )
         click.echo(
-            click.style("Locust is running at http://localhost:8089", fg="green")
+            click.style(
+                "Locust is running at http://localhost:8089", fg="green"
+            )
         )
 
     def run_local_locust(module):
@@ -147,7 +157,9 @@ def locust(module):
             )
 
             if not volume_name:
-                raise ValueError("No volume or bind mount found mounted on /app")
+                raise ValueError(
+                    "No volume or bind mount found mounted on /app"
+                )
 
             run_docker_locust(volume_name, module)
 
@@ -163,10 +175,14 @@ def locust(module):
         run_vagrant_locust(module)
 
     else:
-        click.echo(click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red"))
+        click.echo(
+            click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red")
+        )
 
 
-@click.command("locust:stop", help="Stops the Locust container if it is running.")
+@click.command(
+    "locust:stop", help="Stops the Locust container if it is running."
+)
 def stop():
     working_dir = os.getenv("WORKING_DIR", "")
 
@@ -175,7 +191,9 @@ def stop():
         click.echo("Stopping Locust in local environment...")
         for proc in psutil.process_iter(["pid", "name"]):
             if proc.info["name"] == "locust":
-                click.echo(f"Stopping Locust process with PID {proc.info['pid']}...")
+                click.echo(
+                    f"Stopping Locust process with PID {proc.info['pid']}..."
+                )
                 os.kill(proc.info["pid"], signal.SIGTERM)
 
     def stop_docker_locust():
@@ -196,4 +214,6 @@ def stop():
         stop_local_locust()
 
     else:
-        click.echo(click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red"))
+        click.echo(
+            click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red")
+        )

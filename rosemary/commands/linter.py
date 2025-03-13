@@ -1,62 +1,146 @@
 import click
-import os
 import subprocess
 
+from rosemary.utils.path_utils import PathUtils
 
-@click.command(
-    "linter", help="Runs flake8 linter on the 'app' and 'rosemary' directories."
-)
+
+@click.command("linter", help="Runs Ruff linter on the project.")
 def linter():
-
-    # Define the directories to be checked with flake8
-    working_dir = os.getenv("WORKING_DIR", "")
+    """Ejecuta Ruff para analizar el código en busca de errores."""
     directories = [
-        os.path.join(working_dir, "app"),
-        os.path.join(working_dir, "rosemary"),
-        os.path.join(working_dir, "core"),
+        PathUtils.get_app_dir(),
+        PathUtils.get_rosemary_dir(),
+        PathUtils.get_core_dir(),
     ]
 
-    # Run flake8 in each directory
-    for directory in directories:
-        click.echo(f"Running flake8 on {directory}...")
-        result = subprocess.run(["flake8", directory])
+    click.echo(
+        click.style("\n📌 Running Ruff Linter...\n", fg="cyan", bold=True)
+    )
 
-        # Check if flake8 encountered problems
+    for directory in directories:
+        click.echo(
+            click.style(
+                f"🔍 Checking {directory}...\n", fg="yellow", bold=True
+            )
+        )
+        result = subprocess.run(
+            ["ruff", "check", directory], capture_output=True, text=True
+        )
+
         if result.returncode != 0:
-            click.echo(click.style(f"flake8 found issues in {directory}.", fg="red"))
+            click.echo(click.style(result.stdout, fg="red"))
+            click.echo(
+                click.style(
+                    f"❌ Issues found in {directory}.\n", fg="red", bold=True
+                )
+            )
         else:
             click.echo(
                 click.style(
-                    f"No issues found in {directory}. Congratulations!", fg="green"
+                    f"✅ No issues found in {directory}. 🎉\n",
+                    fg="green",
+                    bold=True,
                 )
             )
+
+    click.echo(
+        click.style("✔️ Linter check completed!\n", fg="cyan", bold=True)
+    )
 
 
 @click.command(
     "linter:fix",
-    help="Automatically formats code in 'app', 'rosemary', and 'core' directories using black.",
+    help="Automatically formats and fixes code using Ruff and Black.",
 )
 def linter_fix():
-
-    # Define the directories to be formatted
-    working_dir = os.getenv("WORKING_DIR", "")
+    """Ejecuta Ruff en modo 'fix' y luego Black para formateo."""
     directories = [
-        os.path.join(working_dir, "app"),
-        os.path.join(working_dir, "rosemary"),
-        os.path.join(working_dir, "core"),
+        PathUtils.get_app_dir(),
+        PathUtils.get_rosemary_dir(),
+        PathUtils.get_core_dir(),
     ]
 
-    # Run black to format the code
-    for directory in directories:
-        click.echo(f"Running black on {directory}...")
-        result = subprocess.run(["black", directory])
+    click.echo(
+        click.style(
+            "\n📌 Running Ruff Fix & Black Formatter...\n",
+            fg="cyan",
+            bold=True,
+        )
+    )
 
-        # Check if black encountered problems
-        if result.returncode != 0:
+    fixes_applied = 0
+
+    for directory in directories:
+        click.echo(
+            click.style(
+                f"🔧 Fixing {directory} with Ruff...\n", fg="yellow", bold=True
+            )
+        )
+        result = subprocess.run(
+            ["ruff", "check", "--fix", directory],
+            capture_output=True,
+            text=True,
+        )
+
+        if "Fixed" in result.stdout:
+            click.echo(click.style(result.stdout, fg="blue"))
+            fixes_applied += 1
+        else:
             click.echo(
-                click.style(f"Failed to format {directory} with black.", fg="red")
+                click.style(
+                    f"✅ No fixes needed in {directory}. 🎉\n",
+                    fg="green",
+                    bold=True,
+                )
+            )
+
+        click.echo(
+            click.style(
+                f"🎨 Formatting {directory} with Black...\n",
+                fg="yellow",
+                bold=True,
+            )
+        )
+        black_result = subprocess.run(
+            ["black", "--line-length=79", directory],
+            capture_output=True,
+            text=True,
+        )
+
+        if black_result.returncode == 0:
+            click.echo(
+                click.style(
+                    f"✨ Code in {directory} formatted successfully!\n",
+                    fg="green",
+                    bold=True,
+                )
             )
         else:
             click.echo(
-                click.style(f"Code in {directory} formatted successfully!", fg="green")
+                click.style(
+                    f"❌ Failed to format {directory} with Black.\n",
+                    fg="red",
+                    bold=True,
+                )
             )
+
+    click.echo(
+        click.style("\n✔️ Fix & Formatting Completed!", fg="cyan", bold=True)
+    )
+
+    if fixes_applied > 0:
+        click.echo(
+            click.style(
+                f"🔧 Ruff applied fixes in {fixes_applied} directories!",
+                fg="blue",
+                bold=True,
+            )
+        )
+    else:
+        click.echo(
+            click.style(
+                "🚀 No fixes were needed! Your code is already clean! 🎉",
+                fg="green",
+                bold=True,
+            )
+        )

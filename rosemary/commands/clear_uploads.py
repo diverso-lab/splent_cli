@@ -2,7 +2,7 @@ import click
 import shutil
 import os
 
-from core.configuration.configuration import uploads_folder_name
+from rosemary.utils.path_utils import PathUtils
 
 
 @click.command(
@@ -10,7 +10,7 @@ from core.configuration.configuration import uploads_folder_name
     help="Clears the contents of the 'uploads' directory without removing the folder.",
 )
 def clear_uploads():
-    uploads_dir = os.path.join(os.getenv("WORKING_DIR", ""), uploads_folder_name())
+    uploads_dir = PathUtils.get_uploads_dir()
 
     # Verify if the 'uploads' folder exists
     if os.path.exists(uploads_dir) and os.path.isdir(uploads_dir):
@@ -34,7 +34,11 @@ def clear_uploads():
             )
         except Exception as e:
             click.echo(
-                click.style(f"Error clearing the 'uploads' directory: {e}", fg="red")
+                click.style(
+                    f"Error clearing the 'uploads' directory: {e}", fg="red"
+                )
             )
     else:
-        click.echo(click.style("The 'uploads' directory does not exist.", fg="yellow"))
+        click.echo(
+            click.style("The 'uploads' directory does not exist.", fg="yellow")
+        )

@@ -14,7 +14,14 @@ dependencies = [
     "click",
     "python-dotenv",
     "flask",
+    "setuptools",
+    "pytest",
+    "pytest-cov",
+    "ruff"
 ]
+
+[tool.black]
+line-length = 79
 
 
 [project.scripts]
