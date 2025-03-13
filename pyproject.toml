@@ -13,7 +13,9 @@ license = { file = "LICENSE" }
 dependencies = [
     "click",
     "python-dotenv",
+    "flask",
 ]
+
 
 [project.scripts]
 rosemary = "rosemary.__main__:main"

@@ -2,6 +2,9 @@ import os
 import sys
 import importlib
 import click
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def check_working_dir():
@@ -64,7 +67,15 @@ def load_commands(cli_group, commands_dir="rosemary/commands"):
     """
     Dynamically import all commands in the specified directory and add them to the CLI group.
     """
+
+    splendid = os.getenv("SPLENDID", "false").lower() in ("true", "1", "yes")
+
+    if splendid:
+        commands_dir = os.path.join("rosemary_cli", "rosemary", "commands")
+
     commands_path = os.path.abspath(commands_dir)
+    print(f"commands_path: {commands_path}")
+
     for file in os.listdir(commands_path):
         if file.endswith(".py") and not file.startswith("__"):
             module_name = f"rosemary.commands.{file[:-3]}"
