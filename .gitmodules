@@ -1,0 +1,3 @@
+[submodule "flasky_app"]
+	path = flasky_app
+	url = https://github.com/diverso-lab/flasky_app
