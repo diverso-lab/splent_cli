@@ -1,3 +1,7 @@
 .venv
 rosemary.egg-info
 venv
+
+__pycache__/
+*.pyc
+*.pyo

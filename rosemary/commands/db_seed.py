@@ -4,7 +4,8 @@ import importlib
 import click
 from flask.cli import with_appcontext
 
-from core.seeders.BaseSeeder import BaseSeeder
+
+from flasky.core.seeders import BaseSeeder
 from rosemary.commands.db_reset import db_reset
 
 
