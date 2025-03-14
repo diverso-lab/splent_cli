@@ -1,5 +1,5 @@
 .venv
-rosemary.egg-info
+splent_cli.egg-info
 venv
 
 __pycache__/

@@ -3,7 +3,7 @@ import click
 import os
 import subprocess
 
-from rosemary.utils.path_utils import PathUtils
+from splent_cli.utils.path_utils import PathUtils
 
 logger = logging.getLogger(__name__)
 

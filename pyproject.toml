@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rosemary"
-version = "2.0.0"
-description = "Rosemary is a CLI to be able to work on your development more easily."
+name = "splent_cli"
+version = "0.0.1"
+description = "SPLENT-CLI is a CLI to be able to work on your development more easily."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "David Romero", email = "drorganvidez@us.es" }]
@@ -23,14 +23,13 @@ dependencies = [
 [tool.black]
 line-length = 79
 
-
 [project.scripts]
-rosemary = "rosemary.__main__:main"
+splent_cli = "splent_cli.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rosemary*"] 
+include = ["splent_cli*"] 
 
 [project.urls]
-Homepage = "https://github.com/diverso-lab/rosemary"
-Issues = "https://github.com/diverso-lab/rosemary/issues"
+Homepage = "https://github.com/diverso-lab/splent_cli"
+Issues = "https://github.com/diverso-lab/splent_cli/issues"

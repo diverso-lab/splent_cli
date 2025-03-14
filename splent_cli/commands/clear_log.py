@@ -1,7 +1,7 @@
 import click
 import os
 
-from rosemary.utils.path_utils import PathUtils
+from splent_cli.utils.path_utils import PathUtils
 
 
 @click.command("clear:log", help="Clears the 'app.log' file.")

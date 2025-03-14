@@ -3,7 +3,7 @@ import click
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import os
 
-from rosemary.utils.path_utils import PathUtils
+from splent_cli.utils.path_utils import PathUtils
 
 
 def pascalcase(s):
@@ -15,7 +15,7 @@ def setup_jinja_env():
     """Configures and returns a Jinja environment."""
     env = Environment(
         loader=FileSystemLoader(
-            searchpath=PathUtils.get_rosemary_templates_dir()
+            searchpath=PathUtils.get_splent_cli_templates_dir()
         ),
         autoescape=select_autoescape(["html", "xml", "j2"]),
     )

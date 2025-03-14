@@ -3,10 +3,10 @@ import shutil
 import os
 import subprocess
 from flask.cli import with_appcontext
-from app import create_app, db
+from splent_app import create_app, db
 from sqlalchemy import MetaData
 
-from rosemary.commands.clear_uploads import clear_uploads
+from splent_cli.commands.clear_uploads import clear_uploads
 
 
 @click.command(

@@ -5,8 +5,8 @@ import click
 from flask.cli import with_appcontext
 
 
-from flasky.core.seeders import BaseSeeder
-from rosemary.commands.db_reset import db_reset
+from splent_framework.core.seeders import BaseSeeder
+from splent_cli.commands.db_reset import db_reset
 
 
 def get_module_seeders(module_path, specific_module=None):

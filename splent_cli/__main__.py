@@ -1,4 +1,4 @@
-from rosemary.cli import check_working_dir, cli, load_commands
+from splent_cli.cli import check_working_dir, cli, load_commands
 
 
 def main():

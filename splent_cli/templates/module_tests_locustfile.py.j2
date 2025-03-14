@@ -1,5 +1,5 @@
 from locust import HttpUser, TaskSet, task
-from flasky.core.environment.host import get_host_for_locust_testing
+from splent_framework.core.environment.host import get_host_for_locust_testing
 
 
 class {{ module_name | pascalcase }}Behavior(TaskSet):

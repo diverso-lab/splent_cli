@@ -19,7 +19,7 @@ def get_metadata_value(metadata_lines, key):
 @click.command()
 def info():
     """Displays information about the Rosemary CLI."""
-    distribution = pkg_resources.get_distribution("rosemary")
+    distribution = pkg_resources.get_distribution("splent_cli")
 
     try:
         metadata = distribution.get_metadata_lines("METADATA")

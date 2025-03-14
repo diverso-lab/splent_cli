@@ -4,7 +4,7 @@ import click
 import shutil
 import os
 
-from rosemary.utils.path_utils import PathUtils
+from splent_cli.utils.path_utils import PathUtils
 
 
 @click.command(

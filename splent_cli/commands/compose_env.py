@@ -3,7 +3,7 @@ import click
 from dotenv import dotenv_values
 from flask.cli import with_appcontext
 
-from rosemary.utils.path_utils import PathUtils
+from splent_cli.utils.path_utils import PathUtils
 
 
 @click.command(

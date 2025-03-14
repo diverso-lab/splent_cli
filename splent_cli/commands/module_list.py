@@ -1,7 +1,7 @@
 import click
 from flask.cli import with_appcontext
-
-from flasky.core.managers.module_manager import ModuleManager
+from splent_app import splent_app
+from splent_framework.core.managers.module_manager import ModuleManager
 
 
 @click.command(
@@ -9,8 +9,7 @@ from flasky.core.managers.module_manager import ModuleManager
 )
 @with_appcontext
 def module_list():
-    app = click.get_current_context().obj
-    manager = ModuleManager(app)
+    manager = ModuleManager(splent_app)
 
     loaded_modules, ignored_modules = manager.get_modules()
 

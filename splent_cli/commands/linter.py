@@ -1,7 +1,7 @@
 import click
 import subprocess
 
-from rosemary.utils.path_utils import PathUtils
+from splent_cli.utils.path_utils import PathUtils
 
 
 @click.command("linter", help="Runs Ruff linter on the project.")
@@ -9,7 +9,7 @@ def linter():
     """Ejecuta Ruff para analizar el código en busca de errores."""
     directories = [
         PathUtils.get_app_dir(),
-        PathUtils.get_rosemary_dir(),
+        PathUtils.get_splent_cli_dir(),
         PathUtils.get_core_dir(),
     ]
 
@@ -56,7 +56,7 @@ def linter_fix():
     """Ejecuta Ruff en modo 'fix' y luego Black para formateo."""
     directories = [
         PathUtils.get_app_dir(),
-        PathUtils.get_rosemary_dir(),
+        PathUtils.get_splent_cli_dir(),
         PathUtils.get_core_dir(),
     ]
 
