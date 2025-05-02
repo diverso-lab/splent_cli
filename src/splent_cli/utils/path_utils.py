@@ -6,6 +6,10 @@ from splent_framework.core.configuration.configuration import uploads_folder_nam
 load_dotenv()
 
 
+def is_splent_dev_mode():
+    return os.getenv("SPLENT", "false").lower() in ("true", "1", "yes")
+
+
 class PathUtils:
 
     @staticmethod
@@ -15,24 +19,17 @@ class PathUtils:
     @staticmethod
     def get_app_dir():
         working_dir = PathUtils.get_working_dir()
-        SPLENT = os.getenv("SPLENT", "false").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
 
-        if SPLENT:
+        if is_splent_dev_mode():
             # Git submodules mode
-            return os.path.join(working_dir, "splent_app", "splent_app")
+            return os.path.join(working_dir, "splent_app", "src", "splent_app")
 
         # PyPi mode
         package = importlib.util.find_spec("splent_app")
         if package and package.origin:
             return os.path.dirname(package.origin)
 
-        raise FileNotFoundError(
-            "Could not find 'splent_app'. Check the installation."
-        )
+        raise FileNotFoundError("Could not find 'splent_app'. Check the installation.")
 
     @staticmethod
     def get_modules_dir():
@@ -40,15 +37,10 @@ class PathUtils:
 
     @staticmethod
     def get_splent_cli_dir():
-        SPLENT = os.getenv("SPLENT", "false").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
-
         base_dir = os.getcwd()
-        if SPLENT:
-            return os.path.join(base_dir, "splent_cli", "splent_cli")
+
+        if is_splent_dev_mode():
+            return os.path.join(base_dir, "splent_cli", "src", "splent_cli")
 
         return os.path.join(base_dir, "splent_cli")
 
@@ -67,20 +59,15 @@ class PathUtils:
     @staticmethod
     def get_splent_framework_dir():
         working_dir = PathUtils.get_working_dir()
-        SPLENT = os.getenv("SPLENT", "false").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
 
-        if SPLENT:
-            # Git submodules mode
-            return os.path.join(working_dir, "splent_framework", "splent_framework")
+        if is_splent_dev_mode():
+            return os.path.join(working_dir, "splent_framework", "src", "splent_framework")
 
-        # PyPi mode
         package = importlib.util.find_spec("splent_framework")
         if package and package.origin:
             return os.path.dirname(package.origin)
+
+        raise FileNotFoundError("Could not find 'splent_framework'. Check the installation.")
 
     @staticmethod
     def get_core_dir():
@@ -94,23 +81,15 @@ class PathUtils:
     def get_app_log_dir():
         return os.path.join(PathUtils.get_working_dir(), "app.log")
 
+    @staticmethod
     def get_uploads_dir():
         working_dir = PathUtils.get_working_dir()
-        SPLENT = os.getenv("SPLENT", "false").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
 
-        if SPLENT:
-            # Git submodules mode
-            return os.path.join(
-                working_dir, "splent_app", uploads_folder_name()
-            )
+        if is_splent_dev_mode():
+            return os.path.join(working_dir, "splent_app", uploads_folder_name())
 
-        # PyPi mode
         package = importlib.util.find_spec("splent_app")
         if package and package.origin:
-            return os.path.join(
-                os.path.dirname(package.origin), uploads_folder_name()
-            )
+            return os.path.join(os.path.dirname(package.origin), uploads_folder_name())
+
+        raise FileNotFoundError("Could not resolve uploads directory.")

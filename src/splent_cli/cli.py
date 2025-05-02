@@ -3,8 +3,8 @@ import sys
 import importlib
 import click
 from dotenv import load_dotenv
-from flask.cli import FlaskGroup  # 📌 Añadir FlaskGroup
-from splent_app import create_app  # 📌 Importar la app de Flask
+from flask.cli import FlaskGroup
+from splent_cli.utils.dynamic_imports import get_app
 
 from splent_cli.utils.path_utils import PathUtils
 
@@ -24,7 +24,7 @@ def check_working_dir():
 
 class SPLENTCLI(FlaskGroup):  # 📌 Usamos FlaskGroup para conectar con Flask
     def __init__(self, **kwargs):
-        super().__init__(create_app=create_app, **kwargs)
+        super().__init__(create_app=get_app, **kwargs)
 
     def get_command(self, ctx, cmd_name):
         rv = super().get_command(ctx, cmd_name)
@@ -34,7 +34,7 @@ class SPLENTCLI(FlaskGroup):  # 📌 Usamos FlaskGroup para conectar con Flask
         return rv
 
 
-def load_commands(cli_group, commands_dir="splent_cli/commands"):
+def load_commands(cli_group):
     """
     Dynamically import all commands in the specified directory and add them to the CLI group.
     """

@@ -20,15 +20,17 @@ dependencies = [
     "ruff"
 ]
 
-[tool.black]
-line-length = 79
-
 [project.scripts]
 splent_cli = "splent_cli.__main__:main"
 
+[tool.setuptools]
+package-dir = { "" = "src" }
+
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["splent_cli*"] 
+where = ["src"]
+
+[tool.black]
+line-length = 79
 
 [project.urls]
 Homepage = "https://github.com/diverso-lab/splent_cli"

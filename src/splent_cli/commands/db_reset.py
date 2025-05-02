@@ -3,10 +3,12 @@ import shutil
 import os
 import subprocess
 from flask.cli import with_appcontext
-from splent_app import create_app, db
+from splent_cli.utils.dynamic_imports import get_create_app, get_db
 from sqlalchemy import MetaData
 
 from splent_cli.commands.clear_uploads import clear_uploads
+
+db = get_db()
 
 
 @click.command(
@@ -26,7 +28,7 @@ from splent_cli.commands.clear_uploads import clear_uploads
 )
 @with_appcontext
 def db_reset(clear_migrations, yes):
-    app = create_app()
+    app = get_create_app()
     with app.app_context():
         if not yes and not click.confirm(
             "WARNING: This will delete all data and clear uploads. Are you sure?",
