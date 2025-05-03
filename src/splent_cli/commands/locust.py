@@ -76,7 +76,7 @@ def locust(module):
             "-p",
             "8089:8089",
             "-v",
-            f"{volume_name}:/app",
+            f"{volume_name}:/workspace",
             "--name",
             "locust_container",
             "--network",
@@ -142,7 +142,7 @@ def locust(module):
     if module:
         validate_module(module)
 
-    if working_dir == "/app/":
+    if working_dir == "/workspace/":
         client = docker.from_env()
 
         try:
@@ -207,7 +207,7 @@ def stop():
         # Remove the Locust container
         subprocess.run(rm_command)
 
-    if working_dir == "/app/":
+    if working_dir == "/workspace/":
         stop_docker_locust()
 
     elif working_dir == "" or working_dir == "/vagrant/":

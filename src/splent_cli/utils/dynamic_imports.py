@@ -1,14 +1,29 @@
 import os
 import importlib
 import sys
+from dotenv import load_dotenv
 
-_app_instance = None  # para que no instancie varias veces
+_app_instance = None  # Singleton
+
+# 1. Intenta obtener el nombre del módulo antes de cargar su .env
+module_name = os.environ.get("SPLENT_APP_MODULE", "splent_app")
+
+# 2. Construye la ruta del .env correspondiente
+dotenv_path = f"/workspace/splent_docker/products/{module_name}/.env"
+
+# 3. Carga el .env (sobrescribiendo si ya había variables)
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path, override=True)
+else:
+    raise FileNotFoundError(f"⚠️ No se encontró el archivo .env en {dotenv_path}")
+
 
 def get_app_module():
+    # Ahora sí: volvemos a obtener el valor, por si fue sobreescrito en el .env
     module_name = os.getenv("SPLENT_APP_MODULE", "splent_app")
 
     # Añade el path de src
-    sys.path.insert(0, "/app/splent_app/src")
+    sys.path.insert(0, f"/workspace/{module_name}/src")
 
     try:
         return importlib.import_module(module_name)

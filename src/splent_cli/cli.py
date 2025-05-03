@@ -17,7 +17,7 @@ def check_working_dir():
     if not working_dir:
         return
 
-    if working_dir in ["/app", "/vagrant", "/app/", "/vagrant/"] and not os.path.exists(working_dir):
+    if working_dir in ["/app", "/vagrant", "/workspace/", "/vagrant/"] and not os.path.exists(working_dir):
         print(f"⚠️  WARNING: WORKING_DIR is set to '{working_dir}', but the directory does not exist.")
         sys.exit(1)
 

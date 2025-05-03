@@ -56,7 +56,7 @@ def selenium(module):
     if module:
         validate_module(module)
 
-    if working_dir == "/app/":
+    if working_dir == "/workspace/":
 
         click.echo(
             click.style(
