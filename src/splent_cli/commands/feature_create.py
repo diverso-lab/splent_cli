@@ -31,7 +31,7 @@ def render_and_write_file(env, template_name, filename, context):
         f.write(content)
 
 
-@click.command("module:create", help="Creates a new module with a given name.")
+@click.command("feature:create", help="Creates a new feature with a given name.")
 @click.argument("name")
 def make_module(name):
     modules_dir = PathUtils.get_modules_dir()
@@ -39,7 +39,7 @@ def make_module(name):
 
     if os.path.exists(module_path):
         click.echo(
-            click.style(f"The module '{name}' already exists.", fg="red")
+            click.style(f"The feature '{name}' already exists.", fg="red")
         )
         return
 
@@ -95,7 +95,7 @@ def make_module(name):
             ).close()  # Create empty file if there is no template.
 
     click.echo(
-        click.style(f"Module '{name}' created successfully.", fg="green")
+        click.style(f"Feature '{name}' created successfully.", fg="green")
     )
 
     # Change the owner of the main folder of the module

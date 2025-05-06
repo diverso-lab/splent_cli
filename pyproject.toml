@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "SPLENT-CLI is a CLI to be able to work on your development more easily."
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [{ name = "David Romero", email = "drorganvidez@us.es" }]
+authors = [{ name = "DiversoLab", email = "diversolab@us.es" }]
 license = { file = "LICENSE" }
 dependencies = [
     "click",

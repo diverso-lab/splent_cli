@@ -12,8 +12,8 @@ EXCLUDED_MODULES = {".pytest_cache", "__pycache__"}
 
 
 def load_excluded_modules():
-    """Load additional excluded modules from .moduleignore file."""
-    moduleignore_path = os.path.join(os.getenv("WORKING_DIR", ""), ".moduleignore")
+    """Load additional excluded modules from .featureignore file."""
+    moduleignore_path = os.path.join(os.getenv("WORKING_DIR", ""), ".featureignore")
     if os.path.exists(moduleignore_path):
         with open(moduleignore_path) as f:
             EXCLUDED_MODULES.update(filter(None, map(str.strip, f)))

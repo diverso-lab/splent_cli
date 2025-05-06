@@ -14,15 +14,12 @@ load_dotenv()
 def check_working_dir():
     working_dir = os.getenv("WORKING_DIR", "").strip()
 
-    if not working_dir:
-        return
-
-    if working_dir in ["/app", "/vagrant", "/workspace/", "/vagrant/"] and not os.path.exists(working_dir):
-        print(f"⚠️  WARNING: WORKING_DIR is set to '{working_dir}', but the directory does not exist.")
+    if working_dir != "/workspace":
+        print(f"❌ ERROR: WORKING_DIR must be set to '/workspace', but got '{working_dir}'.")
         sys.exit(1)
 
 
-class SPLENTCLI(FlaskGroup):  # 📌 Usamos FlaskGroup para conectar con Flask
+class SPLENTCLI(FlaskGroup):
     def __init__(self, **kwargs):
         super().__init__(create_app=get_app, **kwargs)
 

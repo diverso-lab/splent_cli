@@ -17,19 +17,22 @@ class PathUtils:
         return os.getenv("WORKING_DIR", "")
 
     @staticmethod
-    def get_app_dir():
+    def get_features_file():
+
+        splent_app = os.getenv("SPLENT_APP", "splent_app")
+
         working_dir = PathUtils.get_working_dir()
 
-        if is_splent_dev_mode():
-            # Git submodules mode
-            return os.path.join(working_dir, "splent_app", "src", "splent_app")
+        return os.path.join(working_dir, splent_app, "features.txt")
 
-        # PyPi mode
-        package = importlib.util.find_spec("splent_app")
-        if package and package.origin:
-            return os.path.dirname(package.origin)
+    @staticmethod
+    def get_app_dir():
 
-        raise FileNotFoundError("Could not find 'splent_app'. Check the installation.")
+        splent_app = os.getenv("SPLENT_APP", "splent_app")
+
+        working_dir = PathUtils.get_working_dir()
+
+        return os.path.join(working_dir, splent_app, "src", splent_app)
 
     @staticmethod
     def get_modules_dir():
