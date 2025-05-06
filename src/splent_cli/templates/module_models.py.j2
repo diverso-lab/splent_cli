@@ -1,4 +1,6 @@
-from splent_app import db
+from splent_cli.utils.dynamic_imports import get_db
+
+db = get_db()
 
 
 class {{ module_name | pascalcase }}(db.Model):

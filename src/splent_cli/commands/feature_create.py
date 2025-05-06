@@ -1,22 +1,19 @@
+import os
 import stat
 import click
+from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-import os
 
 from splent_cli.utils.path_utils import PathUtils
 
 
 def pascalcase(s):
-    """Converts string to PascalCase."""
     return "".join(word.capitalize() for word in s.split("_"))
 
 
 def setup_jinja_env():
-    """Configures and returns a Jinja environment."""
     env = Environment(
-        loader=FileSystemLoader(
-            searchpath=PathUtils.get_splent_cli_templates_dir()
-        ),
+        loader=FileSystemLoader(searchpath=PathUtils.get_splent_cli_templates_dir()),
         autoescape=select_autoescape(["html", "xml", "j2"]),
     )
     env.filters["pascalcase"] = pascalcase
@@ -24,30 +21,27 @@ def setup_jinja_env():
 
 
 def render_and_write_file(env, template_name, filename, context):
-    """Renders a template and writes it to a specified file."""
-    template = env.get_template(template_name)
-    content = template.render(context) + "\n"
+    content = env.get_template(template_name).render(context) + "\n"
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, "w") as f:
         f.write(content)
 
 
 @click.command("feature:create", help="Creates a new feature with a given name.")
 @click.argument("name")
-def make_module(name):
-    modules_dir = PathUtils.get_modules_dir()
-    module_path = f"{modules_dir}/{name}"
+def make_feature(name):
+    feature_name = f"splent_feature_{name}"
+    base_path = os.path.join(PathUtils.get_working_dir(), feature_name)
+    src_path = os.path.join(base_path, "src", feature_name)
 
-    if os.path.exists(module_path):
-        click.echo(
-            click.style(f"The feature '{name}' already exists.", fg="red")
-        )
+    if os.path.exists(base_path):
+        click.echo(click.style(f"The feature '{feature_name}' already exists.", fg="red"))
         return
 
     env = setup_jinja_env()
+    context = {"module_name": name}
 
-    # Defines the directories to create.
-    directories = {"templates"}
-
+    # Archivos que van dentro de src/splent_feature_<name>
     files_and_templates = {
         "__init__.py": "module_init.py.j2",
         "routes.py": "module_routes.py.j2",
@@ -56,83 +50,55 @@ def make_module(name):
         "services.py": "module_services.py.j2",
         "forms.py": "module_forms.py.j2",
         "seeders.py": "module_seeders.py.j2",
-        os.path.join(
-            "templates", name, "index.html"
-        ): "module_templates_index.html.j2",
-        "assets/js/scripts.js": "module_scripts.js.j2",
-        "assets/js/webpack.config.js": "module_webpack.config.js.j2",
-        "tests/test_unit.py": "module_tests_test_unit.py.j2",
-        "tests/locustfile.py": "module_tests_locustfile.py.j2",
-        "tests/test_selenium.py": "module_tests_test_selenium.py.j2",
+        os.path.join("templates", name, "index.html"): "module_templates_index.html.j2",
+        os.path.join("assets", "js", "scripts.js"): "module_scripts.js.j2",
+        os.path.join("assets", "js", "webpack.config.js"): "module_webpack.config.js.j2",
+        os.path.join("tests", "__init__.py"): None,
+        os.path.join("tests", "test_unit.py"): "module_tests_test_unit.py.j2",
+        os.path.join("tests", "locustfile.py"): "module_tests_locustfile.py.j2",
+        os.path.join("tests", "test_selenium.py"): "module_tests_test_selenium.py.j2",
     }
 
-    # Create the necessary directories, explicitly excluding 'tests' from the creation of subfolders.
-    for directory in directories:
-        os.makedirs(os.path.join(module_path, directory, name), exist_ok=True)
-
-    # Create 'tests' directory directly under module_path, without additional subfolders.
-    os.makedirs(os.path.join(module_path, "tests"), exist_ok=True)
-
-    # Create 'assets' directory directly under module_path
-    os.makedirs(os.path.join(module_path, "assets", "css"), exist_ok=True)
-    os.makedirs(os.path.join(module_path, "assets", "js"), exist_ok=True)
-
-    # Create empty __init__.py file directly in the 'tests' directory.
-    open(os.path.join(module_path, "tests", "__init__.py"), "a").close()
-
-    # Render and write files, including 'test_unit.py' directly in 'tests'.
-    for filename, template_name in files_and_templates.items():
-        if template_name:  # Check if there is a defined template.
-            render_and_write_file(
-                env,
-                template_name,
-                os.path.join(module_path, filename),
-                {"module_name": name},
-            )
+    # Crear todos los archivos de código en src_path
+    for filename, template in files_and_templates.items():
+        full_path = os.path.join(src_path, filename)
+        if template:
+            render_and_write_file(env, template, full_path, context)
         else:
-            open(
-                os.path.join(module_path, filename), "a"
-            ).close()  # Create empty file if there is no template.
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            open(full_path, "a").close()
 
-    click.echo(
-        click.style(f"Feature '{name}' created successfully.", fg="green")
+    # Crear src/__init__.py vacío
+    src_root = os.path.join(base_path, "src")
+    os.makedirs(src_root, exist_ok=True)
+    open(os.path.join(src_root, "__init__.py"), "a").close()
+
+    # Crear el pyproject.toml en la raíz del módulo
+    render_and_write_file(
+        env,
+        "module_pyproject.toml.j2",
+        os.path.join(base_path, "pyproject.toml"),
+        context,
     )
 
-    # Change the owner of the main folder of the module
-    os.chown(module_path, 1000, 1000)
-
-    # Change permissions to drwxrwxr-x (chmod 775)
-    os.chmod(
-        module_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
-    )
-
-    # Change the owner of all created files and directories to UID 1000 and GID 1000
+    # Cambiar permisos y propietario
     uid = 1000
     gid = 1000
 
-    for root, dirs, files in os.walk(module_path):
-        for dir_ in dirs:
-            dir_path = os.path.join(root, dir_)
-            os.chown(dir_path, uid, gid)
-            os.chmod(
-                dir_path,
-                stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH,
-            )
+    os.chown(base_path, uid, gid)
+    os.chmod(base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
 
-        for file_ in files:
-            file_path = os.path.join(root, file_)
+    for root, dirs, files in os.walk(base_path):
+        for d in dirs:
+            dir_path = os.path.join(root, d)
+            os.chown(dir_path, uid, gid)
+            os.chmod(dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+        for f in files:
+            file_path = os.path.join(root, f)
             os.chown(file_path, uid, gid)
             os.chmod(
                 file_path,
-                stat.S_IRUSR
-                | stat.S_IWUSR
-                | stat.S_IRGRP
-                | stat.S_IWGRP
-                | stat.S_IROTH,
+                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH,
             )
 
-    click.echo(
-        click.style(
-            f"Module '{name}' permissions changed successfully.", fg="green"
-        )
-    )
+    click.echo(click.style(f"Feature '{feature_name}' created successfully in {base_path}", fg="green"))
