@@ -7,6 +7,7 @@ from splent_cli.utils.dynamic_imports import get_create_app, get_db
 from sqlalchemy import MetaData
 
 from splent_cli.commands.clear_uploads import clear_uploads
+from splent_cli.utils.path_utils import PathUtils
 
 db = get_db()
 
@@ -28,7 +29,7 @@ db = get_db()
 )
 @with_appcontext
 def db_reset(clear_migrations, yes):
-    app = get_create_app()
+    app = get_create_app()()
     with app.app_context():
         if not yes and not click.confirm(
             "WARNING: This will delete all data and clear uploads. Are you sure?",
@@ -62,9 +63,7 @@ def db_reset(clear_migrations, yes):
 
         if clear_migrations:
             # Delete the migration folder if it exists.
-            migrations_dir = os.path.join(
-                os.getenv("WORKING_DIR", ""), "migrations"
-            )
+            migrations_dir = PathUtils.get_migrations_dir()
             if os.path.isdir(migrations_dir):
                 shutil.rmtree(migrations_dir)
                 click.echo(

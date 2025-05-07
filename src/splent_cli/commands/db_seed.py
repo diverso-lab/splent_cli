@@ -4,51 +4,54 @@ import importlib
 import click
 from flask.cli import with_appcontext
 
-
-from splent_framework.core.seeders import BaseSeeder
 from splent_cli.commands.db_reset import db_reset
+from splent_cli.utils.path_utils import PathUtils
+from splent_framework.core.seeders.BaseSeeder import BaseSeeder
 
 
-def get_module_seeders(module_path, specific_module=None):
+def get_installed_seeders(features_file_path, specific_module=None):
     seeders = []
-    for root, dirs, files in os.walk(module_path):
-        if "seeders.py" in files:
-            relative_path = os.path.relpath(root, module_path)
-            module_name = relative_path.replace(os.path.sep, ".")
-            full_module_name = f"app.modules.{module_name}.seeders"
+    
+    if not os.path.isfile(features_file_path):
+        click.echo(f"⚠️  Features file not found: {features_file_path}")
+        return seeders
 
-            # If a module was specified and does not match the current one, continue with the next one
-            if (
-                specific_module
-                and specific_module != module_name.split(".")[0]
-            ):
+    with open(features_file_path) as f:
+        for line in f:
+            feature = line.strip()
+            if not feature:
                 continue
 
-            seeder_module = importlib.import_module(full_module_name)
-            importlib.reload(seeder_module)  # Reload the module
+            if specific_module and specific_module != feature.split("_")[-1]:
+                continue
 
-            for attr in dir(seeder_module):
-                potential_seeder_class = getattr(seeder_module, attr)
-                if (
-                    inspect.isclass(potential_seeder_class)
-                    and issubclass(potential_seeder_class, BaseSeeder)
-                    and potential_seeder_class is not BaseSeeder
-                ):
-                    seeders.append(potential_seeder_class())
+            try:
+                seeder_module = importlib.import_module(f"{feature}.seeders")
+                importlib.reload(seeder_module)
 
-    # Sort seeders by priority
-    seeders.sort(key=lambda seeder: seeder.priority)
+                for attr in dir(seeder_module):
+                    obj = getattr(seeder_module, attr)
+                    if (
+                        inspect.isclass(obj)
+                        and issubclass(obj, BaseSeeder)
+                        and obj is not BaseSeeder
+                    ):
+                        seeders.append(obj())
+            except Exception as e:
+                click.echo(
+                    f"❌ Error loading seeders from {feature}: {e}",
+                    err=True,
+                )
 
+    seeders.sort(key=lambda s: s.priority)
     return seeders
 
 
 @click.command(
     "db:seed",
-    help="Populates the database with the seeders defined in each module.",
+    help="Populates the database with the seeders defined in each feature.",
 )
-@click.option(
-    "--reset", is_flag=True, help="Reset the database before seeding."
-)
+@click.option("--reset", is_flag=True, help="Reset the database before seeding.")
 @click.option(
     "-y",
     "--yes",
@@ -58,11 +61,10 @@ def get_module_seeders(module_path, specific_module=None):
 @click.argument("module", required=False)
 @with_appcontext
 def db_seed(reset, yes, module):
-
     if reset:
         if yes or click.confirm(
             click.style(
-                "This will reset the database, do you want " "to continue?",
+                "This will reset the database, do you want to continue?",
                 fg="red",
             ),
             abort=True,
@@ -74,50 +76,28 @@ def db_seed(reset, yes, module):
             click.echo(click.style("Database reset cancelled.", fg="yellow"))
             return
 
-    blueprints_module_path = os.path.join(
-        os.getenv("WORKING_DIR", ""), "app/modules"
-    )
-    seeders = get_module_seeders(
-        blueprints_module_path, specific_module=module
-    )
-    success = True  # Flag to control the successful flow of the operation
+    features_file_path = PathUtils.get_features_file()
+    seeders = get_installed_seeders(features_file_path, specific_module=module)
+    success = True
 
     if module:
-        click.echo(
-            click.style(
-                f"Seeding data for the '{module}' module...", fg="green"
-            )
-        )
+        click.echo(click.style(f"Seeding data for the '{module}' feature...", fg="green"))
     else:
-        click.echo(click.style("Seeding data for all modules...", fg="green"))
+        click.echo(click.style("Seeding data for all features...", fg="green"))
 
     for seeder in seeders:
         try:
             seeder.run()
-            click.echo(
-                click.style(
-                    f"{seeder.__class__.__name__} performed.", fg="blue"
-                )
-            )
+            click.echo(click.style(f"{seeder.__class__.__name__} performed.", fg="blue"))
         except Exception as e:
             click.echo(
-                click.style(
-                    f"Error running seeder {seeder.__class__.__name__}: {e}",
-                    fg="red",
-                )
+                click.style(f"Error running {seeder.__class__.__name__}: {e}", fg="red")
             )
             click.echo(
-                click.style(
-                    f"Rolled back the transaction of {seeder.__class__.__name__} to keep the session "
-                    f"clean.",
-                    fg="yellow",
-                )
+                click.style("Rolling back session for safety.", fg="yellow")
             )
-
             success = False
             break
 
     if success:
-        click.echo(
-            click.style("Database populated with test data.", fg="green")
-        )
+        click.echo(click.style("Database populated with test data.", fg="green"))

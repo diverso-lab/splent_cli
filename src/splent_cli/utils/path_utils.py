@@ -37,6 +37,10 @@ class PathUtils:
     @staticmethod
     def get_modules_dir():
         return os.path.join(PathUtils.get_app_dir(), "modules")
+    
+    @staticmethod
+    def get_migrations_dir():
+        return os.path.join(PathUtils.get_app_dir(), "migrations")
 
     @staticmethod
     def get_splent_cli_dir():
