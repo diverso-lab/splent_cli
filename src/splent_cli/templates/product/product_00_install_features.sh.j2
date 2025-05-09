@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# ---------------------------------------------------------------------------
+# Creative Commons CC BY 4.0 - SPLENT - Diverso Lab
+# ---------------------------------------------------------------------------
+# This script is licensed under the Creative Commons Attribution 4.0 
+# International License. You are free to share and adapt the material 
+# as long as appropriate credit is given, a link to the license is provided, 
+# and you indicate if changes were made.
+#
+# For more details, visit:
+# https://creativecommons.org/licenses/by/4.0/
+# ---------------------------------------------------------------------------
+
+set -e
+
+echo "🚀 [Install features] entrypoint starting..."
+echo "📦 Installing editable features listed in [features] of pyproject.toml..."
+
+# Extract the features block from pyproject.toml
+features=$(python3 -c '
+import tomllib
+with open("/workspace/splent_app/pyproject.toml", "rb") as f:
+    data = tomllib.load(f)
+print("\n".join(data["project"]["optional-dependencies"].get("features", [])))
+')
+
+echo "📃 Features parsed:"
+echo "$features"
+
+# Iterate and install in editable if exists
+for feature in $features; do
+    if [ -d "/workspace/$feature" ]; then
+        echo "🔁 Installing $feature in editable mode..."
+        pip install -e "/workspace/$feature" || echo "❌ Error installing $feature"
+    else
+        echo "⚠️  $feature not found locally. Skipping."
+    fi
+done
+
+echo "✅ [Install features] entrypoint finished."

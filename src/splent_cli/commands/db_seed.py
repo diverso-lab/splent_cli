@@ -2,46 +2,52 @@ import inspect
 import os
 import importlib
 import click
-from flask.cli import with_appcontext
+import tomllib
 
+from flask.cli import with_appcontext
 from splent_cli.commands.db_reset import db_reset
 from splent_cli.utils.path_utils import PathUtils
 from splent_framework.core.seeders.BaseSeeder import BaseSeeder
 
 
-def get_installed_seeders(features_file_path, specific_module=None):
+def get_installed_seeders(specific_module=None):
     seeders = []
-    
-    if not os.path.isfile(features_file_path):
-        click.echo(f"⚠️  Features file not found: {features_file_path}")
+
+    pyproject_path = os.path.join(PathUtils.get_app_base_dir(), "pyproject.toml")
+
+    if not os.path.exists(pyproject_path):
+        click.echo(click.style(f"❌ pyproject.toml not found at {pyproject_path}", fg="red"))
         return seeders
 
-    with open(features_file_path) as f:
-        for line in f:
-            feature = line.strip()
-            if not feature:
-                continue
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        features = data["project"]["optional-dependencies"].get("features", [])
+    except Exception as e:
+        click.echo(click.style(f"❌ Failed to read features from pyproject.toml: {e}", fg="red"))
+        return seeders
 
-            if specific_module and specific_module != feature.split("_")[-1]:
-                continue
+    for feature in features:
+        if specific_module and specific_module != feature.split("_")[-1]:
+            continue
 
-            try:
-                seeder_module = importlib.import_module(f"{feature}.seeders")
-                importlib.reload(seeder_module)
+        try:
+            seeder_module = importlib.import_module(f"{feature}.seeders")
+            importlib.reload(seeder_module)
 
-                for attr in dir(seeder_module):
-                    obj = getattr(seeder_module, attr)
-                    if (
-                        inspect.isclass(obj)
-                        and issubclass(obj, BaseSeeder)
-                        and obj is not BaseSeeder
-                    ):
-                        seeders.append(obj())
-            except Exception as e:
-                click.echo(
-                    f"❌ Error loading seeders from {feature}: {e}",
-                    err=True,
-                )
+            for attr in dir(seeder_module):
+                obj = getattr(seeder_module, attr)
+                if (
+                    inspect.isclass(obj)
+                    and issubclass(obj, BaseSeeder)
+                    and obj is not BaseSeeder
+                ):
+                    seeders.append(obj())
+        except Exception as e:
+            click.echo(
+                click.style(f"❌ Error loading seeders from {feature}: {e}", fg="red"),
+                err=True,
+            )
 
     seeders.sort(key=lambda s: s.priority)
     return seeders
@@ -76,8 +82,7 @@ def db_seed(reset, yes, module):
             click.echo(click.style("Database reset cancelled.", fg="yellow"))
             return
 
-    features_file_path = PathUtils.get_features_file()
-    seeders = get_installed_seeders(features_file_path, specific_module=module)
+    seeders = get_installed_seeders(specific_module=module)
     success = True
 
     if module:

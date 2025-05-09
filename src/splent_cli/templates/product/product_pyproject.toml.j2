@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=80.3.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{ product_name }}"
+version = "0.0.1"
+description = "{{ product_name }} is an app built with SPLENT (https://www.splent.io)"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+
+]
+
+[project.optional-dependencies]
+dev = [
+
+]
+
+core = [
+    "splent_framework",
+    "splent_cli"
+]
+
+features = [
+    "splent_feature_public",
+    "splent_feature_mail",
+    "splent_feature_confirmemail",
+    "splent_feature_auth",
+    "splent_feature_profile",
+    "splent_feature_reset"
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

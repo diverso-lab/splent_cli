@@ -2,19 +2,12 @@ import logging
 import click
 import os
 import subprocess
+import tomllib
 
-from splent_cli.utils.path_utils import PathUtils
+from splent_cli.utils.feature_utils import get_features_from_pyproject,get_normalize_feature_name_in_splent_format
+
 
 logger = logging.getLogger(__name__)
-
-FEATURES_FILE = PathUtils.get_features_file()
-
-
-def get_features():
-    if not os.path.isfile(FEATURES_FILE):
-        return []
-    with open(FEATURES_FILE) as f:
-        return [line.strip() for line in f if line.strip()]
 
 
 @click.command("webpack:compile", help="Compile webpack for one or all features.")
@@ -23,13 +16,10 @@ def get_features():
 def webpack_compile(feature_name, watch):
     production = os.getenv("FLASK_ENV", "develop") == "production"
 
-    def normalize_feature_name(name):
-        return name if name.startswith("splent_feature_") else f"splent_feature_{name}"
-
     features = (
-        [normalize_feature_name(feature_name)]
+        [get_normalize_feature_name_in_splent_format(feature_name)]
         if feature_name
-        else get_features()
+        else get_features_from_pyproject()
     )
 
     for feature in features:

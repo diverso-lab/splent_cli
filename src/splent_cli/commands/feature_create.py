@@ -39,29 +39,45 @@ def make_feature(name):
         return
 
     env = setup_jinja_env()
-    context = {"module_name": name}
+    context = {"feature_name": name}
 
     # Archivos que van dentro de src/splent_feature_<name>
-    files_and_templates = {
-        "__init__.py": "module_init.py.j2",
-        "routes.py": "module_routes.py.j2",
-        "models.py": "module_models.py.j2",
-        "repositories.py": "module_repositories.py.j2",
-        "services.py": "module_services.py.j2",
-        "forms.py": "module_forms.py.j2",
-        "seeders.py": "module_seeders.py.j2",
-        os.path.join("templates", name, "index.html"): "module_templates_index.html.j2",
-        os.path.join("assets", "js", "scripts.js"): "module_scripts.js.j2",
-        os.path.join("assets", "js", "webpack.config.js"): "module_webpack.config.js.j2",
+    src_files_and_templates = {
+        "__init__.py": "feature/feature_init.py.j2",
+        "routes.py": "feature/feature_routes.py.j2",
+        "models.py": "feature/feature_models.py.j2",
+        "repositories.py": "feature/feature_repositories.py.j2",
+        "services.py": "feature/feature_services.py.j2",
+        "forms.py": "feature/feature_forms.py.j2",
+        "seeders.py": "feature/feature_seeders.py.j2",
+        os.path.join("templates", name, "index.html"): "feature/feature_templates_index.html.j2",
+        os.path.join("assets", "js", "scripts.js"): "feature/feature_scripts.js.j2",
+        os.path.join("assets", "js", "webpack.config.js"): "feature/feature_webpack.config.js.j2",
         os.path.join("tests", "__init__.py"): None,
-        os.path.join("tests", "test_unit.py"): "module_tests_test_unit.py.j2",
-        os.path.join("tests", "locustfile.py"): "module_tests_locustfile.py.j2",
-        os.path.join("tests", "test_selenium.py"): "module_tests_test_selenium.py.j2",
+        os.path.join("tests", "test_unit.py"): "feature/feature_tests_test_unit.py.j2",
+        os.path.join("tests", "locustfile.py"): "feature/feature_tests_locustfile.py.j2",
+        os.path.join("tests", "test_selenium.py"): "feature/feature_tests_test_selenium.py.j2",
+    }
+    
+    # Archivos que van en la raíz de splent_feature_<name>
+    base_files_and_templates = {
+        ".gitignore": "feature/feature_.gitignore.j2",
+        "pyproject.toml": "feature/feature_pyproject.toml.j2",
+        "MANIFEST.in": "feature/feature_MANIFEST.in.j2"
     }
 
     # Crear todos los archivos de código en src_path
-    for filename, template in files_and_templates.items():
+    for filename, template in src_files_and_templates.items():
         full_path = os.path.join(src_path, filename)
+        if template:
+            render_and_write_file(env, template, full_path, context)
+        else:
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            open(full_path, "a").close()
+            
+    # Crear todos los archivos de código en base_path
+    for filename, template in base_files_and_templates.items():
+        full_path = os.path.join(base_path, filename)
         if template:
             render_and_write_file(env, template, full_path, context)
         else:
@@ -72,14 +88,6 @@ def make_feature(name):
     src_root = os.path.join(base_path, "src")
     os.makedirs(src_root, exist_ok=True)
     open(os.path.join(src_root, "__init__.py"), "a").close()
-
-    # Crear el pyproject.toml en la raíz del módulo
-    render_and_write_file(
-        env,
-        "module_pyproject.toml.j2",
-        os.path.join(base_path, "pyproject.toml"),
-        context,
-    )
 
     # Cambiar permisos y propietario
     uid = 1000

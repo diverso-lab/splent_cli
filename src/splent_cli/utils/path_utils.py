@@ -17,22 +17,22 @@ class PathUtils:
         return os.getenv("WORKING_DIR", "")
 
     @staticmethod
-    def get_features_file():
-
-        splent_app = os.getenv("SPLENT_APP", "splent_app")
-
+    def get_app_base_dir():
         working_dir = PathUtils.get_working_dir()
-
-        return os.path.join(working_dir, splent_app, "features.txt")
+        splent_app = os.getenv("SPLENT_APP", "splent_app")
+        return os.path.join(working_dir, splent_app)
 
     @staticmethod
     def get_app_dir():
 
         splent_app = os.getenv("SPLENT_APP", "splent_app")
-
+        return os.path.join(PathUtils.get_app_base_dir(), "src", splent_app)
+    
+    @staticmethod
+    def get_app_env_file():
         working_dir = PathUtils.get_working_dir()
-
-        return os.path.join(working_dir, splent_app, "src", splent_app)
+        splent_app = os.getenv("SPLENT_APP", "splent_app")
+        return os.path.join(working_dir, splent_app, "docker", ".env")
 
     @staticmethod
     def get_modules_dir():
@@ -44,12 +44,8 @@ class PathUtils:
 
     @staticmethod
     def get_splent_cli_dir():
-        base_dir = os.getcwd()
-
-        if is_splent_dev_mode():
-            return os.path.join(base_dir, "splent_cli", "src", "splent_cli")
-
-        return os.path.join(base_dir, "splent_cli")
+        working_dir = PathUtils.get_working_dir()
+        return os.path.join(working_dir, "splent_cli", "src", "splent_cli")
 
     @staticmethod
     def get_splent_cli_templates_dir():
@@ -66,15 +62,7 @@ class PathUtils:
     @staticmethod
     def get_splent_framework_dir():
         working_dir = PathUtils.get_working_dir()
-
-        if is_splent_dev_mode():
-            return os.path.join(working_dir, "splent_framework", "src", "splent_framework")
-
-        package = importlib.util.find_spec("splent_framework")
-        if package and package.origin:
-            return os.path.dirname(package.origin)
-
-        raise FileNotFoundError("Could not find 'splent_framework'. Check the installation.")
+        return os.path.join(working_dir, "splent_framework", "src", "splent_framework")
 
     @staticmethod
     def get_core_dir():

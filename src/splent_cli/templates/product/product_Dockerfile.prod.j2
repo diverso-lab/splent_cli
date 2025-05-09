@@ -1,0 +1,19 @@
+FROM python:3.13
+WORKDIR /workspace
+
+COPY {{ product_name }}/ {{ product_name }}/
+
+ENV PIP_ROOT_USER_ACTION=ignore
+RUN pip install --no-cache-dir ./{{ product_name }}
+RUN pip install --no-cache-dir ./{{ product_name }}[core]
+RUN pip install --no-cache-dir ./{{ product_name }}[features]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gcc \
+    libffi-dev \
+    libssl-dev \
+    mariadb-client \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 5000

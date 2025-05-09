@@ -15,7 +15,7 @@ def check_working_dir():
     working_dir = os.getenv("WORKING_DIR", "").strip()
 
     if working_dir != "/workspace":
-        print(f"❌ ERROR: WORKING_DIR must be set to '/workspace', but got '{working_dir}'.")
+        print(f"❌ CLI ERROR: WORKING_DIR must be set to '/workspace', but got '{working_dir}'.")
         sys.exit(1)
 
 

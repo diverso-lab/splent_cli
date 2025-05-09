@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# ---------------------------------------------------------------------------
+# Creative Commons CC BY 4.0 - SPLENT - Diverso Lab
+# ---------------------------------------------------------------------------
+# This script is licensed under the Creative Commons Attribution 4.0 
+# International License.
+# https://creativecommons.org/licenses/by/4.0/
+# ---------------------------------------------------------------------------
+
+set -e  # Exit immediately on error
+
+# Main startup sequence
+bash /workspace/{{ product_name }}/scripts/00_core_requirements_dev.sh
+bash /workspace/{{ product_name }}/scripts/00_install_features.sh
+bash /workspace/{{ product_name }}/scripts/01_compile_assets.sh
+bash /workspace/{{ product_name }}/scripts/02_0_db_wait_connection.sh
+bash /workspace/{{ product_name }}/scripts/02_1_db_create_db_test.sh
+bash /workspace/{{ product_name }}/scripts/03_initialize_migrations.sh
+bash /workspace/{{ product_name }}/scripts/04_handle_migrations.sh
+bash /workspace/{{ product_name }}/scripts/05_0_start_app_dev.sh

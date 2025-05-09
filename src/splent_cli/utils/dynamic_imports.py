@@ -6,13 +6,17 @@ import importlib
 from dotenv import load_dotenv
 from importlib.metadata import distributions
 
+from splent_cli.utils.path_utils import PathUtils
+
+load_dotenv()
+
 _app_instance = None
 _db_instance = None
 _module_cache = None
 _mail_service_instance = None
 
-module_name = os.environ.get("SPLENT_APP", "splent_app")
-dotenv_path = f"/workspace/splent_docker/products/{module_name}/.env"
+module_name = os.getenv("SPLENT_APP", "splent_app")
+dotenv_path = PathUtils.get_app_env_file()
 
 if os.path.exists(dotenv_path):
     load_dotenv(dotenv_path, override=True)

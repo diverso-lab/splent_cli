@@ -1,0 +1,50 @@
+services:
+
+  {{ product_name }}_web:
+    build:
+      context: ../../
+      dockerfile: {{ product_name }}/docker/Dockerfile.{{ product_name }}.dev
+    container_name: {{ product_name }}_web
+    volumes:
+      - ../../:/workspace
+    env_file:
+      - ./.env
+    ports:
+      - "{{ web_port }}:5000"
+    depends_on:
+      - {{ product_name }}_db
+      - {{ product_name }}_redis
+    networks:
+      - splent_network
+    command: [ "bash", "-c", "bash /workspace/{{ product_name }}/entrypoints/entrypoint.dev.sh" ]
+
+  {{ product_name }}_db:
+    image: mariadb:latest
+    container_name: {{ product_name }}_db
+    env_file:
+      - ./.env
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "{{ db_port }}:3306"
+    volumes:
+      - {{ product_name }}_db_data:/var/lib/mysql
+    networks:
+      - splent_network
+
+  {{ product_name }}_redis:
+    container_name: {{ product_name }}_redis_container
+    image: redis:latest
+    restart: always
+    ports:
+      - "{{ redis_port }}:6379"
+    networks:
+      - splent_network
+
+volumes:
+  {{ product_name }}_db_data:
+
+networks:
+
+  splent_network:
+    driver: bridge
+    name: splent_network

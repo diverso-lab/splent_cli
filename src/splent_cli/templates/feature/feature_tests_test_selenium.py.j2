@@ -5,7 +5,7 @@ from splent_framework.core.environment.host import get_host_for_selenium_testing
 from splent_framework.core.selenium.common import initialize_driver, close_driver
 
 
-def test_{{ module_name }}_index():
+def test_{{ feature_name }}_index():
 
     driver = initialize_driver()
 
@@ -13,7 +13,7 @@ def test_{{ module_name }}_index():
         host = get_host_for_selenium_testing()
 
         # Open the index page
-        driver.get(f'{host}/{{ module_name }}')
+        driver.get(f'{host}/{{ feature_name }}')
 
         # Wait a little while to make sure the page has loaded completely
         time.sleep(4)
@@ -32,4 +32,4 @@ def test_{{ module_name }}_index():
 
 
 # Call the test function
-test_{{ module_name }}_index()
+test_{{ feature_name }}_index()
