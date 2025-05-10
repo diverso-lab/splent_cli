@@ -1,0 +1,25 @@
+"""
+Default configuration for this SPLENT product
+
+You can customize these classes as needed.
+SPLENT will always use this file, falling back to the framework
+only if you remove a config class.
+"""
+
+from splent_framework.configuration.default_config import Config as BaseConfig
+
+
+class DevelopmentConfig(BaseConfig):
+    DEBUG = True
+    TEMPLATES_AUTO_RELOAD = True
+
+
+class TestingConfig(BaseConfig):
+    TESTING = True
+    WTF_CSRF_ENABLED = False
+    SESSION_TYPE = "filesystem"
+    SESSION_FILE_DIR = "/tmp/flask_sessions"
+
+
+class ProductionConfig(BaseConfig):
+    DEBUG = False

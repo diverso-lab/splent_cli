@@ -12,7 +12,6 @@ load_dotenv()
 
 _app_instance = None
 _module_cache = None
-_mail_service_instance = None
 
 module_name = os.getenv("SPLENT_APP", "splent_app")
 dotenv_path = PathUtils.get_app_env_file()
@@ -82,18 +81,3 @@ def get_app():
     create_app = get_create_app()
     _app_instance = create_app()
     return _app_instance
-
-
-def get_mail_service():
-    global _mail_service_instance
-    if _mail_service_instance is not None:
-        return _mail_service_instance
-
-    mod = get_app_module()
-    if hasattr(mod, "mail_service"):
-        _mail_service_instance = mod.mail_service
-        return _mail_service_instance
-
-    raise RuntimeError(
-        f"❌ Module '{mod.__name__}' does not expose `mail_service`."
-    )

@@ -1,7 +1,7 @@
 import click
 from flask.cli import with_appcontext
-from splent_cli.utils.dynamic_imports import get_app
-from splent_framework.core.managers.feature_manager import FeatureManager
+from flask import current_app
+from splent_framework.managers.feature_manager import FeatureManager
 
 
 @click.command(
@@ -9,7 +9,7 @@ from splent_framework.core.managers.feature_manager import FeatureManager
 )
 @with_appcontext
 def feature_list():
-    app = get_app
+    app = current_app
     manager = FeatureManager(app)
 
     loaded_features, ignored_features = manager.get_features()

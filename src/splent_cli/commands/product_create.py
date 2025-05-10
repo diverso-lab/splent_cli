@@ -87,6 +87,9 @@ def make_product(name, features_file):
         "pyproject.toml": "product/product_pyproject.toml.j2",
         "README.md": "product/product_README.md.j2",
         f"src/{name}/__init__.py": "product/product_init.py.j2",
+        f"src/{name}/config.py": "product/product_config.py.j2",
+        f"src/{name}/errors.py": "product/product_errors.py.j2",
+        f"src/{name}/logging.py": "product/product_logging.py.j2",
     }
 
     raw_files = {

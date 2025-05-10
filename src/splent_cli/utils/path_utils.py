@@ -1,7 +1,7 @@
 import os
 import importlib.util
 from dotenv import load_dotenv
-from splent_framework.core.configuration.configuration import uploads_folder_name
+from splent_framework.configuration.configuration import uploads_folder_name
 
 load_dotenv()
 

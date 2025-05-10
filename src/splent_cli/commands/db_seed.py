@@ -7,7 +7,7 @@ import tomllib
 from flask.cli import with_appcontext
 from splent_cli.commands.db_reset import db_reset
 from splent_cli.utils.path_utils import PathUtils
-from splent_framework.core.seeders.BaseSeeder import BaseSeeder
+from splent_framework.seeders.BaseSeeder import BaseSeeder
 
 
 def get_installed_seeders(specific_module=None):
