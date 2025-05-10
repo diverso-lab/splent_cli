@@ -2,14 +2,13 @@ import click
 import shutil
 import os
 import subprocess
+from splent_framework.core.db import db
 from flask.cli import with_appcontext
-from splent_cli.utils.dynamic_imports import get_create_app, get_db
+from splent_cli.utils.dynamic_imports import get_create_app
 from sqlalchemy import MetaData
 
 from splent_cli.commands.clear_uploads import clear_uploads
 from splent_cli.utils.path_utils import PathUtils
-
-db = get_db()
 
 
 @click.command(

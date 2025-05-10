@@ -2,27 +2,27 @@ import os
 
 from flask import Flask
 
-from flask_sqlalchemy import SQLAlchemy
-from dotenv import load_dotenv
 from flask_migrate import Migrate
 from flask_session import Session
 
-
+from splent_framework.core.db import db
 from splent_framework.core.managers.feature_manager import FeatureManager
 from splent_framework.core.managers.config_manager import ConfigManager
 from splent_framework.core.managers.error_handler_manager import ErrorHandlerManager
 from splent_framework.core.managers.logging_manager import LoggingManager
-from splent_feature_mail.services import MailService
 from splent_framework.core.configuration.configuration import get_app_version
 from splent_cli.utils.path_utils import PathUtils
 
-db = SQLAlchemy()
 migrate = Migrate(directory=PathUtils.get_migrations_dir())
-mail_service = MailService()
+mail_service = None
 sess = Session()
 
 
 def create_app(config_name="development"):
+    
+    from splent_cli.utils.dynamic_imports import install_features_if_needed
+    install_features_if_needed()
+    
     app = Flask(__name__)
 
     # Load configuration according to environment
@@ -60,6 +60,8 @@ def create_app(config_name="development"):
     error_handler_manager = ErrorHandlerManager(app)
     error_handler_manager.register_error_handlers()
 
+    from splent_feature_mail.services import MailService
+    mail_service = MailService()
     mail_service.init_app(app)
 
     # Injecting environment variables into jinja context
@@ -83,9 +85,3 @@ def create_app(config_name="development"):
         return env_vars
 
     return app
-
-
-def get_db():
-    return db
-
-__all__ = ["create_app", "get_db", "db", "mail_service"]

@@ -17,7 +17,7 @@ echo "🚀 [Core requirements] entrypoint starting..."
 # Install splent_framework
 if [ -d /workspace/splent_framework ]; then
     echo "🔁 Installing splent_framework in editable mode..."
-    pip install --no-cache-dir -e /workspace/splent_framework
+    pip install --no-cache-dir --root-user-action=ignore -e /workspace/splent_framework
 else
     echo "📦 Installing splent_framework from pyproject.toml [core]..."
     pip install --no-cache-dir "{{ product_name }}[core]"
@@ -26,8 +26,8 @@ fi
 # Install splent_cli
 if [ -d /workspace/splent_cli ]; then
     echo "🔁 Installing splent_cli in editable mode (with [dev])..."
-    pip install --no-cache-dir -e /workspace/splent_cli
-    pip install --no-cache-dir -e /workspace/splent_cli[dev]
+    pip install --no-cache-dir --root-user-action=ignore -e /workspace/splent_cli
+    pip install --no-cache-dir --root-user-action=ignore -e /workspace/splent_cli[dev]
 else
     echo "⚠️  splent_cli directory not found. Skipping editable install."
 fi

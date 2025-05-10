@@ -4,7 +4,7 @@ WORKDIR /workspace
 COPY {{ product_name }}/ {{ product_name }}/
 
 ENV PIP_ROOT_USER_ACTION=ignore
-RUN pip install -e ./{{ product_name }}
+RUN pip install --no-cache-dir --root-user-action=ignore -e ./{{ product_name }}
 RUN pip install ./{{ product_name }}[dev]
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

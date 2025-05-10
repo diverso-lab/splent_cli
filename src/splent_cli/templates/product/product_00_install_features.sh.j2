@@ -32,7 +32,7 @@ echo "$features"
 for feature in $features; do
     if [ -d "/workspace/$feature" ]; then
         echo "🔁 Installing $feature in editable mode..."
-        pip install -e "/workspace/$feature" || echo "❌ Error installing $feature"
+        pip install --no-cache-dir --root-user-action=ignore -e "/workspace/$feature" || echo "❌ Error installing $feature"
     else
         echo "⚠️  $feature not found locally. Skipping."
     fi

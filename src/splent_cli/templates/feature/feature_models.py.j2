@@ -1,6 +1,4 @@
-from splent_cli.utils.dynamic_imports import get_db
-
-db = get_db()
+from splent_framework.core.db import db
 
 
 class {{ feature_name | pascalcase }}(db.Model):

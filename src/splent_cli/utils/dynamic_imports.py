@@ -11,7 +11,6 @@ from splent_cli.utils.path_utils import PathUtils
 load_dotenv()
 
 _app_instance = None
-_db_instance = None
 _module_cache = None
 _mail_service_instance = None
 
@@ -25,31 +24,30 @@ else:
 
 
 def install_features_if_needed():
-    """Ensure all features in features.txt are installed and their src paths are in sys.path."""
-    features_file = f"/workspace/{module_name}/features.txt"
-    if not os.path.exists(features_file):
+    """Ensure all features from pyproject.toml are installed and their src paths are in sys.path."""
+    pyproject_path = f"/workspace/{module_name}/pyproject.toml"
+    if not os.path.exists(pyproject_path):
         return
 
     installed = {dist.metadata["Name"] for dist in distributions()}
-    with open(features_file) as f:
-        for line in f:
-            feature = line.strip()
-            if not feature:
-                continue
+    with open(pyproject_path, "rb") as f_toml:
+        pyproject = tomllib.load(f_toml)
 
-            path = f"/workspace/{feature}"
-            pyproject_path = os.path.join(path, "pyproject.toml")
-            if not os.path.exists(pyproject_path):
-                continue
+    features = pyproject.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    for feature in features:
+        path = f"/workspace/{feature}"
+        pyproject_feature = os.path.join(path, "pyproject.toml")
+        if not os.path.exists(pyproject_feature):
+            continue
 
-            with open(pyproject_path, "rb") as f_toml:
-                name = tomllib.load(f_toml)["project"]["name"]
-                if name not in installed:
-                    subprocess.run([sys.executable, "-m", "pip", "install", "-e", path], check=True)
+        with open(pyproject_feature, "rb") as f_feat:
+            name = tomllib.load(f_feat)["project"]["name"]
+            if name not in installed:
+                subprocess.run([sys.executable, "-m", "pip", "install", "-e", path], check=True)
 
-            src_path = os.path.join(path, "src")
-            if src_path not in sys.path:
-                sys.path.insert(0, src_path)
+        src_path = os.path.join(path, "src")
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
 
 
 def get_app_module():
@@ -84,25 +82,6 @@ def get_app():
     create_app = get_create_app()
     _app_instance = create_app()
     return _app_instance
-
-
-def get_db():
-    global _db_instance
-    if _db_instance is not None:
-        return _db_instance
-
-    mod = get_app_module()
-    if hasattr(mod, "get_db") and callable(mod.get_db):
-        _db_instance = mod.get_db()
-    elif hasattr(mod, "db"):
-        app = get_app()
-        mod.db.init_app(app)
-        _db_instance = mod.db
-    else:
-        raise RuntimeError(
-            f"❌ Module '{mod.__name__}' must define either `get_db()` or `db`."
-        )
-    return _db_instance
 
 
 def get_mail_service():
