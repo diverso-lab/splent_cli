@@ -6,5 +6,5 @@ if [ $# -eq 0 ]; then
     tail -f /dev/null
 else
     # Ejecuta la CLI con los argumentos proporcionados
-    exec splent_cli "$@"
+    exec splent "$@"
 fi

@@ -43,7 +43,7 @@ dev = [
 ]
 
 [project.scripts]
-splent_cli = "splent_cli.__main__:main"
+splent = "splent_cli.__main__:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

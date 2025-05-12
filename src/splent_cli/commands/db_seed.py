@@ -43,6 +43,8 @@ def get_installed_seeders(specific_module=None):
                     and obj is not BaseSeeder
                 ):
                     seeders.append(obj())
+        except ModuleNotFoundError:
+            pass
         except Exception as e:
             click.echo(
                 click.style(f"❌ Error loading seeders from {feature}: {e}", fg="red"),

@@ -27,7 +27,7 @@ class SPLENTCLI(FlaskGroup):
         rv = super().get_command(ctx, cmd_name)
         if rv is None:
             click.echo(f"No such command '{cmd_name}'.")
-            click.echo("Try 'splent_cli --help' for a list of available commands.")
+            click.echo("Try 'splent --help' for a list of available commands.")
         return rv
 
 

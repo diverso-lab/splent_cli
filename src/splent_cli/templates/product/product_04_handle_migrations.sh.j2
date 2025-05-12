@@ -28,7 +28,7 @@ if [ "$TABLE_COUNT" -eq 0 ]; then
     flask db upgrade
     if [ "$RUN_DB_SEED" = "true" ]; then
         echo "Seeding database..."
-        splent_cli db:seed -y
+        splent db:seed -y
     else
         echo "Skipping DB seeding (RUN_DB_SEED != true)"
     fi
