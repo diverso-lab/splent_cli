@@ -5,6 +5,7 @@ import tomllib
 import importlib
 from dotenv import load_dotenv
 from importlib.metadata import distributions
+from flask import Flask
 
 from splent_cli.utils.path_utils import PathUtils
 
@@ -73,6 +74,11 @@ def get_create_app():
         return mod.create_app
     raise RuntimeError(f"❌ The module '{mod.__name__}' does not define `create_app()`")
 
+def get_create_app_in_testing_mode():
+    mod = get_app_module()
+    if not hasattr(mod, "create_app"):
+        raise RuntimeError(f"❌ The module '{mod.__name__}' no define create_app()")
+    return mod.create_app("testing")
 
 def get_app():
     global _app_instance
@@ -81,3 +87,8 @@ def get_app():
     create_app = get_create_app()
     _app_instance = create_app()
     return _app_instance
+
+
+def get_current_app_config_value(key: str):
+    app: Flask = get_create_app_in_testing_mode()
+    return app.config.get(key)

@@ -1,55 +1,39 @@
 import os
 import sys
-import importlib
 import click
 from dotenv import load_dotenv
-from flask.cli import FlaskGroup
-from splent_cli.utils.dynamic_imports import get_app
 
-from splent_cli.utils.path_utils import PathUtils
+from splent_cli.utils.dynamic_imports import get_app
+from splent_cli.utils.command_loader import load_commands
 
 load_dotenv()
 
 
-def check_working_dir():
-    working_dir = os.getenv("WORKING_DIR", "").strip()
-
-    if working_dir != "/workspace":
-        print(f"❌ CLI ERROR: WORKING_DIR must be set to '/workspace', but got '{working_dir}'.")
-        sys.exit(1)
-
-
-class SPLENTCLI(FlaskGroup):
-    def __init__(self, **kwargs):
-        super().__init__(create_app=get_app, **kwargs)
-
-    def get_command(self, ctx, cmd_name):
-        rv = super().get_command(ctx, cmd_name)
-        if rv is None:
-            click.echo(f"No such command '{cmd_name}'.")
-            click.echo("Try 'splent --help' for a list of available commands.")
-        return rv
-
-
-def load_commands(cli_group):
+class SPLENTCLI(click.Group):
     """
-    Dynamically import all commands in the specified directory and add them to the CLI group.
+    CLI principal que detecta si un comando requiere una app Flask y,
+    en ese caso, inyecta el contexto automáticamente.
     """
-    commands_path = PathUtils.get_commands_path()
 
-    for file in os.listdir(commands_path):
-        if file.endswith(".py") and not file.startswith("__"):
-            module_name = f"splent_cli.commands.{file[:-3]}"
-            module = importlib.import_module(module_name)
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if isinstance(attr, click.Command):
-                    cli_group.add_command(attr)
+    def invoke(self, ctx):
+        cmd_name = ctx.protected_args[0] if ctx.protected_args else None
+        command = self.get_command(ctx, cmd_name)
+
+        if command and getattr(command, "requires_app", False):
+            app = get_app()
+            with app.app_context():
+                return super().invoke(ctx)
+
+        return super().invoke(ctx)
 
 
 @click.group(cls=SPLENTCLI)
 def cli():
-    """A CLI tool to help with project development."""
+    """SPLENT CLI: gestión unificada de features, productos y apps Flask."""
+
+
+# Cargar todos los comandos automáticamente
+load_commands(cli)
 
 
 if __name__ == "__main__":

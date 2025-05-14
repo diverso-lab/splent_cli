@@ -4,8 +4,8 @@ import importlib
 import click
 import tomllib
 
-from flask.cli import with_appcontext
 from splent_cli.commands.db_reset import db_reset
+from splent_cli.utils.decorators import requires_app
 from splent_cli.utils.path_utils import PathUtils
 from splent_framework.seeders.BaseSeeder import BaseSeeder
 
@@ -55,6 +55,7 @@ def get_installed_seeders(specific_module=None):
     return seeders
 
 
+@requires_app
 @click.command(
     "db:seed",
     help="Populates the database with the seeders defined in each feature.",
@@ -67,7 +68,6 @@ def get_installed_seeders(specific_module=None):
     help="Confirm the operation without prompting.",
 )
 @click.argument("module", required=False)
-@with_appcontext
 def db_seed(reset, yes, module):
     if reset:
         if yes or click.confirm(
@@ -107,4 +107,7 @@ def db_seed(reset, yes, module):
             break
 
     if success:
-        click.echo(click.style("Database populated with test data.", fg="green"))
+        click.echo(click.style("✅ Database populated with test data.", fg="green"))
+
+
+cli_command = db_seed
