@@ -2,13 +2,13 @@ services:
 
   {{ product_name }}_web:
     build:
-      context: ../../
-      dockerfile: {{ product_name }}/docker/Dockerfile.{{ product_name }}.dev
+      context: /workspace
+      dockerfile: /workspace/{{ product_name }}/docker/Dockerfile.{{ product_name }}.dev
     container_name: {{ product_name }}_web
     volumes:
-      - ../../:/workspace
+      - ${SPLENT_HOST_PROJECT_DIR}:/workspace
     env_file:
-      - ./.env
+      - /workspace/{{ product_name }}/docker/.env
     ports:
       - "{{ web_port }}:5000"
     depends_on:
@@ -16,13 +16,13 @@ services:
       - {{ product_name }}_redis
     networks:
       - splent_network
-    command: [ "bash", "-c", "bash /workspace/{{ product_name }}/entrypoints/entrypoint.dev.sh" ]
+    command: [ "tail", "-f", "/dev/null" ]
 
   {{ product_name }}_db:
     image: mariadb:latest
     container_name: {{ product_name }}_db
     env_file:
-      - ./.env
+      - /workspace/{{ product_name }}/docker/.env
     command: --default-authentication-plugin=mysql_native_password
     ports:
       - "{{ db_port }}:3306"

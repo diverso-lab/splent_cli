@@ -54,28 +54,19 @@
 
                 {% if current_user.is_anonymous %}
 
-                    <li class="sidebar-header">
-                        Let's get started!
-                    </li>
-
-                    <li class="sidebar-item {{ 'active' if request.endpoint == 'auth.login' else '' }}">
-                        <a class="sidebar-link" href="{{ url_for('auth.login') }}">
-                            <i class="align-middle" data-feather="log-in"></i> <span class="align-middle">Login</span>
-                        </a>
-                    </li>
-
-                    <li class="sidebar-item {{ 'active' if request.endpoint == 'auth.show_signup_form' else '' }}">
-                        <a class="sidebar-link" href="{{ url_for('auth.show_signup_form') }}">
-                            <i class="align-middle" data-feather="user-plus"></i> <span
-                                class="align-middle">Sign Up</span>
-                        </a>
-                    </li>
+                    {% for hook in get_template_hooks("layout.anonymous_sidebar") %}
+                        {{ hook() | safe }}
+                    {% endfor %}
 
                 {% else %}
 
                     <li class="sidebar-header">
                         Options
                     </li>
+
+                    {% for hook in get_template_hooks("layout.authenticated_sidebar") %}
+                        {{ hook() | safe }}
+                    {% endfor %}
 
                     <li class="sidebar-item {{ 'active' if request.endpoint == 'profile.edit_profile' else '' }}">
                         <a class="sidebar-link" href="{{ url_for('profile.edit_profile') }}">
@@ -84,12 +75,7 @@
                         </a>
                     </li>
 
-                    <li class="sidebar-item">
-                        <a class="sidebar-link" href="{{ url_for('auth.logout') }}">
-                            <i class="align-middle" data-feather="log-out"></i> <span
-                                class="align-middle">Log out</span>
-                        </a>
-                    </li>
+                    
 
                 {% endif %}
 

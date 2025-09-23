@@ -10,6 +10,9 @@
 
 set -e  # Exit immediately on error
 
+mkdir -p /var/log
+touch /var/log/entrypoint.log
+
 # Main startup sequence
 bash /workspace/{{ product_name }}/scripts/00_core_requirements_dev.sh
 bash /workspace/{{ product_name }}/scripts/00_install_features.sh
