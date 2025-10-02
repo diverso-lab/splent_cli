@@ -6,6 +6,7 @@ SPLENT will always use this file, falling back to the framework
 only if you remove a config class.
 """
 
+import os
 from splent_framework.configuration.default_config import Config as BaseConfig
 
 
@@ -13,6 +14,14 @@ class DevelopmentConfig(BaseConfig):
     DEBUG = True
     TEMPLATES_AUTO_RELOAD = True
 
+    def __init__(self):
+        super().__init__()
+        self.SQLALCHEMY_DATABASE_URI = (
+            f"mysql+pymysql://{os.getenv('MARIADB_USER', 'default_user')}:"
+            f"{os.getenv('MARIADB_PASSWORD', 'default_password')}@"
+            f"{os.getenv('MARIADB_HOSTNAME', 'localhost')}:3306/"
+            f"{os.getenv('MARIADB_DATABASE', 'default_test_db')}"
+        )
 
 class TestingConfig(BaseConfig):
     TESTING = True
@@ -20,6 +29,18 @@ class TestingConfig(BaseConfig):
     SESSION_TYPE = "filesystem"
     SESSION_FILE_DIR = "/tmp/flask_sessions"
 
+    def __init__(self):
+        super().__init__()
+        self.SQLALCHEMY_DATABASE_URI = (
+            f"mysql+pymysql://{os.getenv('MARIADB_USER', 'default_user')}:"
+            f"{os.getenv('MARIADB_PASSWORD', 'default_password')}@"
+            f"{os.getenv('MARIADB_HOSTNAME', 'localhost')}:3306/"
+            f"{os.getenv('MARIADB_TEST_DATABASE', 'default_test_db')}"
+        )
+
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
+    
+    def __init__(self):
+        super().__init__() 

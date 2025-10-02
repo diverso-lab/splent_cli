@@ -16,4 +16,10 @@ set -e
 
 echo "🚀 [Start app in dev mode] entrypoint starting..."
 
-exec flask run --host=0.0.0.0 --port=5000 --reload --debug
+watchmedo auto-restart \
+    --directory=/workspace/{{ product_name }}/src/{{ product_name }} \
+    --pattern=*.py \
+    --recursive \
+    -- flask run --host=0.0.0.0 --port=5000 --debug >> /var/log/entrypoint.log 2>&1 &
+
+echo "✅ [Start app in dev mode] entrypoint finished."
