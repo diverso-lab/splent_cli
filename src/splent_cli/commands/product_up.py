@@ -3,23 +3,31 @@ import subprocess
 import threading
 import click
 import tomllib
+import os, tomllib, subprocess, click
+
 from collections import OrderedDict
 
-def is_splent_developer() -> bool:
-    return os.getenv("SPLENT_USE_SSH", "").lower() == "true"
-
 def clone_missing_features(product_path, workspace="/workspace"):
-    """Clona automáticamente las features listadas en project.optional-dependencies.features."""
-    pyproject_file = os.path.join(product_path, "pyproject.toml")
-    if not os.path.exists(pyproject_file):
+    
+    def is_splent_developer():
+        if os.getenv("SPLENT_USE_SSH", "").lower() == "true": return True
+        if os.getenv("SPLENT_ROLE", "").lower() == "developer": return True
+        try:
+            r = subprocess.run(["ssh","-T","git@github.com"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
+            return "successfully authenticated" in r.stderr.lower()
+        except Exception:
+            return False
+
+    py = os.path.join(product_path, "pyproject.toml")
+    if not os.path.exists(py):
         click.echo(f"❌ pyproject.toml not found at {product_path}")
         return []
 
-    with open(pyproject_file, "rb") as f:
-        pyproject = tomllib.load(f)
+    with open(py, "rb") as f:
+        data = tomllib.load(f)
 
-    # Leer lista de features estándar
-    features = pyproject.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    # ← tu formato real
+    features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
     if not features:
         click.echo("ℹ️ No features declared under [project.optional-dependencies.features]")
         return []
@@ -30,39 +38,29 @@ def clone_missing_features(product_path, workspace="/workspace"):
     cloned = []
     for feature in features:
         org = "splent-io"
-        repo_url = (
-            f"git@github.com:{org}/{feature}.git"
-            if use_ssh
-            else f"https://github.com/{org}/{feature}.git"
-        )
+        url = (f"git@github.com:{org}/{feature}.git" if use_ssh
+               else f"https://github.com/{org}/{feature}.git")
 
-        feature_path = os.path.join(workspace, feature)
-        if os.path.exists(feature_path):
-            click.echo(f"✅ {feature} already present at {feature_path}")
+        dst = os.path.join(workspace, feature)
+        if os.path.exists(dst):
+            click.echo(f"✅ {feature} already present at {dst}")
             continue
 
-        click.echo(f"⬇️ Cloning {feature} from {repo_url}")
-        
-        result = subprocess.run(
-            ["git", "clone", "--depth", "1", repo_url, feature_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        if result.returncode != 0:
-            click.echo(f"⚠️  Failed to clone {feature} from {repo_url}")
-            click.echo(result.stderr.strip())
-            continue  # saltar a la siguiente feature
-        else:
-            click.echo(f"✅ Cloned {feature}")
-            cloned.append(feature)
-
+        click.echo(f"⬇️ Cloning {feature} from {url}")
+        r = subprocess.run(["git","clone","--depth","1",url,dst],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode != 0:
+            click.echo(f"⚠️  Failed to clone {feature} from {url}")
+            click.echo(r.stderr.strip())
+            continue
+        click.echo(f"✅ Cloned {feature}")
         cloned.append(feature)
 
     if cloned:
-        click.echo(f"✨ Cloned {len(cloned)} new feature(s): {', '.join(cloned)}")
+        uniq = sorted(set(cloned))
+        click.echo(f"✨ Cloned {len(uniq)} new feature(s): {', '.join(uniq)}")
 
+    # Devolvemos la lista “oficial” del pyproject (no solo las clonadas)
     return features
 
 
@@ -184,15 +182,11 @@ def ensure_env_reviewed_if_prod(env, env_path):
 
 @click.command("product:up")
 @click.argument("product", required=False)
-@click.option("--env", default=None, type=click.Choice(["dev", "prod"]), help="Docker environment: dev or prod")
+@click.option("--env", default="dev", type=click.Choice(["dev", "prod"]), help="Docker environment: dev or prod")
 def product_up(product, env):
-    """
-    Starts a SPLENT product and its activated features using the appropriate docker-compose files.
-    """
     workspace = "/workspace"
     workspace_env = os.path.join(workspace, ".env")
 
-    # Si no se pasa el argumento, usar SPLENT_APP del .env global
     if not product:
         if os.path.exists(workspace_env):
             with open(workspace_env, "r") as f:
@@ -206,14 +200,10 @@ def product_up(product, env):
 
     product_path = os.path.join(workspace, product)
 
-    # Si no se especifica entorno (--env), preguntar
-    if env is None:
-        env = click.prompt("Select environment", type=click.Choice(["dev", "prod"]), default="dev")
-
-    # === NUEVO: Clonar features automáticamente antes de continuar
+    # 0) Clonar features faltantes (devuelve la lista completa del pyproject)
     features_list = clone_missing_features(product_path, workspace)
 
-    # 1. Generar o crear los .env de producto y features
+    # 1) Generar .env (si no existe) para producto + features usando el MISMO env
     docker_dirs = [(product, os.path.join(product_path, "docker"))] + [
         (feature, os.path.join(workspace, feature, "docker")) for feature in features_list
     ]
@@ -221,36 +211,37 @@ def product_up(product, env):
     for name, docker_dir in docker_dirs:
         if not os.path.exists(docker_dir):
             continue
-
         env_file = os.path.join(docker_dir, ".env")
         if not os.path.exists(env_file):
             click.echo(f"⚠️  No .env found for {name}. Using environment '{env}'.")
-            example_file = os.path.join(docker_dir, f".env.{env}.example")
-
-            if os.path.exists(example_file):
-                subprocess.run(["cp", example_file, env_file], check=True)
-                click.echo(f"📄 Created {name}/docker/.env from {os.path.basename(example_file)}")
+            example = os.path.join(docker_dir, f".env.{env}.example")
+            fallback = os.path.join(docker_dir, ".env.example")
+            selected = example if os.path.exists(example) else (fallback if os.path.exists(fallback) else None)
+            if selected:
+                subprocess.run(["cp", selected, env_file], check=True)
+                click.echo(f"📄 Created {name}/docker/.env from {os.path.basename(selected)}")
             else:
-                click.echo(f"❌ No example file found for {env} environment in {docker_dir}")
-                return
+                click.echo(f"⚠️  No .env template found for {name} in {docker_dir} (skipping).")
         else:
             click.echo(f"ℹ️  Using existing {name}/docker/.env")
 
-    # 2. Fusionar variables de entorno
-    product_env_path = os.path.join(product_path, "docker", ".env")
-    feature_env_paths = [os.path.join(workspace, feature, "docker", ".env") for feature in features_list]
-    merge_feature_envs_into_product_env(product_env_path, feature_env_paths)
+    # 2) Merge variables (si falta el .env del producto, no abortar)
+    product_env = os.path.join(product_path, "docker", ".env")
+    feature_envs = [os.path.join(workspace, feat, "docker", ".env") for feat in features_list]
+    if os.path.exists(product_env):
+        merge_feature_envs_into_product_env(product_env, feature_envs)
+    else:
+        click.echo(f"⚠️  Product .env not found at {product_env} (merge skipped).")
     
-    # 3. Confirmar si es producción
-    ensure_env_reviewed_if_prod(env, product_env_path)
+    # 3) Confirmación solo en prod
+    ensure_env_reviewed_if_prod(env, product_env)
 
-    # 4. Levantar el producto y sus features
+    # 4) Levantar compose: producto + features (si tienen docker-compose)
     launch_compose(product, os.path.join(product_path, "docker"), env)
+    for feat in features_list:
+        launch_compose(feat, os.path.join(workspace, feat, "docker"), env)
 
-    for feature in features_list:
-        launch_compose(feature, os.path.join(workspace, feature, "docker"), env)
-
-    # 5. Ejecutar entrypoint
+    # 5) Entrypoint del producto
     execute_entrypoint(product, product_path, env)
 
     click.echo("✅ All services started successfully.")
