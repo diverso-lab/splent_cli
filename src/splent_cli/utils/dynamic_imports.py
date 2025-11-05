@@ -14,17 +14,24 @@ load_dotenv()
 _app_instance = None
 _module_cache = None
 
-module_name = os.getenv("SPLENT_APP", "splent_app")
-dotenv_path = PathUtils.get_app_env_file()
+module_name = os.getenv("SPLENT_APP")
+dotenv_path = None
 
-if os.path.exists(dotenv_path):
-    load_dotenv(dotenv_path, override=True)
+if module_name:
+    dotenv_path = PathUtils.get_app_env_file()
+    if os.path.exists(dotenv_path):
+        load_dotenv(dotenv_path, override=True)
+    else:
+        print(f"⚠️ .env file not found at {dotenv_path} — continuing without app environment.")
 else:
-    raise FileNotFoundError(f"⚠️ .env file not found at {dotenv_path}")
+    print("ℹ️ No SPLENT_APP defined — running in base CLI mode (no app context).")
 
 
 def install_features_if_needed():
     """Ensure all features from pyproject.toml are installed and their src paths are in sys.path."""
+    if not module_name:
+        return  # No app defined yet
+
     pyproject_path = f"/workspace/{module_name}/pyproject.toml"
     if not os.path.exists(pyproject_path):
         return
@@ -52,6 +59,8 @@ def install_features_if_needed():
 
 def get_app_module():
     global _module_cache
+    if not module_name:
+        raise RuntimeError("❌ No SPLENT_APP defined — cannot import application module.")
     if _module_cache:
         return _module_cache
 

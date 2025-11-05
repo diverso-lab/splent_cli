@@ -19,11 +19,6 @@ def select_app(app_name):
         click.echo(click.style(f"❌ Product folder not found: {product_path}", fg="red"))
         return
 
-    if not os.path.isfile(product_dotenv_path):
-        click.echo(click.style(f"❌ Missing .env file at: {product_dotenv_path}", fg="red"))
-        click.echo(click.style("💡 You can create it manually or copy a template.", fg="yellow"))
-        return
-
     try:
         # ✅ Solo si todo es válido, entonces modificamos
         with open(workspace_env_path, "r") as f:
