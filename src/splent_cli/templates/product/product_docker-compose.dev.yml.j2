@@ -13,7 +13,6 @@ services:
       - "{{ web_port }}:5000"
     depends_on:
       - {{ product_name }}_db
-      - {{ product_name }}_redis
     networks:
       - splent_network
     command: [ "tail", "-f", "/dev/null" ]
@@ -31,20 +30,9 @@ services:
     networks:
       - splent_network
 
-  {{ product_name }}_redis:
-    container_name: {{ product_name }}_redis_container
-    image: redis:latest
-    restart: always
-    ports:
-      - "{{ redis_port }}:6379"
-    networks:
-      - splent_network
-
 volumes:
   {{ product_name }}_db_data:
 
 networks:
-
   splent_network:
-    driver: bridge
-    name: splent_network
+    external: true
