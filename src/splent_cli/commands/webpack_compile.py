@@ -27,7 +27,24 @@ def webpack_compile(feature_name, watch):
 
 
 def compile_feature(feature, watch, production):
-    webpack_file = os.path.join("/workspace", feature, "src", feature, "assets", "js", "webpack.config.js")
+    """
+    Compiles a feature's webpack assets located under:
+    /workspace/<product>/features/<feature>@<version>/src/<feature_base>/assets/js/webpack.config.js
+    """
+    product = os.getenv("SPLENT_APP")
+    base_feature_name = feature.split("@")[0]
+
+    webpack_file = os.path.join(
+        "/workspace",
+        product,
+        "features",
+        feature,
+        "src",
+        base_feature_name,
+        "assets",
+        "js",
+        "webpack.config.js",
+    )
 
     if not os.path.exists(webpack_file):
         click.echo(click.style(f"⚠ No webpack.config.js found in {feature}, skipping...", fg="yellow"))
@@ -39,7 +56,7 @@ def compile_feature(feature, watch, production):
     extra_flags = "--devtool source-map --no-cache" if not production else ""
     watch_flag = "--watch" if watch and not production else ""
 
-    webpack_command = f"npx webpack --config {webpack_file} --mode {mode} {watch_flag} {extra_flags} --color"
+    webpack_command = f"npx webpack --config '{webpack_file}' --mode {mode} {watch_flag} {extra_flags} --color"
 
     try:
         if watch:
