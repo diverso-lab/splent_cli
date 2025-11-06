@@ -3,17 +3,23 @@ import subprocess
 import threading
 import click
 import tomllib
-import os, tomllib, subprocess, click
-
 from collections import OrderedDict
 
-def clone_missing_features(product_path, workspace="/workspace"):
-    
+
+def clone_missing_features(product_path, workspace="/workspace", default_version="v1.0.0"):
+    """
+    Clona las features declaradas en el pyproject.toml del producto,
+    usando por defecto la versión v1.0.0 si no se especifica.
+    """
+
     def is_splent_developer():
         if os.getenv("SPLENT_USE_SSH", "").lower() == "true": return True
         if os.getenv("SPLENT_ROLE", "").lower() == "developer": return True
         try:
-            r = subprocess.run(["ssh","-T","git@github.com"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
+            r = subprocess.run(
+                ["ssh","-T","git@github.com"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3
+            )
             return "successfully authenticated" in r.stderr.lower()
         except Exception:
             return False
@@ -26,7 +32,6 @@ def clone_missing_features(product_path, workspace="/workspace"):
     with open(py, "rb") as f:
         data = tomllib.load(f)
 
-    # ← tu formato real
     features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
     if not features:
         click.echo("ℹ️ No features declared under [project.optional-dependencies.features]")
@@ -35,34 +40,61 @@ def clone_missing_features(product_path, workspace="/workspace"):
     use_ssh = is_splent_developer()
     click.echo(f"🔑 Cloning mode: {'SSH' if use_ssh else 'HTTPS'}")
 
-    cloned = []
-    for feature in features:
-        org = "splent-io"
-        url = (f"git@github.com:{org}/{feature}.git" if use_ssh
-               else f"https://github.com/{org}/{feature}.git")
+    cache_base = os.path.join(workspace, ".splent_cache", "features")
+    os.makedirs(cache_base, exist_ok=True)
 
-        dst = os.path.join(workspace, feature)
-        if os.path.exists(dst):
-            click.echo(f"✅ {feature} already present at {dst}")
-            continue
+    linked = []
+    org = "splent-io"
 
-        click.echo(f"⬇️ Cloning {feature} from {url}")
-        r = subprocess.run(["git","clone","--depth","1",url,dst],
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if r.returncode != 0:
-            click.echo(f"⚠️  Failed to clone {feature} from {url}")
-            click.echo(r.stderr.strip())
-            continue
-        click.echo(f"✅ Cloned {feature}")
-        cloned.append(feature)
+    for feature_entry in features:
+        # 1️⃣ Parsear nombre y versión (usa la versión por defecto si no hay @)
+        name, _, version = feature_entry.partition("@")
+        version = version or default_version
 
-    if cloned:
-        uniq = sorted(set(cloned))
-        click.echo(f"✨ Cloned {len(uniq)} new feature(s): {', '.join(uniq)}")
+        url = (
+            f"git@github.com:{org}/{name}.git"
+            if use_ssh
+            else f"https://github.com/{org}/{name}.git"
+        )
 
-    # Devolvemos la lista “oficial” del pyproject (no solo las clonadas)
-    return features
+        cache_dir = os.path.join(cache_base, name, version)
+        os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
 
+        # 2️⃣ Clonar o reutilizar cache
+        if not os.path.exists(cache_dir):
+            click.echo(f"⬇️ Cloning {name}@{version} from {url}")
+            r = subprocess.run(
+                ["git", "clone", "--branch", version, "--depth", "1", url, cache_dir],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            if r.returncode != 0:
+                click.echo(f"⚠️  Failed to clone {name}@{version}")
+                click.echo(r.stderr.strip())
+                continue
+            click.echo(f"✅ Cached {name}@{version}")
+        else:
+            click.echo(f"✅ Using cached {name}@{version}")
+
+        # 3️⃣ Crear symlink hacia el producto
+        product_features_dir = os.path.join(product_path, "features")
+        os.makedirs(product_features_dir, exist_ok=True)
+
+        link_name = f"{name}@{version}"
+        link_path = os.path.join(product_features_dir, link_name)
+
+        if os.path.islink(link_path) or os.path.exists(link_path):
+            click.echo(f"ℹ️  {link_name} already linked in {product_features_dir}")
+        else:
+            os.symlink(cache_dir, link_path)
+            click.echo(f"🔗 Linked {link_name} → {cache_dir}")
+
+        linked.append(link_name)
+
+    if linked:
+        uniq = sorted(set(linked))
+        click.echo(f"✨ Linked {len(uniq)} feature(s): {', '.join(uniq)}")
+
+    return linked
 
 # === UTILIDADES EXISTENTES ======================================
 
