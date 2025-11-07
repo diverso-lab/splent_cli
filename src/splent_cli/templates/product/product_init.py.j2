@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 
+from splent_cli.utils.path_utils import PathUtils
 from splent_framework.managers.config_manager import ConfigManager
 from splent_framework.managers.db_manager import MigrateManager
 from splent_framework.managers.session_manager import SessionManager
@@ -8,10 +9,12 @@ from splent_framework.managers.logging_manager import LoggingManager
 from splent_framework.managers.error_handler_manager import ErrorHandlerManager
 from splent_framework.managers.jinja_manager import JinjaManager
 from splent_framework.managers.feature_manager import FeatureManager
+from splent_framework.namespaces.namespaces import get_namespaces
 
 
 def create_app(config_name="development"):
     app = Flask(__name__)
+    get_namespaces()
 
     _load_config(app, config_name)
     _init_db(app)
@@ -41,9 +44,9 @@ def _init_error_handlers(app):
 
 def _init_jinja_context(app):
     context = {
-        "SPLENT_APP": os.getenv("SPLENT_APP", "my_app")
+        "SPLENT_APP": os.getenv("SPLENT_APP")
     }
     JinjaManager(app, context)
 
 def _init_features(app):
-    FeatureManager(app).register_features()
+    FeatureManager(app, strict=False).register_features()

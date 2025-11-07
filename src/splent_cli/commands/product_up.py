@@ -9,21 +9,32 @@ from collections import OrderedDict
 def clone_missing_features(product_path, workspace="/workspace", default_version="v1.0.0"):
     """
     Clona las features declaradas en el pyproject.toml del producto,
-    usando por defecto la versión v1.0.0 si no se especifica.
+    respetando la organización (org/feature@version) y normalizando guiones.
+    La estructura resultante será:
+      .splent_cache/features/<org_safe>/<feature>@<version>/
+      <product>/features/<org_safe>/<feature>@<version> → symlink
     """
 
+    # ----------------------------------------------
+    # Helper: detectar modo SSH o HTTPS
+    # ----------------------------------------------
     def is_splent_developer():
-        if os.getenv("SPLENT_USE_SSH", "").lower() == "true": return True
-        if os.getenv("SPLENT_ROLE", "").lower() == "developer": return True
+        if os.getenv("SPLENT_USE_SSH", "").lower() == "true":
+            return True
+        if os.getenv("SPLENT_ROLE", "").lower() == "developer":
+            return True
         try:
             r = subprocess.run(
-                ["ssh","-T","git@github.com"],
+                ["ssh", "-T", "git@github.com"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3
             )
             return "successfully authenticated" in r.stderr.lower()
         except Exception:
             return False
 
+    # ----------------------------------------------
+    # Cargar pyproject.toml del producto
+    # ----------------------------------------------
     py = os.path.join(product_path, "pyproject.toml")
     if not os.path.exists(py):
         click.echo(f"❌ pyproject.toml not found at {product_path}")
@@ -37,64 +48,83 @@ def clone_missing_features(product_path, workspace="/workspace", default_version
         click.echo("ℹ️ No features declared under [project.optional-dependencies.features]")
         return []
 
+    # ----------------------------------------------
+    # Preparar entorno
+    # ----------------------------------------------
     use_ssh = is_splent_developer()
     click.echo(f"🔑 Cloning mode: {'SSH' if use_ssh else 'HTTPS'}")
 
     cache_base = os.path.join(workspace, ".splent_cache", "features")
     os.makedirs(cache_base, exist_ok=True)
-
     linked = []
-    org = "splent-io"
 
+    # ----------------------------------------------
+    # Clonado y enlace
+    # ----------------------------------------------
     for feature_entry in features:
-        # 1️⃣ Parsear nombre y versión (usa la versión por defecto si no hay @)
-        name, _, version = feature_entry.partition("@")
+        # 1️⃣ Parsear organización, nombre y versión
+        if "/" in feature_entry:
+            org, rest = feature_entry.split("/", 1)
+        else:
+            org, rest = "splent-io", feature_entry
+
+        name, _, version = rest.partition("@")
         version = version or default_version
 
+        org_safe = org.replace("-", "_")  # 🔥 clave para evitar errores en imports
+
+        click.echo(f"🔍 Feature: {name}@{version} (org: {org_safe})")
+
+        # 2️⃣ Construir URL de origen (usando el nombre original con guión)
         url = (
             f"git@github.com:{org}/{name}.git"
             if use_ssh
             else f"https://github.com/{org}/{name}.git"
         )
 
-        cache_dir = os.path.join(cache_base, name, version)
+        # 3️⃣ Construir ruta de caché y crear si no existe
+        cache_dir = os.path.join(cache_base, org_safe, f"{name}@{version}")
         os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
 
-        # 2️⃣ Clonar o reutilizar cache
+        # 4️⃣ Clonar si no existe
         if not os.path.exists(cache_dir):
-            click.echo(f"⬇️ Cloning {name}@{version} from {url}")
+            click.echo(f"⬇️ Cloning {org}/{name}@{version} from {url}")
             r = subprocess.run(
                 ["git", "clone", "--branch", version, "--depth", "1", url, cache_dir],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
             if r.returncode != 0:
-                click.echo(f"⚠️  Failed to clone {name}@{version}")
+                click.echo(f"⚠️ Failed to clone {org}/{name}@{version}")
                 click.echo(r.stderr.strip())
                 continue
-            click.echo(f"✅ Cached {name}@{version}")
+            click.echo(f"✅ Cached {org_safe}/{name}@{version}")
         else:
-            click.echo(f"✅ Using cached {name}@{version}")
+            click.echo(f"✅ Using cached {org_safe}/{name}@{version}")
 
-        # 3️⃣ Crear symlink hacia el producto
-        product_features_dir = os.path.join(product_path, "features")
+        # 5️⃣ Crear symlink en el producto
+        product_features_dir = os.path.join(product_path, "features", org_safe)
         os.makedirs(product_features_dir, exist_ok=True)
 
         link_name = f"{name}@{version}"
         link_path = os.path.join(product_features_dir, link_name)
 
         if os.path.islink(link_path) or os.path.exists(link_path):
-            click.echo(f"ℹ️  {link_name} already linked in {product_features_dir}")
+            click.echo(f"ℹ️ {link_name} already linked in {product_features_dir}")
         else:
             os.symlink(cache_dir, link_path)
             click.echo(f"🔗 Linked {link_name} → {cache_dir}")
 
-        linked.append(link_name)
+        linked.append(f"{org_safe}/{link_name}")
 
+    # ----------------------------------------------
+    # Resultado final
+    # ----------------------------------------------
     if linked:
         uniq = sorted(set(linked))
         click.echo(f"✨ Linked {len(uniq)} feature(s): {', '.join(uniq)}")
 
     return linked
+
 
 # === UTILIDADES EXISTENTES ======================================
 
@@ -157,7 +187,35 @@ def merge_feature_envs_into_product_env(product_env_path, feature_env_paths):
     click.echo("🔗 Merged feature .env values into product .env")
 
 
-def launch_compose(name, docker_dir, env):
+
+def launch_compose(name: str, docker_dir: str, env: str):
+    """
+    Launch a Docker Compose environment for a given feature or product.
+    Automatically redirects to the cached path under /workspace/.splent_cache/features if needed.
+    """
+
+    # 🔍 Resolve the correct cached path if the original comes from /workspace/<feature>/docker
+    if ".splent_cache" not in docker_dir:
+        parts = docker_dir.strip("/").split("/")
+        try:
+            if parts[-1] == "docker":
+                org = parts[-3]
+                feature_name = parts[-2]
+            else:
+                org = parts[-2]
+                feature_name = parts[-1]
+
+            docker_dir = os.path.join(
+                "/workspace/.splent_cache/features",
+                org,
+                feature_name,
+                "docker"
+            )
+        except Exception:
+            click.echo(f"⚠️  Could not resolve cache path for {docker_dir}")
+            return
+
+    # 🧩 Look for docker-compose.<env>.yml or fallback to docker-compose.yml
     preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
     fallback = os.path.join(docker_dir, "docker-compose.yml")
 
@@ -166,11 +224,43 @@ def launch_compose(name, docker_dir, env):
     elif os.path.exists(fallback):
         compose_file = fallback
     else:
+        # 🔇 Quietly skip features with no docker files
         click.echo(f"⚠️  {name}: No docker-compose.{env}.yml or docker-compose.yml found in {docker_dir}")
         return
 
+    # 🏗️ Build a Docker-compatible project name (only [a-z0-9_-])
+    splent_app = os.getenv("SPLENT_APP", name)
+    flask_env = os.getenv("FLASK_ENV", env)
+    raw_name = f"{splent_app}_{name}_{flask_env}"
+    project_name = "".join(
+        c if c.isalnum() or c in "-_" else "_" for c in raw_name
+    ).lower()
+
     click.echo(f"⬆️  {name}: Launching {os.path.basename(compose_file)}")
-    subprocess.run(["docker", "compose", "-f", compose_file, "up", "-d"], cwd=docker_dir, check=True)
+    click.echo(f"📂 Using docker dir: {docker_dir}")
+    click.echo(f"🐳 Docker project: {project_name}")
+
+    # 🚀 Compose command
+    cmd = [
+        "docker",
+        "compose",
+        "-p", project_name,
+        "-f", compose_file,
+        "up",
+        "-d",
+    ]
+
+    try:
+        subprocess.run(cmd, cwd=docker_dir, check=True)
+        click.echo(f"✅  {name}: Containers started successfully.")
+    except subprocess.CalledProcessError as e:
+        click.echo(f"❌  Failed to launch {name}: {e}")
+        return
+
+    # 📦 Show active containers for this project
+    click.echo("\n📦 Active containers:")
+    subprocess.run(["docker", "ps", "--filter", f"name={project_name}"], check=False)
+
 
 
 def stream_logs(container_name):

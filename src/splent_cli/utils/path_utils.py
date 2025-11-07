@@ -78,12 +78,15 @@ class PathUtils:
 
     @staticmethod
     def get_uploads_dir():
+
+        splent_app = os.getenv("SPLENT_APP")
+
         working_dir = PathUtils.get_working_dir()
 
         if is_splent_dev_mode():
-            return os.path.join(working_dir, "splent_app", uploads_folder_name())
+            return os.path.join(working_dir, splent_app, uploads_folder_name())
 
-        package = importlib.util.find_spec("splent_app")
+        package = importlib.util.find_spec(splent_app)
         if package and package.origin:
             return os.path.join(os.path.dirname(package.origin), uploads_folder_name())
 

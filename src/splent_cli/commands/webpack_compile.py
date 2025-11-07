@@ -2,13 +2,13 @@ import logging
 import click
 import os
 import subprocess
-import tomllib
 
-from splent_cli.utils.feature_utils import get_features_from_pyproject,get_normalize_feature_name_in_splent_format
-
+from splent_cli.utils.feature_utils import (
+    get_features_from_pyproject,
+    get_normalize_feature_name_in_splent_format,
+)
 
 logger = logging.getLogger(__name__)
-
 
 @click.command("webpack:compile", help="Compile webpack for one or all features.")
 @click.argument("feature_name", required=False)
@@ -29,18 +29,32 @@ def webpack_compile(feature_name, watch):
 def compile_feature(feature, watch, production):
     """
     Compiles a feature's webpack assets located under:
-    /workspace/<product>/features/<feature>@<version>/src/<feature_base>/assets/js/webpack.config.js
+    /workspace/<product>/features/<org_safe>/<feature>@<version>/src/<org_safe>/<feature>/assets/js/webpack.config.js
     """
     product = os.getenv("SPLENT_APP")
-    base_feature_name = feature.split("@")[0]
+    if not product:
+        click.echo(click.style("❌ Environment variable SPLENT_APP is not set!", fg="red"))
+        return
+
+    # Parse parts like: splent_io/splent_feature_public@v1.0.0
+    parts = feature.split("/")
+    if len(parts) == 2:
+        org_safe, name_version = parts
+    else:
+        org_safe, name_version = "splent_io", parts[0]
+
+    base_name, _, version = name_version.partition("@")
+    version = version or "v1.0.0"
 
     webpack_file = os.path.join(
         "/workspace",
         product,
         "features",
-        feature,
+        org_safe,
+        f"{base_name}@{version}",
         "src",
-        base_feature_name,
+        org_safe,
+        base_name,
         "assets",
         "js",
         "webpack.config.js",
@@ -53,7 +67,7 @@ def compile_feature(feature, watch, production):
     click.echo(click.style(f"🚀 Compiling {feature}...", fg="cyan"))
 
     mode = "production" if production else "development"
-    extra_flags = "--devtool source-map --no-cache" if not production else ""
+    extra_flags = "--devtool=source-map --no-cache" if not production else ""
     watch_flag = "--watch" if watch and not production else ""
 
     webpack_command = f"npx webpack --config '{webpack_file}' --mode {mode} {watch_flag} {extra_flags} --color"
