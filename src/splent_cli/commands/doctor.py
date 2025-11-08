@@ -88,51 +88,73 @@ def doctor():
 # -----------------------------
 
 def _check_features_with_cache(workspace: str, features_declared: list[str], results: list[str]):
+    """
+    Valida la cache de features con estructura esperada:
+      /workspace/.splent_cache/features/<org_safe>/<feature_pkg>@<version>/
+        ├─ pyproject.toml
+        └─ src/<org_safe>/<feature_pkg>/
+    """
     cache_root = os.path.join(workspace, ".splent_cache", "features")
     if not os.path.isdir(cache_root):
         results.append(_fail(".splent_cache/features not found"))
         return
 
-    cached_orgs = [
-        d for d in os.listdir(cache_root)
-        if os.path.isdir(os.path.join(cache_root, d))
-    ]
+    # Normaliza la lista declarada a [("splent_io", "splent_feature_xxx", "v1.0.0"), ...]
+    decl_norm = []
+    for f in features_declared:
+        # formatos posibles: "splent_io/splent_feature_x@v1.0.0" o "splent_feature_x@v1.0.0"
+        if "/" in f:
+            org_safe, rest = f.split("/", 1)
+        else:
+            org_safe, rest = "splent_io", f
+        feat_pkg, _, ver = rest.partition("@")
+        decl_norm.append((org_safe.replace("-", "_"), feat_pkg, ver or ""))
 
-    for org_safe in cached_orgs:
+    # Recorre organizaciones
+    for org_safe in os.listdir(cache_root):
         org_dir = os.path.join(cache_root, org_safe)
-        for feature_version in os.listdir(org_dir):
-            feature_dir = os.path.join(org_dir, feature_version)
-            pyproject = os.path.join(feature_dir, "pyproject.toml")
+        if not os.path.isdir(org_dir):
+            # ignora ficheros como __init__.py
+            continue
 
-            # --- Namespace structure check ---
-            src_dir = os.path.join(feature_dir, "src")
-            expected_ns = os.path.join(src_dir, org_safe)
-            if not os.path.isdir(expected_ns):
-                results.append(_fail(
-                    f"Feature {org_safe}/{feature_version} missing namespace folder: expected {expected_ns}"
-                ))
+        # Dentro deben existir carpetas "splent_feature_xxx@version"
+        for entry in os.listdir(org_dir):
+            feat_dir = os.path.join(org_dir, entry)
+            if not os.path.isdir(feat_dir):
                 continue
 
-            # --- Feature inner folder check ---
-            subfolders = [
-                d for d in os.listdir(expected_ns)
-                if os.path.isdir(os.path.join(expected_ns, d))
-            ]
-            if not subfolders:
-                results.append(_fail(
-                    f"Feature {org_safe}/{feature_version} missing inner package under namespace"
-                ))
+            # Valida patrón "nombre@version"
+            if "@" not in entry:
+                results.append(_warn(f"{org_safe}/{entry} no sigue el patrón <feature>@<version>"))
                 continue
 
-            # --- pyproject.toml check ---
+            feat_pkg, ver = entry.split("@", 1)
+            if not feat_pkg.startswith("splent_feature_"):
+                results.append(_warn(f"{org_safe}/{entry} no es un paquete de feature válido"))
+                continue
+
+            # Estructura esperada
+            src_dir = os.path.join(feat_dir, "src")
+            expected_ns_dir = os.path.join(src_dir, org_safe)
+            expected_pkg_dir = os.path.join(expected_ns_dir, feat_pkg)
+            pyproject = os.path.join(feat_dir, "pyproject.toml")
+
+            if not os.path.isdir(src_dir):
+                results.append(_fail(f"Feature {org_safe}/{entry} missing folder: {src_dir}"))
+                continue
+            if not os.path.isdir(expected_ns_dir):
+                results.append(_fail(f"Feature {org_safe}/{entry} missing namespace folder: {expected_ns_dir}"))
+                continue
+            if not os.path.isdir(expected_pkg_dir):
+                results.append(_fail(f"Feature {org_safe}/{entry} missing package folder: {expected_pkg_dir}"))
+                continue
             if not os.path.exists(pyproject):
-                results.append(_warn(f"Feature {org_safe}/{feature_version} missing pyproject.toml"))
+                results.append(_warn(f"Feature {org_safe}/{entry} missing pyproject.toml"))
                 continue
 
-            results.append(_ok(f"Feature {org_safe}/{feature_version} structure OK"))
+            results.append(_ok(f"Feature {org_safe}/{entry} structure OK"))
 
-    results.append(_ok("✅ Feature namespace validation complete"))
-
+    results.append(_ok("Feature namespace validation complete"))
 
 
 # -----------------------------
