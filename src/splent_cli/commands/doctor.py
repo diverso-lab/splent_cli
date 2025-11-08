@@ -93,39 +93,46 @@ def _check_features_with_cache(workspace: str, features_declared: list[str], res
         results.append(_fail(".splent_cache/features not found"))
         return
 
-    declared = [f.split("@")[0].strip() for f in features_declared]
-    cached = [d for d in os.listdir(cache_root) if d.startswith("splent_feature_")]
+    cached_orgs = [
+        d for d in os.listdir(cache_root)
+        if os.path.isdir(os.path.join(cache_root, d))
+    ]
 
-    missing = [f for f in declared if f not in cached]
-    extra = [c for c in cached if c not in declared]
+    for org_safe in cached_orgs:
+        org_dir = os.path.join(cache_root, org_safe)
+        for feature_version in os.listdir(org_dir):
+            feature_dir = os.path.join(org_dir, feature_version)
+            pyproject = os.path.join(feature_dir, "pyproject.toml")
 
-    for feature in declared:
-        if feature in missing:
-            results.append(_fail(f"Feature {feature} not found in .splent_cache"))
-            continue
+            # --- Namespace structure check ---
+            src_dir = os.path.join(feature_dir, "src")
+            expected_ns = os.path.join(src_dir, org_safe)
+            if not os.path.isdir(expected_ns):
+                results.append(_fail(
+                    f"Feature {org_safe}/{feature_version} missing namespace folder: expected {expected_ns}"
+                ))
+                continue
 
-        feature_dir = os.path.join(cache_root, feature)
-        versions = [
-            v for v in os.listdir(feature_dir)
-            if os.path.isdir(os.path.join(feature_dir, v))
-        ]
-        if not versions:
-            results.append(_warn(f"Feature {feature} has no versions in cache"))
-            continue
+            # --- Feature inner folder check ---
+            subfolders = [
+                d for d in os.listdir(expected_ns)
+                if os.path.isdir(os.path.join(expected_ns, d))
+            ]
+            if not subfolders:
+                results.append(_fail(
+                    f"Feature {org_safe}/{feature_version} missing inner package under namespace"
+                ))
+                continue
 
-        latest = sorted(versions)[-1]
-        version_path = os.path.join(feature_dir, latest)
-        pyproject = os.path.join(version_path, "pyproject.toml")
+            # --- pyproject.toml check ---
+            if not os.path.exists(pyproject):
+                results.append(_warn(f"Feature {org_safe}/{feature_version} missing pyproject.toml"))
+                continue
 
-        if os.path.exists(pyproject):
-            results.append(_ok(f"Feature {feature} {latest} cached"))
-        else:
-            results.append(_warn(f"Feature {feature} {latest} missing pyproject.toml"))
+            results.append(_ok(f"Feature {org_safe}/{feature_version} structure OK"))
 
-    if extra:
-        results.append(_warn(f"Extra features in cache (not declared): {', '.join(extra)}"))
-    else:
-        results.append(_ok("No extra features in cache"))
+    results.append(_ok("✅ Feature namespace validation complete"))
+
 
 
 # -----------------------------

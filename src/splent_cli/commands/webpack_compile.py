@@ -46,6 +46,7 @@ def compile_feature(feature, watch, production):
     base_name, _, version = name_version.partition("@")
     version = version or "v1.0.0"
 
+    # Ruta en el producto (symlink)
     webpack_file = os.path.join(
         "/workspace",
         product,
@@ -59,6 +60,22 @@ def compile_feature(feature, watch, production):
         "js",
         "webpack.config.js",
     )
+
+    # Si no existe, probar en la caché real
+    if not os.path.exists(webpack_file):
+        webpack_file = os.path.join(
+            "/workspace",
+            ".splent_cache",
+            "features",
+            org_safe,
+            f"{base_name}@{version}",
+            "src",
+            org_safe,
+            base_name,
+            "assets",
+            "js",
+            "webpack.config.js",
+        )
 
     if not os.path.exists(webpack_file):
         click.echo(click.style(f"⚠ No webpack.config.js found in {feature}, skipping...", fg="yellow"))
