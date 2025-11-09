@@ -1,17 +1,26 @@
 import os
 import subprocess
 import tomllib
-
 import click
+import socket
 
 
 def _get_product_path(product, workspace="/workspace"):
     return os.path.join(workspace, product)
 
 
+def _check_github_connectivity(host="github.com", port=443, timeout=3):
+    """Check if there's an active network connection to GitHub."""
+    try:
+        socket.create_connection((host, port), timeout=timeout)
+        return True
+    except OSError:
+        return False
+
+
 @click.command("product:clone-features")
 def product_clone_features():
-    """Clona las features declaradas en pyproject.toml y crea los enlaces simbólicos."""
+    """Clone features declared in pyproject.toml and create symbolic links."""
     workspace = "/workspace"
     product = os.getenv("SPLENT_APP")
     product_path = _get_product_path(product, workspace)
@@ -29,6 +38,12 @@ def product_clone_features():
             return "successfully authenticated" in r.stderr.lower()
         except Exception:
             return False
+
+    # 1️⃣ Check connectivity before doing anything
+    click.echo("🌐 Checking GitHub connectivity...")
+    if not _check_github_connectivity():
+        click.echo("❌ No connection to GitHub detected. Please check your network.")
+        raise SystemExit(1)
 
     py = os.path.join(product_path, "pyproject.toml")
     if not os.path.exists(py):
@@ -60,7 +75,17 @@ def product_clone_features():
 
         cache_dir = os.path.join(cache_base, org_safe, f"{name}@{version}")
         if not os.path.exists(cache_dir):
-            subprocess.run(["git", "clone", "--branch", version, "--depth", "1", url, cache_dir], check=False)
+            try:
+                subprocess.run(
+                    ["git", "clone", "--branch", version, "--depth", "1", url, cache_dir],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+            except subprocess.CalledProcessError as e:
+                click.echo(f"❌ Failed to clone {name}@{version}: {e.stderr.strip()}")
+                raise SystemExit(1)
         else:
             click.echo(f"✅ Using cached {org_safe}/{name}@{version}")
 
@@ -71,3 +96,5 @@ def product_clone_features():
         if not os.path.exists(link_path):
             os.symlink(cache_dir, link_path)
             click.echo(f"🔗 Linked {name}@{version} → {cache_dir}")
+
+    click.echo("🎉 All features cloned and linked successfully.")

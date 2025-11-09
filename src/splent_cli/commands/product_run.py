@@ -7,17 +7,13 @@ def _compose_project_name(name: str, env: str) -> str:
     return f"{name}_{env}".replace("/", "_").replace("@", "_").replace(".", "_")
 
 
-def _feature_cache_docker_dir(workspace: str, feature: str) -> str:
-    return os.path.join(workspace, ".splent_cache", "features", feature, "docker")
-
-
 def _get_product_path(product, workspace="/workspace"):
     return os.path.join(workspace, product)
 
 
-@click.command("product:entrypoint")
+@click.command("product:run")
 @click.option("--env", default="dev", help="Environment name (dev or prod)")
-def product_entrypoint(env):
+def product_runc(env):
     """Ejecuta el entrypoint dentro del contenedor del producto."""
     workspace = "/workspace"
     product = os.getenv("SPLENT_APP")
