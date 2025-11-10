@@ -3,17 +3,17 @@ import re
 import subprocess
 import requests
 import click
+from splent_cli.commands.feature_attach import feature_attach
 
 
 @click.command("feature:release")
 @click.argument("feature_name", required=True)
 @click.argument("version", required=True)
-@click.option("--attach", is_flag=True, help="Attach this version to the product (update pyproject + cache + symlink)")
+@click.option("--attach", is_flag=True, help="Also attach this version to the current product")
 def feature_release(feature_name, version, attach):
     """
     Create a Git tag, push, and GitHub release for a feature.
-    Also updates the feature's pyproject.toml version before tagging.
-    Optionally attach it to the product (--attach).
+    Confirms and commits version bump before tagging.
     Must be executed from /workspace.
     """
     workspace = "/workspace"
@@ -43,11 +43,9 @@ def feature_release(feature_name, version, attach):
         click.echo("❌ pyproject.toml not found in feature directory.")
         raise SystemExit(1)
 
-    # Leer contenido
     with open(py_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Actualizar versión (quita la 'v' si la versión viene con prefijo)
     normalized_version = version.lstrip("v")
     content = re.sub(
         r'(?m)^version\s*=\s*["\'].*?["\']',
@@ -60,22 +58,21 @@ def feature_release(feature_name, version, attach):
 
     click.echo(f"🧩 Updated pyproject.toml version → {normalized_version}")
 
-    # --- Git commit for version bump ---------------------------------------
-    subprocess.run(["git", "add", "pyproject.toml"], check=False)
-    subprocess.run(["git", "commit", "-m", f"chore: bump version to {version}"], check=False)
-    subprocess.run(["git", "push"], check=False)
-    click.echo(f"☁️  Committed and pushed version bump to origin.")
-
-    # --- Clean tree check --------------------------------------------------
+    # --- Check local changes -----------------------------------------------
     r = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
     if r.stdout.strip():
-        click.echo("⚠️  There are uncommitted or unstaged changes in this repository.")
+        click.echo("⚠️  Detected local changes:")
         click.echo(r.stdout.strip())
-        if not click.confirm("Do you want to continue the release WITHOUT committing/pushing these changes?"):
-            click.echo("🚫 Release cancelled.")
-            raise SystemExit(1)
+        if click.confirm("Do you want to commit and push these changes before releasing?", default=True):
+            subprocess.run(["git", "add", "-A"], check=False)
+            subprocess.run(["git", "commit", "-m", f"chore: bump version to {version}"], check=False)
+            subprocess.run(["git", "push", "--set-upstream", "origin", "main"], check=False)
+            click.echo("☁️  Changes committed and pushed to origin.")
         else:
-            click.echo("⚠️ Proceeding with uncommitted changes...")
+            click.echo("🚫 Release cancelled (uncommitted changes).")
+            raise SystemExit(1)
+    else:
+        click.echo("✅ Working tree clean, proceeding with release.")
 
     # --- Tag and push ------------------------------------------------------
     subprocess.run(["git", "fetch", "origin", "--tags"], check=False)
@@ -97,7 +94,7 @@ def feature_release(feature_name, version, attach):
     token = os.getenv("GITHUB_TOKEN")
 
     if token:
-        payload = {"tag_name": version, "name": f"{feature_name} {version}", "draft": False, "prerelease": False}
+        payload = {"tag_name": version, "name": version, "draft": False, "prerelease": False}
         headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
         resp = requests.post(api_url, headers=headers, json=payload)
         if resp.status_code in (200, 201):
@@ -109,41 +106,10 @@ def feature_release(feature_name, version, attach):
     else:
         click.echo("⚠️ GITHUB_TOKEN not set. Skipping GitHub release creation.")
 
-    # --- Attach mode -------------------------------------------------------
+    # --- Optionally call attach command ------------------------------------
     if attach:
         click.echo("🔗 Attaching version to product...")
-
-        product_path = os.path.join(workspace, product)
-        pyproject_path = os.path.join(product_path, "pyproject.toml")
-        if not os.path.exists(pyproject_path):
-            click.echo("❌ pyproject.toml not found in product.")
-            raise SystemExit(1)
-
-        # Update pyproject
-        with open(pyproject_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        pattern = rf"{feature_name}(?!@)"
-        new_content = re.sub(pattern, f"{feature_name}@{version}", content)
-        with open(pyproject_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-        click.echo(f"🧩 Updated pyproject.toml → {feature_name}@{version}")
-
-        # Rename cache folder
-        old_path = os.path.join(cache_base, feature_name)
-        new_path = f"{old_path}@{version}"
-        if os.path.exists(old_path) and not os.path.exists(new_path):
-            os.rename(old_path, new_path)
-            click.echo(f"📦 Renamed cache folder → {new_path}")
-        else:
-            click.echo(f"✅ Cache already versioned as {version}")
-
-        # Update symlink
-        product_features_dir = os.path.join(product_path, "features", org_safe)
-        os.makedirs(product_features_dir, exist_ok=True)
-        new_link = os.path.join(product_features_dir, f"{feature_name}@{version}")
-        if os.path.islink(new_link):
-            os.unlink(new_link)
-        os.symlink(new_path, new_link)
-        click.echo(f"🔗 Linked {new_link} → {new_path}")
+        ctx = click.get_current_context()
+        ctx.invoke(feature_attach, feature_name=feature_name, version=version)
 
     click.echo("🎉 Feature release completed.")

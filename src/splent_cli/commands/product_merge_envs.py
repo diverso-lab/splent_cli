@@ -9,10 +9,12 @@ def _get_product_path(product, workspace="/workspace"):
 
 
 def _feature_cache_dir(workspace: str, feature: str) -> str:
-    """Return the base cache path for a feature (ignores version)."""
+    """Return the base cache path for a feature (includes version if present)."""
     org_safe = "splent_io"  # can be dynamic later
-    feature_name = feature.split("@")[0]
+    # Preserve version if present
+    feature_name = feature if "@" in feature else f"{feature}@v1.0.0"
     return os.path.join(workspace, ".splent_cache", "features", org_safe, feature_name)
+
 
 
 @click.command("product:merge-envs")

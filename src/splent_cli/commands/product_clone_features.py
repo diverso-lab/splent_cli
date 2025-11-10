@@ -74,21 +74,39 @@ def product_clone_features():
         url = f"git@github.com:{org}/{name}.git" if use_ssh else f"https://github.com/{org}/{name}.git"
 
         cache_dir = os.path.join(cache_base, org_safe, f"{name}@{version}")
+
         if not os.path.exists(cache_dir):
             try:
+                # --- Clone only the main branch (avoids detached HEAD) ---
                 subprocess.run(
-                    ["git", "clone", "--branch", version, "--depth", "1", url, cache_dir],
+                    ["git", "clone", "--depth", "1", url, cache_dir],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True
                 )
+
+                # --- Fetch all tags and try to checkout the requested version ---
+                subprocess.run(["git", "-C", cache_dir, "fetch", "--tags"], check=False)
+                tag_result = subprocess.run(
+                    ["git", "-C", cache_dir, "tag", "-l", version],
+                    capture_output=True,
+                    text=True
+                )
+
+                if tag_result.stdout.strip() == version:
+                    subprocess.run(["git", "-C", cache_dir, "checkout", version], check=False)
+                    click.echo(f"🏷️  Checked out tag {version}")
+                else:
+                    click.echo(f"⚠️ Tag {version} not found — staying on main branch")
+
             except subprocess.CalledProcessError as e:
                 click.echo(f"❌ Failed to clone {name}@{version}: {e.stderr.strip()}")
                 raise SystemExit(1)
         else:
             click.echo(f"✅ Using cached {org_safe}/{name}@{version}")
 
+        # --- Create symlink to product ---
         product_features_dir = os.path.join(product_path, "features", org_safe)
         os.makedirs(product_features_dir, exist_ok=True)
         link_path = os.path.join(product_features_dir, f"{name}@{version}")
