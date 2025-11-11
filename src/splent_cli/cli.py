@@ -11,8 +11,10 @@ load_dotenv()
 
 class SPLENTCLI(click.Group):
     """
-    CLI principal que detecta si un comando requiere una app Flask y,
-    en ese caso, inyecta el contexto automáticamente.
+    Main SPLENT CLI class.
+
+    - Automatically injects the Flask app context for commands marked with `requires_app = True`.
+    - Displays commands grouped by category for a cleaner, more readable help output.
     """
 
     def invoke(self, ctx):
@@ -26,13 +28,56 @@ class SPLENTCLI(click.Group):
 
         return super().invoke(ctx)
 
+    def format_commands(self, ctx, formatter):
+        """Group SPLENT commands by category in the CLI help output."""
+        groups = {
+            "🌿 Feature Management": [
+                cmd for cmd in self.commands if cmd.startswith("feature:")
+            ],
+            "🏗️ Product Management": [
+                cmd for cmd in self.commands if cmd.startswith("product:")
+            ],
+            "🧱 Database": [
+                cmd for cmd in self.commands if cmd.startswith("db:")
+            ],
+            "🧰 Utilities": [
+                cmd
+                for cmd in self.commands
+                if cmd.startswith(("clear:", "env", "select", "info", "version", "doctor"))
+            ],
+            "🐍 Development & QA": [
+                cmd
+                for cmd in self.commands
+                if cmd.startswith(("linter", "test", "coverage", "locust"))
+            ],
+            "⚙️ Build & Assets": [
+                cmd for cmd in self.commands if cmd.startswith("webpack:")
+            ],
+        }
+
+        for title, cmds in groups.items():
+            cmds = [c for c in cmds if c in self.commands]
+            if not cmds:
+                continue
+
+            with formatter.section(title):
+                rows = []
+                for cmd_name in sorted(cmds):
+                    cmd = self.get_command(ctx, cmd_name)
+                    if cmd is None or cmd.hidden:
+                        continue
+                    rows.append((cmd_name, cmd.get_short_help_str()))
+                if rows:
+                    formatter.write_dl(rows)
+
 
 @click.group(cls=SPLENTCLI)
 def cli():
-    """SPLENT CLI: gestión unificada de features, productos y apps Flask."""
+    """SPLENT CLI: unified management of features, products, and Flask apps."""
+    pass
 
 
-# Cargar todos los comandos automáticamente
+# Automatically load all command modules
 load_commands(cli)
 
 
