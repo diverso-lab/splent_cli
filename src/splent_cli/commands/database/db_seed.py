@@ -3,7 +3,7 @@ import os
 import importlib
 import click
 
-from splent_cli.commands.db_reset import db_reset
+from splent_cli.commands.database.db_reset import db_reset
 from splent_cli.utils.decorators import requires_app
 from splent_cli.utils.path_utils import PathUtils
 from splent_cli.utils.feature_utils import get_features_from_pyproject
