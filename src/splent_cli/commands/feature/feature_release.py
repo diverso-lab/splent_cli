@@ -3,7 +3,7 @@ import re
 import subprocess
 import requests
 import click
-from splent_cli.commands.feature_attach import feature_attach
+from splent_cli.commands.feature.feature_attach import feature_attach
 
 
 @click.command("feature:release")
