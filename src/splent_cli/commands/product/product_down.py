@@ -4,8 +4,6 @@ import click
 import tomllib
 
 
-# === HELPERS ====================================================
-
 def _compose_project_name(name: str, env: str) -> str:
     return f"{name}_{env}".replace("/", "_").replace("@", "_").replace(".", "_")
 
@@ -19,7 +17,7 @@ def _get_product_path(product, workspace="/workspace"):
 
 
 def _normalize_feature_ref(feat: str) -> str:
-    """Ensure the feature reference follows org_safe/feature@version format."""
+    """Ensure the feature ref follows org_safe/feature@version format."""
     if "features/" in feat:
         feat = feat.split("features/")[-1]
     if "/" not in feat:
@@ -27,31 +25,32 @@ def _normalize_feature_ref(feat: str) -> str:
     return feat
 
 
-@click.command("product:up")
-@click.option("--dev", is_flag=True, help="Run in development mode.")
-@click.option("--prod", is_flag=True, help="Run in production mode.")
-def product_up(dev, prod):
-    """Starts the product and its features using Docker Compose."""
+@click.command("product:down")
+@click.option("--env", default="dev", help="Environment name (dev or prod)")
+@click.option("--v", is_flag=True, help="Remove all volumes (requires confirmation)")
+def product_down(env, v):
+    """Stops the product and its features using Docker Compose.
+    Use --v to also remove all volumes.
+    """
     workspace = "/workspace"
     product = os.getenv("SPLENT_APP")
-
-    # Determine environment
-    if dev and prod:
-        click.echo("❌ You cannot specify both --dev and --prod.")
+    if not product:
+        click.echo("❌ SPLENT_APP not set.")
         raise SystemExit(1)
-    elif dev:
-        env = "dev"
-    elif prod:
-        env = "prod"
-    else:
-        env = os.getenv("SPLENT_ENV")
-        if not env:
-            click.echo("❌ No environment specified. Use --dev, --prod or set SPLENT_ENV.")
-            raise SystemExit(1)
 
     product_path = _get_product_path(product, workspace)
 
-    def launch(name, docker_dir):
+    remove_volumes = False
+    if v:
+        confirm = input("⚠️  This will remove ALL Docker volumes for the product and its features. Continue? (y/N): ")
+        if confirm.lower() in ("y", "yes"):
+            remove_volumes = True
+            click.echo("🧹 Volumes will be removed.")
+        else:
+            click.echo("❎ Operation cancelled.")
+            return
+
+    def shutdown(name, docker_dir):
         compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
         compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
         compose_file = compose_preferred if os.path.exists(compose_preferred) else compose_fallback
@@ -59,22 +58,26 @@ def product_up(dev, prod):
             click.echo(f"⚠️ No docker-compose file for {name}")
             return
         project_name = _compose_project_name(name, env)
-        subprocess.run(["docker", "compose", "-p", project_name, "-f", compose_file, "up", "-d"], check=False)
-        click.echo(f"✅  {name}: started successfully")
 
-    # Load features
+        args = ["docker", "compose", "-p", project_name, "-f", compose_file, "down"]
+        if remove_volumes:
+            args += ["-v"]
+        subprocess.run(args, check=False)
+        click.echo(f"🛑  {name}: stopped successfully")
+
+    # Stop the product first (to avoid dependency issues)
+    shutdown(product, os.path.join(product_path, "docker"))
+
+    # Then stop the features
     py = os.path.join(product_path, "pyproject.toml")
     if not os.path.exists(py):
-        click.echo("❌ pyproject.toml not found in product path.")
-        raise SystemExit(1)
+        click.echo("⚠️ pyproject.toml not found.")
+        return
 
     with open(py, "rb") as f:
         data = tomllib.load(f)
-
     features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+
     for feat in features:
         clean = _normalize_feature_ref(feat)
-        launch(clean, _feature_cache_docker_dir(workspace, clean))
-
-    # Launch product last
-    launch(product, os.path.join(product_path, "docker"))
+        shutdown(clean, _feature_cache_docker_dir(workspace, clean))
