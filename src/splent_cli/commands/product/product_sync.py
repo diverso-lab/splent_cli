@@ -5,8 +5,15 @@ import shutil
 import click
 
 
-@click.command("product:sync", help="Sync (clone + link) all versioned features declared in the active product.")
-@click.option("--force", is_flag=True, help="Force reclone even if feature already exists in cache.")
+@click.command(
+    "product:sync",
+    help="Sync (clone + link) all versioned features declared in the active product.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Force reclone even if feature already exists in cache.",
+)
 def product_sync(force):
     """
     Sync all versioned features declared in the current product's pyproject.toml:
@@ -17,7 +24,9 @@ def product_sync(force):
     product = os.getenv("SPLENT_APP")
 
     if not product:
-        click.secho("❌ SPLENT_APP not defined. Please select a product first.", fg="red")
+        click.secho(
+            "❌ SPLENT_APP not defined. Please select a product first.", fg="red"
+        )
         raise SystemExit(1)
 
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")
@@ -28,9 +37,14 @@ def product_sync(force):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    features = (
+        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    )
     if not features:
-        click.secho("ℹ️ No features declared under [project.optional-dependencies.features].", fg="yellow")
+        click.secho(
+            "ℹ️ No features declared under [project.optional-dependencies.features].",
+            fg="yellow",
+        )
         return
 
     remote_features = [f for f in features if "@" in f]
@@ -41,9 +55,14 @@ def product_sync(force):
         return
 
     if local_features:
-        click.secho(f"🧱 Skipping {len(local_features)} local features (no version).", fg="cyan")
+        click.secho(
+            f"🧱 Skipping {len(local_features)} local features (no version).", fg="cyan"
+        )
 
-    click.secho(f"🔄 Syncing {len(remote_features)} features for '{product}'... (force={force})\n", fg="green")
+    click.secho(
+        f"🔄 Syncing {len(remote_features)} features for '{product}'... (force={force})\n",
+        fg="green",
+    )
 
     for entry in remote_features:
         # 1️⃣ Validación y extracción flexible
@@ -63,8 +82,12 @@ def product_sync(force):
         namespace_safe = namespace.replace("-", "_").replace(".", "_")
 
         # 2️⃣ Ruta en caché
-        cache_dir = os.path.join(workspace, ".splent_cache", "features", namespace_safe, f"{repo}@{version}")
-        product_features_dir = os.path.join(workspace, product, "features", namespace_safe)
+        cache_dir = os.path.join(
+            workspace, ".splent_cache", "features", namespace_safe, f"{repo}@{version}"
+        )
+        product_features_dir = os.path.join(
+            workspace, product, "features", namespace_safe
+        )
         link_path = os.path.join(product_features_dir, f"{repo}@{version}")
 
         # 3️⃣ Clonado con --force
@@ -82,15 +105,21 @@ def product_sync(force):
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            click.secho(f"❌ Failed to clone {namespace}/{repo}@{version}:\n{result.stderr}", fg="red")
+            click.secho(
+                f"❌ Failed to clone {namespace}/{repo}@{version}:\n{result.stderr}",
+                fg="red",
+            )
             continue
 
         # 5️⃣ Crear symlink
         _create_symlink(cache_dir, product_features_dir, link_path)
 
-
-        cache_dir = os.path.join(workspace, ".splent_cache", "features", namespace_safe, f"{repo}@{version}")
-        product_features_dir = os.path.join(workspace, product, "features", namespace_safe)
+        cache_dir = os.path.join(
+            workspace, ".splent_cache", "features", namespace_safe, f"{repo}@{version}"
+        )
+        product_features_dir = os.path.join(
+            workspace, product, "features", namespace_safe
+        )
         link_path = os.path.join(product_features_dir, f"{repo}@{version}")
 
         # 1️⃣ Clone feature (respecting --force)
@@ -114,7 +143,9 @@ def product_sync(force):
         # 2️⃣ Create symlink after clone
         _create_symlink(cache_dir, product_features_dir, link_path)
 
-    click.secho("\n✅ Product synced successfully — all features cloned and linked.", fg="green")
+    click.secho(
+        "\n✅ Product synced successfully — all features cloned and linked.", fg="green"
+    )
 
 
 def _create_symlink(cache_dir, product_features_dir, link_path):

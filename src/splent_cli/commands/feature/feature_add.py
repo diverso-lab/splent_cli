@@ -5,7 +5,10 @@ import click
 from splent_cli.utils.path_utils import PathUtils
 
 
-@click.command("feature:add", help="Adds a local (non-versioned) feature to the active product (namespace/feature_name).")
+@click.command(
+    "feature:add",
+    help="Adds a local (non-versioned) feature to the active product (namespace/feature_name).",
+)
 @click.argument("full_name", required=True)
 def feature_add(full_name):
     """
@@ -32,7 +35,9 @@ def feature_add(full_name):
         click.echo("❌ SPLENT_APP not set.")
         raise SystemExit(1)
 
-    cache_dir = os.path.join(workspace, ".splent_cache", "features", org_safe, feature_name)
+    cache_dir = os.path.join(
+        workspace, ".splent_cache", "features", org_safe, feature_name
+    )
     if not os.path.exists(cache_dir):
         click.echo(f"❌ Feature not found in cache: {cache_dir}")
         raise SystemExit(1)

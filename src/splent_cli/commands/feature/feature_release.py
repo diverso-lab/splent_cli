@@ -9,7 +9,9 @@ from splent_cli.commands.feature.feature_attach import feature_attach
 @click.command("feature:release")
 @click.argument("feature_name", required=True)
 @click.argument("version", required=True)
-@click.option("--attach", is_flag=True, help="Also attach this version to the current product")
+@click.option(
+    "--attach", is_flag=True, help="Also attach this version to the current product"
+)
 def feature_release(feature_name, version, attach):
     """
     Create a Git tag, push, and GitHub release for a feature.
@@ -27,7 +29,7 @@ def feature_release(feature_name, version, attach):
 
     candidates = [
         os.path.join(cache_base, f"{feature_name}@{version}"),
-        os.path.join(cache_base, feature_name)
+        os.path.join(cache_base, feature_name),
     ]
     feature_path = next((c for c in candidates if os.path.exists(c)), None)
     if not feature_path:
@@ -50,7 +52,7 @@ def feature_release(feature_name, version, attach):
     content = re.sub(
         r'(?m)^version\s*=\s*["\'].*?["\']',
         f'version = "{normalized_version}"',
-        content
+        content,
     )
 
     with open(py_path, "w", encoding="utf-8") as f:
@@ -63,10 +65,18 @@ def feature_release(feature_name, version, attach):
     if r.stdout.strip():
         click.echo("⚠️  Detected local changes:")
         click.echo(r.stdout.strip())
-        if click.confirm("Do you want to commit and push these changes before releasing?", default=True):
+        if click.confirm(
+            "Do you want to commit and push these changes before releasing?",
+            default=True,
+        ):
             subprocess.run(["git", "add", "-A"], check=False)
-            subprocess.run(["git", "commit", "-m", f"chore: bump version to {version}"], check=False)
-            subprocess.run(["git", "push", "--set-upstream", "origin", "main"], check=False)
+            subprocess.run(
+                ["git", "commit", "-m", f"chore: bump version to {version}"],
+                check=False,
+            )
+            subprocess.run(
+                ["git", "push", "--set-upstream", "origin", "main"], check=False
+            )
             click.echo("☁️  Changes committed and pushed to origin.")
         else:
             click.echo("🚫 Release cancelled (uncommitted changes).")
@@ -76,26 +86,39 @@ def feature_release(feature_name, version, attach):
 
     # --- Tag and push ------------------------------------------------------
     subprocess.run(["git", "fetch", "origin", "--tags"], check=False)
-    existing_tags = subprocess.run(["git", "tag"], capture_output=True, text=True).stdout.splitlines()
+    existing_tags = subprocess.run(
+        ["git", "tag"], capture_output=True, text=True
+    ).stdout.splitlines()
     if version in existing_tags:
         click.echo(f"⚠️ Tag {version} already exists locally. Skipping tag creation.")
     else:
-        subprocess.run(["git", "tag", "-a", version, "-m", f"Release {version}"], check=False)
+        subprocess.run(
+            ["git", "tag", "-a", version, "-m", f"Release {version}"], check=False
+        )
         click.echo(f"🏷️  Tag {version} created.")
 
     subprocess.run(["git", "push", "origin", version], check=False)
     click.echo(f"☁️  Tag {version} pushed to origin.")
 
     # --- GitHub release ----------------------------------------------------
-    remote_url = subprocess.run(["git", "config", "--get", "remote.origin.url"],
-                                capture_output=True, text=True).stdout.strip()
+    remote_url = subprocess.run(
+        ["git", "config", "--get", "remote.origin.url"], capture_output=True, text=True
+    ).stdout.strip()
     repo = re.sub(r"^git@github\.com:|\.git$", "", remote_url)
     api_url = f"https://api.github.com/repos/{repo}/releases"
     token = os.getenv("GITHUB_TOKEN")
 
     if token:
-        payload = {"tag_name": version, "name": version, "draft": False, "prerelease": False}
-        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+        payload = {
+            "tag_name": version,
+            "name": version,
+            "draft": False,
+            "prerelease": False,
+        }
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+        }
         resp = requests.post(api_url, headers=headers, json=payload)
         if resp.status_code in (200, 201):
             click.echo(f"✅ GitHub release created: {resp.json().get('html_url')}")

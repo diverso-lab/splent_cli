@@ -10,6 +10,7 @@ from splent_framework.db import db
 from splent_cli.commands.clear_uploads import clear_uploads
 from splent_cli.utils.path_utils import PathUtils
 
+
 @requires_app
 @click.command(
     "db:reset",
@@ -26,7 +27,6 @@ from splent_cli.utils.path_utils import PathUtils
     is_flag=True,
     help="Confirm the operation without prompting.",
 )
-
 def db_reset(clear_migrations, yes):
     app = current_app
 
@@ -77,7 +77,9 @@ def db_reset(clear_migrations, yes):
                 migrate()
                 upgrade()
 
-            click.echo(click.style("✅ Database recreated from new migrations.", fg="green"))
+            click.echo(
+                click.style("✅ Database recreated from new migrations.", fg="green")
+            )
 
         except Exception as e:
             click.echo(click.style(f"❌ Error during migration reset: {e}", fg="red"))

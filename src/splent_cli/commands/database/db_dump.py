@@ -33,13 +33,9 @@ def db_dump(filename):
 
     # Execute the command
     try:
-        subprocess.run(
-            dump_cmd, shell=True, check=True, executable="/bin/bash"
-        )
+        subprocess.run(dump_cmd, shell=True, check=True, executable="/bin/bash")
         click.echo(
-            click.style(
-                f"Database dump created successfully: {filename}", fg="green"
-            )
+            click.style(f"Database dump created successfully: {filename}", fg="green")
         )
     except subprocess.CalledProcessError as e:
         click.echo(click.style(f"Error creating database dump: {e}", fg="red"))

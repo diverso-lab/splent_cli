@@ -6,7 +6,7 @@ from splent_cli.utils.path_utils import PathUtils
 
 def get_features_from_pyproject() -> List[str]:
     """
-    Devuelve la lista de features declaradas en [project.optional-dependencies].features 
+    Devuelve la lista de features declaradas en [project.optional-dependencies].features
     del pyproject.toml del producto activo (según SPLENT_APP).
 
     Returns:

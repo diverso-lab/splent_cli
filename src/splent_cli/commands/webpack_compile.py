@@ -10,6 +10,7 @@ from splent_cli.utils.feature_utils import (
 
 logger = logging.getLogger(__name__)
 
+
 @click.command("webpack:compile", help="Compile webpack for one or all features.")
 @click.argument("feature_name", required=False)
 @click.option("--watch", is_flag=True, help="Enable watch mode for development.")
@@ -33,7 +34,9 @@ def compile_feature(feature, watch, production):
     """
     product = os.getenv("SPLENT_APP")
     if not product:
-        click.echo(click.style("❌ Environment variable SPLENT_APP is not set!", fg="red"))
+        click.echo(
+            click.style("❌ Environment variable SPLENT_APP is not set!", fg="red")
+        )
         return
 
     # Parse parts like: splent_io/splent_feature_public@v1.0.0
@@ -78,7 +81,11 @@ def compile_feature(feature, watch, production):
         )
 
     if not os.path.exists(webpack_file):
-        click.echo(click.style(f"⚠ No webpack.config.js found in {feature}, skipping...", fg="yellow"))
+        click.echo(
+            click.style(
+                f"⚠ No webpack.config.js found in {feature}, skipping...", fg="yellow"
+            )
+        )
         return
 
     click.echo(click.style(f"🚀 Compiling {feature}...", fg="cyan"))
@@ -91,10 +98,21 @@ def compile_feature(feature, watch, production):
 
     try:
         if watch:
-            subprocess.Popen(webpack_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            click.echo(click.style(f"👀 Watching {feature} in {mode} mode...", fg="blue"))
+            subprocess.Popen(
+                webpack_command,
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            click.echo(
+                click.style(f"👀 Watching {feature} in {mode} mode...", fg="blue")
+            )
         else:
             subprocess.run(webpack_command, shell=True, check=True)
-            click.echo(click.style(f"✅ Successfully compiled {feature} in {mode} mode!", fg="green"))
+            click.echo(
+                click.style(
+                    f"✅ Successfully compiled {feature} in {mode} mode!", fg="green"
+                )
+            )
     except subprocess.CalledProcessError as e:
         click.echo(click.style(f"❌ Error compiling {feature}: {e}", fg="red"))

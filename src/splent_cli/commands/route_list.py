@@ -18,20 +18,26 @@ def get_feature_names():
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
         features = data["project"]["optional-dependencies"].get("features", [])
-        return [f.split("_")[-1] for f in features]  # e.g. "splent_feature_auth" → "auth"
+        return [
+            f.split("_")[-1] for f in features
+        ]  # e.g. "splent_feature_auth" → "auth"
     except Exception:
         return []
 
 
 @requires_app
-@click.command("route:list", help="Lists all routes registered by the Flask application.")
+@click.command(
+    "route:list", help="Lists all routes registered by the Flask application."
+)
 @click.argument("feature_name", required=False)
 @click.option("--group", is_flag=True, help="Group routes by feature.")
 def route_list(feature_name, group):
     features = get_feature_names()
 
     if feature_name and feature_name not in features:
-        click.echo(click.style(f"❌ Feature '{feature_name}' is not enabled.", fg="red"))
+        click.echo(
+            click.style(f"❌ Feature '{feature_name}' is not enabled.", fg="red")
+        )
         return
 
     rules = sorted(current_app.url_map.iter_rules(), key=lambda rule: rule.endpoint)
@@ -67,17 +73,15 @@ def print_route_table(rules):
     max_endpoint = min(max((len(r.endpoint) for r in rules), default=8), 25)
     max_methods = min(max((len(", ".join(r.methods)) for r in rules), default=7), 20)
 
-    header = (
-        f"{'Endpoint'.ljust(max_endpoint)}  "
-        f"{'Methods'.ljust(max_methods)}  "
-        f"Route"
-    )
+    header = f"{'Endpoint'.ljust(max_endpoint)}  {'Methods'.ljust(max_methods)}  Route"
     click.echo(click.style(header, bold=True))
     click.echo("-" * (max_endpoint + max_methods + 2 + 60))
 
     for rule in rules:
         endpoint = rule.endpoint.ljust(max_endpoint)
-        methods = ", ".join(sorted(rule.methods.difference({"HEAD", "OPTIONS"}))).ljust(max_methods)
+        methods = ", ".join(sorted(rule.methods.difference({"HEAD", "OPTIONS"}))).ljust(
+            max_methods
+        )
         route = rule.rule
 
         click.echo(
@@ -85,7 +89,6 @@ def print_route_table(rules):
             f"{click.style(methods, fg='magenta')}  "
             f"{route}"
         )
-
 
 
 cli_command = route_list

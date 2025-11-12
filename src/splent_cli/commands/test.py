@@ -1,5 +1,4 @@
 import os
-import sys
 import subprocess
 from pathlib import Path
 import click
@@ -29,6 +28,7 @@ def test(feature_name, keyword):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def validate_testing_environment():
     env = get_current_app_config_value("TESTING")
     db_url = get_current_app_config_value("SQLALCHEMY_DATABASE_URI")
@@ -49,18 +49,26 @@ def get_feature_dirs(feature_name=None) -> list[Path]:
 
     features = get_features_from_pyproject()
     if not features:
-        click.echo(click.style(f"⚠️ No features registered in {splent_app}/pyproject.toml", fg="yellow"))
+        click.echo(
+            click.style(
+                f"⚠️ No features registered in {splent_app}/pyproject.toml", fg="yellow"
+            )
+        )
         raise click.Abort()
 
     if feature_name:
         full_name = get_normalize_feature_name_in_splent_format(feature_name)
         if full_name not in features:
-            click.echo(click.style(f"❌ Feature '{full_name}' is not registered.", fg="red"))
+            click.echo(
+                click.style(f"❌ Feature '{full_name}' is not registered.", fg="red")
+            )
             raise click.Abort()
 
         feature_path = workspace / full_name
         if not feature_path.is_dir():
-            click.echo(click.style(f"❌ Feature directory not found: {feature_path}", fg="red"))
+            click.echo(
+                click.style(f"❌ Feature directory not found: {feature_path}", fg="red")
+            )
             raise click.Abort()
 
         click.echo(f"🧪 Running tests for feature '{full_name}'...")
@@ -87,10 +95,11 @@ def collect_test_paths(feature_dirs: list[Path]) -> list[str]:
 def run_pytest_individually(test_paths: list[str], keyword: str | None):
     for test_path in test_paths:
         test_dir = Path(test_path)  # .../src/splent_feature_xxx/tests
-        src_dir = test_dir.parent.parent      # .../src
-        feature_dir = src_dir.parent          # .../splent_feature_xxx
-        feature_name = feature_dir.name.replace("splent_feature_", "")  # Ej: auth, profile, reset
-        relative_path = test_dir.relative_to(src_dir)  # tests/...
+        src_dir = test_dir.parent.parent  # .../src
+        feature_dir = src_dir.parent  # .../splent_feature_xxx
+        feature_name = feature_dir.name.replace(
+            "splent_feature_", ""
+        )  # Ej: auth, profile, reset
 
         env = os.environ.copy()
         env["PYTHONPATH"] = str(src_dir)
@@ -100,7 +109,8 @@ def run_pytest_individually(test_paths: list[str], keyword: str | None):
             "-v",
             "--rootdir=.",
             "--ignore-glob=*selenium*",
-            "-W", "ignore::DeprecationWarning"
+            "-W",
+            "ignore::DeprecationWarning",
         ]
 
         if keyword:

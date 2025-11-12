@@ -20,12 +20,6 @@ def clear_log():
                 )
             )
         except Exception as e:
-            click.echo(
-                click.style(
-                    f"Error clearing the 'app.log' file: {e}", fg="red"
-                )
-            )
+            click.echo(click.style(f"Error clearing the 'app.log' file: {e}", fg="red"))
     else:
-        click.echo(
-            click.style("The 'app.log' file does not exist.", fg="yellow")
-        )
+        click.echo(click.style("The 'app.log' file does not exist.", fg="yellow"))

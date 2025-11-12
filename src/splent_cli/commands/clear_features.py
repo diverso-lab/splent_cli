@@ -6,9 +6,13 @@ from pathlib import Path
 
 @click.command(
     "clear:features",
-    help="Clears SPLENT feature cache (.splent_cache/features) and broken symlinks in products."
+    help="Clears SPLENT feature cache (.splent_cache/features) and broken symlinks in products.",
 )
-@click.option("--namespace", default=None, help="Optional namespace (e.g. splent_io) to clear only that org.")
+@click.option(
+    "--namespace",
+    default=None,
+    help="Optional namespace (e.g. splent_io) to clear only that org.",
+)
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
 def clear_features(namespace, yes):
     workspace = os.getenv("WORKING_DIR", "/workspace")
@@ -23,7 +27,9 @@ def clear_features(namespace, yes):
         click.echo(f"⚠️  Namespace '{namespace}' not found in cache.")
         raise SystemExit(0)
 
-    if not yes and not click.confirm(f"⚠️  This will permanently delete {target} and cleanup symlinks. Continue?"):
+    if not yes and not click.confirm(
+        f"⚠️  This will permanently delete {target} and cleanup symlinks. Continue?"
+    ):
         click.echo("❎ Cancelled.")
         raise SystemExit(0)
 
@@ -32,7 +38,7 @@ def clear_features(namespace, yes):
     os.makedirs(cache_root, exist_ok=True)
     click.secho(
         f"🧹 Feature cache cleared: {'all namespaces' if not namespace else namespace}",
-        fg="green"
+        fg="green",
     )
 
     # 2️⃣ Limpiar symlinks rotos en productos

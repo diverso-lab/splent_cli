@@ -6,6 +6,7 @@ import tomllib
 
 # === HELPERS ====================================================
 
+
 def _compose_project_name(name: str, env: str) -> str:
     return f"{name}_{env}".replace("/", "_").replace("@", "_").replace(".", "_")
 
@@ -46,7 +47,9 @@ def product_up(dev, prod):
     else:
         env = os.getenv("SPLENT_ENV")
         if not env:
-            click.echo("❌ No environment specified. Use --dev, --prod or set SPLENT_ENV.")
+            click.echo(
+                "❌ No environment specified. Use --dev, --prod or set SPLENT_ENV."
+            )
             raise SystemExit(1)
 
     product_path = _get_product_path(product, workspace)
@@ -54,12 +57,17 @@ def product_up(dev, prod):
     def launch(name, docker_dir):
         compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
         compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
-        compose_file = compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+        compose_file = (
+            compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+        )
         if not os.path.exists(compose_file):
             click.echo(f"⚠️ No docker-compose file for {name}")
             return
         project_name = _compose_project_name(name, env)
-        subprocess.run(["docker", "compose", "-p", project_name, "-f", compose_file, "up", "-d"], check=False)
+        subprocess.run(
+            ["docker", "compose", "-p", project_name, "-f", compose_file, "up", "-d"],
+            check=False,
+        )
         click.echo(f"✅  {name}: started successfully")
 
     # Load features
@@ -71,7 +79,9 @@ def product_up(dev, prod):
     with open(py, "rb") as f:
         data = tomllib.load(f)
 
-    features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    features = (
+        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    )
     for feat in features:
         clean = _normalize_feature_ref(feat)
         launch(clean, _feature_cache_docker_dir(workspace, clean))

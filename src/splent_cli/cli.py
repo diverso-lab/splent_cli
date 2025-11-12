@@ -1,5 +1,3 @@
-import os
-import sys
 import click
 from dotenv import load_dotenv
 
@@ -37,13 +35,13 @@ class SPLENTCLI(click.Group):
             "🏗️ Product Management": [
                 cmd for cmd in self.commands if cmd.startswith("product:")
             ],
-            "🧱 Database": [
-                cmd for cmd in self.commands if cmd.startswith("db:")
-            ],
+            "🧱 Database": [cmd for cmd in self.commands if cmd.startswith("db:")],
             "🧰 Utilities": [
                 cmd
                 for cmd in self.commands
-                if cmd.startswith(("clear:", "env", "select", "info", "version", "doctor"))
+                if cmd.startswith(
+                    ("clear:", "env", "select", "info", "version", "doctor")
+                )
             ],
             "🐍 Development & QA": [
                 cmd

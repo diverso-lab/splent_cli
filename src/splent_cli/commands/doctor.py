@@ -5,7 +5,9 @@ import tomllib
 import importlib.metadata
 
 
-@click.command("doctor", help="Diagnose SPLENT workspace consistency and feature cache state")
+@click.command(
+    "doctor", help="Diagnose SPLENT workspace consistency and feature cache state"
+)
 def doctor():
     """
     Performs consistency checks for SPLENT:
@@ -50,7 +52,7 @@ def doctor():
             if os.path.isdir(src_path):
                 results.append(_ok(f"Active app: {app_name} (with src/)"))
             else:
-                results.append(_ok(f"Active app: {app_name} (flat layout)"))    
+                results.append(_ok(f"Active app: {app_name} (flat layout)"))
 
     _print_phase(results)
     all_results += results
@@ -149,7 +151,10 @@ def doctor():
 # Feature cache and symlink validation helpers
 # =====================================================
 
-def _check_features_with_cache(workspace: str, features_declared: list[str], results: list[str]):
+
+def _check_features_with_cache(
+    workspace: str, features_declared: list[str], results: list[str]
+):
     cache_root = os.path.join(workspace, ".splent_cache", "features")
     if not os.path.isdir(cache_root):
         results.append(_fail(".splent_cache/features not found"))
@@ -171,7 +176,9 @@ def _check_features_with_cache(workspace: str, features_declared: list[str], res
             continue
         src_dir = os.path.join(feat_dir, "src", org_safe, feat_pkg)
         if not os.path.isdir(src_dir):
-            results.append(_fail(f"{org_safe}/{feat_pkg}@{ver} missing package structure"))
+            results.append(
+                _fail(f"{org_safe}/{feat_pkg}@{ver} missing package structure")
+            )
             continue
         pyproject = os.path.join(feat_dir, "pyproject.toml")
         if not os.path.exists(pyproject):
@@ -180,7 +187,9 @@ def _check_features_with_cache(workspace: str, features_declared: list[str], res
         results.append(_ok(f"{org_safe}/{feat_pkg}@{ver} OK in cache"))
 
 
-def _check_feature_symlinks(workspace: str, app_name: str, features: list[str], results: list[str]):
+def _check_feature_symlinks(
+    workspace: str, app_name: str, features: list[str], results: list[str]
+):
     product_features_dir = os.path.join(workspace, app_name, "features")
     if not os.path.isdir(product_features_dir):
         results.append(_fail(f"No 'features/' directory found in {app_name}"))
@@ -192,13 +201,23 @@ def _check_feature_symlinks(workspace: str, app_name: str, features: list[str], 
         org, rest = f.split("/", 1) if "/" in f else ("splent_io", f)
         feat_pkg, _, ver = rest.partition("@")
         namespace_safe = org.replace("-", "_").replace(".", "_")
-        link_path = os.path.join(product_features_dir, namespace_safe, f"{feat_pkg}@{ver}")
-        target_path = os.path.join(workspace, ".splent_cache", "features", namespace_safe, f"{feat_pkg}@{ver}")
+        link_path = os.path.join(
+            product_features_dir, namespace_safe, f"{feat_pkg}@{ver}"
+        )
+        target_path = os.path.join(
+            workspace, ".splent_cache", "features", namespace_safe, f"{feat_pkg}@{ver}"
+        )
 
         if not os.path.exists(link_path):
-            results.append(_fail(f"Missing symlink: {app_name}/features/{namespace_safe}/{feat_pkg}@{ver}"))
+            results.append(
+                _fail(
+                    f"Missing symlink: {app_name}/features/{namespace_safe}/{feat_pkg}@{ver}"
+                )
+            )
         elif not os.path.islink(link_path):
-            results.append(_fail(f"Expected symlink but found directory/file: {link_path}"))
+            results.append(
+                _fail(f"Expected symlink but found directory/file: {link_path}")
+            )
         elif not os.path.exists(target_path):
             results.append(_fail(f"Broken symlink → target missing: {target_path}"))
         else:
@@ -208,6 +227,7 @@ def _check_feature_symlinks(workspace: str, app_name: str, features: list[str], 
 # =====================================================
 # Generic helpers
 # =====================================================
+
 
 def _extract_features(pyproject_path: str, data: dict) -> list[str]:
     features = data.get("project", {}).get("optional-dependencies", {}).get("features")

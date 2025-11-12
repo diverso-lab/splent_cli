@@ -1,11 +1,9 @@
 import inspect
-import os
 import importlib
 import click
 
 from splent_cli.commands.database.db_reset import db_reset
 from splent_cli.utils.decorators import requires_app
-from splent_cli.utils.path_utils import PathUtils
 from splent_cli.utils.feature_utils import get_features_from_pyproject
 from splent_framework.seeders.BaseSeeder import BaseSeeder
 
@@ -44,7 +42,9 @@ def get_installed_seeders(specific_module=None):
             continue
         except Exception as e:
             click.echo(
-                click.style(f"❌ Error loading seeders from {module_name}: {e}", fg="red"),
+                click.style(
+                    f"❌ Error loading seeders from {module_name}: {e}", fg="red"
+                ),
                 err=True,
             )
 
@@ -75,18 +75,24 @@ def db_seed(reset, yes, module):
         click.echo(click.style("⚠️  No seeders found.", fg="yellow"))
         return
 
-    click.echo(click.style(
-        f"🌱 Seeding {'feature '+module if module else 'all features'}...",
-        fg="green"
-    ))
+    click.echo(
+        click.style(
+            f"🌱 Seeding {'feature ' + module if module else 'all features'}...",
+            fg="green",
+        )
+    )
 
     success = True
     for seeder in seeders:
         try:
             seeder.run()
-            click.echo(click.style(f"✔ {seeder.__class__.__name__} completed.", fg="blue"))
+            click.echo(
+                click.style(f"✔ {seeder.__class__.__name__} completed.", fg="blue")
+            )
         except Exception as e:
-            click.echo(click.style(f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red"))
+            click.echo(
+                click.style(f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red")
+            )
             success = False
             break
 

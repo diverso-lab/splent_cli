@@ -36,7 +36,11 @@ def install_features_if_needed():
     with open(pyproject_path, "rb") as f_toml:
         pyproject = tomllib.load(f_toml)
 
-    features = pyproject.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    features = (
+        pyproject.get("project", {})
+        .get("optional-dependencies", {})
+        .get("features", [])
+    )
     for feature in features:
         path = f"/workspace/{feature}"
         pyproject_feature = os.path.join(path, "pyproject.toml")
@@ -46,7 +50,9 @@ def install_features_if_needed():
         with open(pyproject_feature, "rb") as f_feat:
             name = tomllib.load(f_feat)["project"]["name"]
             if name not in installed:
-                subprocess.run([sys.executable, "-m", "pip", "install", "-e", path], check=True)
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-e", path], check=True
+                )
 
         src_path = os.path.join(path, "src")
         if src_path not in sys.path:
@@ -56,7 +62,9 @@ def install_features_if_needed():
 def get_app_module():
     global _module_cache
     if not module_name:
-        raise RuntimeError("❌ No SPLENT_APP defined — cannot import application module.")
+        raise RuntimeError(
+            "❌ No SPLENT_APP defined — cannot import application module."
+        )
     if _module_cache:
         return _module_cache
 
@@ -79,11 +87,13 @@ def get_create_app():
         return mod.create_app
     raise RuntimeError(f"❌ The module '{mod.__name__}' does not define `create_app()`")
 
+
 def get_create_app_in_testing_mode():
     mod = get_app_module()
     if not hasattr(mod, "create_app"):
         raise RuntimeError(f"❌ The module '{mod.__name__}' no define create_app()")
     return mod.create_app("testing")
+
 
 def get_app():
     global _app_instance

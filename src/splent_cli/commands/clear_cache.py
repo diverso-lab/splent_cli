@@ -12,16 +12,12 @@ from splent_cli.utils.path_utils import PathUtils
     help="Clears pytest cache in workspace and the build directory at the root.",
 )
 def clear_cache():
-
     if click.confirm(
         "Are you sure you want to clear the pytest cache and the build directory?"
     ):
-
         project_root = Path(os.getenv("WORKING_DIR", ""))
 
-        pytest_cache_dir = os.path.join(
-            PathUtils.get_modules_dir(), ".pytest_cache"
-        )
+        pytest_cache_dir = os.path.join(PathUtils.get_modules_dir(), ".pytest_cache")
 
         build_dir = os.path.join(os.getenv("WORKING_DIR", ""), "build")
 
@@ -30,14 +26,10 @@ def clear_cache():
                 shutil.rmtree(pytest_cache_dir)
                 click.echo(click.style("Pytest cache cleared.", fg="green"))
             except Exception as e:
-                click.echo(
-                    click.style(f"Failed to clear pytest cache: {e}", fg="red")
-                )
+                click.echo(click.style(f"Failed to clear pytest cache: {e}", fg="red"))
         else:
             click.echo(
-                click.style(
-                    "No pytest cache found. Nothing to clear.", fg="yellow"
-                )
+                click.style("No pytest cache found. Nothing to clear.", fg="yellow")
             )
 
         if os.path.exists(build_dir):
@@ -46,9 +38,7 @@ def clear_cache():
                 click.echo(click.style("Build directory cleared.", fg="green"))
             except Exception as e:
                 click.echo(
-                    click.style(
-                        f"Failed to clear build directory: {e}", fg="red"
-                    )
+                    click.style(f"Failed to clear build directory: {e}", fg="red")
                 )
         else:
             click.echo(
@@ -69,9 +59,7 @@ def clear_cache():
                         fg="red",
                     )
                 )
-        click.echo(
-            click.style("All __pycache__ directories cleared.", fg="green")
-        )
+        click.echo(click.style("All __pycache__ directories cleared.", fg="green"))
 
         pyc_files = project_root.rglob("*.pyc")
         for file in pyc_files:
@@ -79,9 +67,7 @@ def clear_cache():
                 file.unlink()
             except Exception as e:
                 click.echo(
-                    click.style(
-                        f"Failed to clear .pyc file {file}: {e}", fg="red"
-                    )
+                    click.style(f"Failed to clear .pyc file {file}: {e}", fg="red")
                 )
 
         click.echo(click.style("All cache cleared.", fg="green"))

@@ -4,6 +4,7 @@ import os
 import click
 from splent_cli.utils.path_utils import PathUtils
 
+
 @click.command("command:create", help="Creates a new CLI command skeleton.")
 @click.argument("name")
 def command_create(name):
@@ -12,10 +13,16 @@ def command_create(name):
     filepath = os.path.join(commands_dir, filename)
 
     if os.path.exists(filepath):
-        click.echo(click.style(f"❌ The command '{name}' already exists as file {filename}.", fg="red"))
+        click.echo(
+            click.style(
+                f"❌ The command '{name}' already exists as file {filename}.", fg="red"
+            )
+        )
         return
 
-    use_flask = click.confirm("Does this command require access to the Flask app context?", default=False)
+    use_flask = click.confirm(
+        "Does this command require access to the Flask app context?", default=False
+    )
 
     command_var = name.lower().replace(":", "_")
     command_name = name.lower()

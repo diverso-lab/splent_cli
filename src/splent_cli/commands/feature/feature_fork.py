@@ -4,9 +4,14 @@ import click
 import requests
 
 
-@click.command("feature:fork", help="Fork a SPLENT feature on GitHub and clone it locally under your namespace")
+@click.command(
+    "feature:fork",
+    help="Fork a SPLENT feature on GitHub and clone it locally under your namespace",
+)
 @click.argument("feature_name", required=True)
-@click.option("--version", "-v", default="v1.0.0", help="Feature version (default: v1.0.0)")
+@click.option(
+    "--version", "-v", default="v1.0.0", help="Feature version (default: v1.0.0)"
+)
 def feature_fork(feature_name, version):
     token = os.getenv("GITHUB_TOKEN")
     github_user = os.getenv("GITHUB_USER")
@@ -17,9 +22,14 @@ def feature_fork(feature_name, version):
 
     upstream_owner = "splent-io"
     api_url = f"https://api.github.com/repos/{upstream_owner}/{feature_name}/forks"
-    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
 
-    click.secho(f"🔁 Forking {upstream_owner}/{feature_name} into {github_user}...", fg="cyan")
+    click.secho(
+        f"🔁 Forking {upstream_owner}/{feature_name} into {github_user}...", fg="cyan"
+    )
     resp = requests.post(api_url, headers=headers, json={"default_branch_only": False})
     if resp.status_code not in (201, 202):
         click.secho(f"❌ Failed: {resp.status_code} {resp.text}", fg="red")
@@ -30,7 +40,10 @@ def feature_fork(feature_name, version):
 
     # Esperar a que GitHub lo procese
     for i in range(5):
-        r = requests.get(f"https://api.github.com/repos/{github_user}/{feature_name}", headers=headers)
+        r = requests.get(
+            f"https://api.github.com/repos/{github_user}/{feature_name}",
+            headers=headers,
+        )
         if r.status_code == 200:
             click.secho("✅ Fork is ready.", fg="green")
             break

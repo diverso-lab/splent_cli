@@ -18,7 +18,9 @@ def feature_list():
         return
 
     if not features:
-        click.echo(click.style("ℹ️ No features declared in pyproject.toml.", fg="yellow"))
+        click.echo(
+            click.style("ℹ️ No features declared in pyproject.toml.", fg="yellow")
+        )
         return
 
     click.echo(click.style(f"Declared features ({len(features)}):", fg="green"))

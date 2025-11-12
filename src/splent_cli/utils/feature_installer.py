@@ -8,9 +8,15 @@ from splent_cli.utils.feature_utils import get_features_from_pyproject
 def get_installed_packages() -> set[str]:
     result = subprocess.run(
         ["pip", "list", "--format=freeze"],
-        stdout=subprocess.PIPE, text=True, check=True
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
     )
-    return {line.split("==")[0] for line in result.stdout.strip().splitlines() if "==" in line}
+    return {
+        line.split("==")[0]
+        for line in result.stdout.strip().splitlines()
+        if "==" in line
+    }
 
 
 def get_package_name(feature_path: Path) -> str | None:
@@ -41,7 +47,4 @@ def ensure_editable_features_installed():
             continue
 
         print(f"➡️ Installing {package_name} in editable mode...")
-        subprocess.run(
-            ["pip", "install", "-e", str(feature_path)],
-            check=True
-        )
+        subprocess.run(["pip", "install", "-e", str(feature_path)], check=True)

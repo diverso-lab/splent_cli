@@ -1,5 +1,4 @@
 import os
-import re
 import shutil
 import tomllib
 import tomli_w
@@ -7,10 +6,15 @@ import click
 from splent_cli.utils.path_utils import PathUtils
 
 
-@click.command("feature:rename", help="Renames a local feature (only if non-versioned and non-remote). Updates pyproject and symlink if active.")
+@click.command(
+    "feature:rename",
+    help="Renames a local feature (only if non-versioned and non-remote). Updates pyproject and symlink if active.",
+)
 @click.argument("old_name")
 @click.argument("new_name")
-@click.option("--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io').")
+@click.option(
+    "--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io')."
+)
 def feature_rename(old_name, new_name, namespace):
     """
     Safe rename for local, non-versioned, non-remote features.
@@ -36,19 +40,35 @@ def feature_rename(old_name, new_name, namespace):
     # Validations
     # -----------------------------
     if not os.path.exists(old_dir):
-        click.echo(click.style(f"❌ Feature '{old_name}' not found in namespace '{org_safe}'.", fg="red"))
+        click.echo(
+            click.style(
+                f"❌ Feature '{old_name}' not found in namespace '{org_safe}'.",
+                fg="red",
+            )
+        )
         raise SystemExit(1)
 
     if os.path.exists(new_dir):
-        click.echo(click.style(f"⚠️  A feature named '{new_name}' already exists in '{org_safe}'.", fg="yellow"))
+        click.echo(
+            click.style(
+                f"⚠️  A feature named '{new_name}' already exists in '{org_safe}'.",
+                fg="yellow",
+            )
+        )
         raise SystemExit(1)
 
     if "@" in old_name or "@" in new_name:
-        click.echo(click.style("❌ Versioned features cannot be renamed manually.", fg="red"))
+        click.echo(
+            click.style("❌ Versioned features cannot be renamed manually.", fg="red")
+        )
         raise SystemExit(1)
 
     if os.path.exists(os.path.join(old_dir, ".git")):
-        click.echo(click.style("❌ Feature is linked to a Git repository; cannot rename.", fg="red"))
+        click.echo(
+            click.style(
+                "❌ Feature is linked to a Git repository; cannot rename.", fg="red"
+            )
+        )
         raise SystemExit(1)
 
     # -----------------------------
@@ -65,16 +85,24 @@ def feature_rename(old_name, new_name, namespace):
             try:
                 with open(pyproject_path, "rb") as f:
                     data = tomllib.load(f)
-                features_list = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+                features_list = (
+                    data.get("project", {})
+                    .get("optional-dependencies", {})
+                    .get("features", [])
+                )
                 if old_name in features_list:
                     feature_is_active = True
             except Exception as e:
-                click.echo(click.style(f"⚠️  Could not read pyproject.toml: {e}", fg="yellow"))
+                click.echo(
+                    click.style(f"⚠️  Could not read pyproject.toml: {e}", fg="yellow")
+                )
 
     # -----------------------------
     # Rename in cache
     # -----------------------------
-    click.echo(f"🚚 Renaming feature '{old_name}' → '{new_name}' in namespace '{org_safe}'...")
+    click.echo(
+        f"🚚 Renaming feature '{old_name}' → '{new_name}' in namespace '{org_safe}'..."
+    )
     shutil.move(old_dir, new_dir)
 
     old_src = os.path.join(new_dir, "src", org_safe, old_name)
@@ -93,8 +121,12 @@ def feature_rename(old_name, new_name, namespace):
             path = os.path.join(root, file)
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
-            new_content = content.replace(f"{org_safe}.{old_name}", f"{org_safe}.{new_name}")
-            new_content = new_content.replace(f"templates/{old_name}/", f"templates/{new_name}/")
+            new_content = content.replace(
+                f"{org_safe}.{old_name}", f"{org_safe}.{new_name}"
+            )
+            new_content = new_content.replace(
+                f"templates/{old_name}/", f"templates/{new_name}/"
+            )
             if new_content != content:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(new_content)
@@ -118,9 +150,7 @@ def feature_rename(old_name, new_name, namespace):
             symlink_updated = True
 
         # Update pyproject
-        updated_features = [
-            new_name if f == old_name else f for f in features_list
-        ]
+        updated_features = [new_name if f == old_name else f for f in features_list]
         try:
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
@@ -129,7 +159,9 @@ def feature_rename(old_name, new_name, namespace):
                 tomli_w.dump(data, f)
             pyproject_updated = True
         except Exception as e:
-            click.echo(click.style(f"⚠️  Could not update pyproject.toml: {e}", fg="yellow"))
+            click.echo(
+                click.style(f"⚠️  Could not update pyproject.toml: {e}", fg="yellow")
+            )
 
     # -----------------------------
     # Summary

@@ -42,7 +42,9 @@ def product_down(env, v):
 
     remove_volumes = False
     if v:
-        confirm = input("⚠️  This will remove ALL Docker volumes for the product and its features. Continue? (y/N): ")
+        confirm = input(
+            "⚠️  This will remove ALL Docker volumes for the product and its features. Continue? (y/N): "
+        )
         if confirm.lower() in ("y", "yes"):
             remove_volumes = True
             click.echo("🧹 Volumes will be removed.")
@@ -53,9 +55,10 @@ def product_down(env, v):
     def shutdown(name, docker_dir):
         compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
         compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
-        compose_file = compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+        compose_file = (
+            compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+        )
         if not os.path.exists(compose_file):
-            click.echo(f"⚠️ No docker-compose file for {name}")
             return
         project_name = _compose_project_name(name, env)
 
@@ -76,7 +79,9 @@ def product_down(env, v):
 
     with open(py, "rb") as f:
         data = tomllib.load(f)
-    features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    features = (
+        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    )
 
     for feat in features:
         clean = _normalize_feature_ref(feat)

@@ -2,9 +2,15 @@ import os
 import sys
 import click
 
-@click.command("select", help="Select the active SPLENT app (updates .env, prompt, and session env vars)")
+
+@click.command(
+    "select",
+    help="Select the active SPLENT app (updates .env, prompt, and session env vars)",
+)
 @click.argument("app_name", required=True)
-@click.option("--shell", is_flag=True, help="Output shell commands instead of applying directly")
+@click.option(
+    "--shell", is_flag=True, help="Output shell commands instead of applying directly"
+)
 def select_app(app_name, shell):
     workspace_env_path = "/workspace/.env"
     splent_env_path = os.path.expanduser("~/.splent_env")
@@ -41,8 +47,8 @@ def select_app(app_name, shell):
 
     # --- Update ~/.splent_env ---
     with open(splent_env_path, "w") as f:
-        f.write(f'export SPLENT_APP={app_name}\n')
-        f.write('source /workspace/.env\n')
+        f.write(f"export SPLENT_APP={app_name}\n")
+        f.write("source /workspace/.env\n")
 
     # --- Ensure ~/.bashrc loads the environment ---
     bashrc = os.path.expanduser("~/.bashrc")
@@ -51,12 +57,14 @@ def select_app(app_name, shell):
             bashrc_content = f.read()
         if "source ~/.splent_env" not in bashrc_content:
             with open(bashrc, "a") as f:
-                f.write('\n# Automatically load SPLENT environment\nsource ~/.splent_env\n')
+                f.write(
+                    "\n# Automatically load SPLENT environment\nsource ~/.splent_env\n"
+                )
 
     # --- If --shell is used, print only the export lines (no emojis or colors) ---
     if shell:
-        print(f'export SPLENT_APP={app_name}')
-        print('source /workspace/.env')
-        print('type set_prompt >/dev/null 2>&1 && set_prompt || true')
+        print(f"export SPLENT_APP={app_name}")
+        print("source /workspace/.env")
+        print("type set_prompt >/dev/null 2>&1 && set_prompt || true")
 
     # 🔇 No extra output (keeps Docker CLI prompt clean)

@@ -3,13 +3,14 @@ import shutil
 import stat
 import click
 import zlib
-from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from splent_cli.utils.path_utils import PathUtils
 
+
 def pascalcase(s):
     return "".join(word.capitalize() for word in s.split("_"))
+
 
 def setup_jinja_env():
     env = Environment(
@@ -19,20 +20,25 @@ def setup_jinja_env():
     env.filters["pascalcase"] = pascalcase
     return env
 
+
 def render_and_write_file(env, template_name, filename, context):
     content = env.get_template(template_name).render(context) + "\n"
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, "w") as f:
         f.write(content)
 
+
 def copy_raw_file(template_name, filename):
     src = os.path.join(PathUtils.get_splent_cli_templates_dir(), template_name)
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     shutil.copy(src, filename)
 
+
 @click.command("product:create", help="Creates a new product with a given name.")
 @click.argument("name")
-@click.option("--features-file", type=click.Path(exists=True), help="Path to features.txt")
+@click.option(
+    "--features-file", type=click.Path(exists=True), help="Path to features.txt"
+)
 def make_product(name, features_file):
     env = setup_jinja_env()
     offset = zlib.crc32(name.encode("utf-8")) % 1000  # 0–999
@@ -44,7 +50,7 @@ def make_product(name, features_file):
         "pascal_name": pascalcase(name),
         "web_port": web_port,
         "db_port": db_port,
-        "redis_port": redis_port
+        "redis_port": redis_port,
     }
 
     base_path = os.path.join(PathUtils.get_working_dir(), name)
@@ -54,10 +60,15 @@ def make_product(name, features_file):
         return
 
     for subdir in [
-        "docker", "entrypoints", "scripts", f"src/{name}",
-        f"src/{name}/static", f"src/{name}/static/css",
-        f"src/{name}/static/fonts", f"src/{name}/static/js",
-        f"src/{name}/templates"
+        "docker",
+        "entrypoints",
+        "scripts",
+        f"src/{name}",
+        f"src/{name}/static",
+        f"src/{name}/static/css",
+        f"src/{name}/static/fonts",
+        f"src/{name}/static/js",
+        f"src/{name}/templates",
     ]:
         os.makedirs(os.path.join(base_path, subdir), exist_ok=True)
 
@@ -121,13 +132,23 @@ def make_product(name, features_file):
         for d in dirs:
             dir_path = os.path.join(root, d)
             os.chown(dir_path, uid, gid)
-            os.chmod(dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+            os.chmod(
+                dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
+            )
         for f in files:
             file_path = os.path.join(root, f)
             os.chown(file_path, uid, gid)
             os.chmod(
                 file_path,
-                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH,
+                stat.S_IRUSR
+                | stat.S_IWUSR
+                | stat.S_IRGRP
+                | stat.S_IWGRP
+                | stat.S_IROTH,
             )
 
-    click.echo(click.style(f"✅ Product '{name}' created successfully in {base_path}", fg="green"))
+    click.echo(
+        click.style(
+            f"✅ Product '{name}' created successfully in {base_path}", fg="green"
+        )
+    )

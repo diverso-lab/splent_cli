@@ -36,17 +36,14 @@ def feature_attach(feature_name, version):
     # --- 1️⃣ Verify that the GitHub tag exists -------------------------------
     click.echo(f"🔍 Checking GitHub for {feature_name}@{version}...")
 
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "splent-cli"
-    }
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "splent-cli"}
     token = os.getenv("GITHUB_TOKEN")
     if token:
         headers["Authorization"] = f"token {token}"
 
     tag_api_urls = [
         f"https://api.github.com/repos/{org}/{feature_name}/git/refs/tags/{version}",
-        f"https://api.github.com/repos/{org}/{feature_name}/releases/tags/{version}"
+        f"https://api.github.com/repos/{org}/{feature_name}/releases/tags/{version}",
     ]
     html_url = f"https://github.com/{org}/{feature_name}/releases/tag/{version}"
 
@@ -80,18 +77,33 @@ def feature_attach(feature_name, version):
     if not os.path.exists(versioned_dir):
         click.echo(f"⬇️  Cloning {feature_name}@{version}...")
         use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
-        url = f"git@github.com:{org}/{feature_name}.git" if use_ssh else f"https://github.com/{org}/{feature_name}.git"
+        url = (
+            f"git@github.com:{org}/{feature_name}.git"
+            if use_ssh
+            else f"https://github.com/{org}/{feature_name}.git"
+        )
         try:
             subprocess.run(
-                ["git", "clone", "--branch", version, "--depth", "1", url, versioned_dir],
+                [
+                    "git",
+                    "clone",
+                    "--branch",
+                    version,
+                    "--depth",
+                    "1",
+                    url,
+                    versioned_dir,
+                ],
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
             )
             click.echo(f"✅ Feature cloned to {versioned_dir}")
         except subprocess.CalledProcessError as e:
-            click.echo(f"❌ Failed to clone {feature_name}@{version}: {e.stderr.strip()}")
+            click.echo(
+                f"❌ Failed to clone {feature_name}@{version}: {e.stderr.strip()}"
+            )
             raise SystemExit(1)
     else:
         click.echo(f"✅ Cached feature already exists: {versioned_dir}")

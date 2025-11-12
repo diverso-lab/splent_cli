@@ -11,7 +11,6 @@ def is_splent_dev_mode():
 
 
 class PathUtils:
-
     @staticmethod
     def get_working_dir():
         return os.getenv("WORKING_DIR", "")
@@ -24,10 +23,9 @@ class PathUtils:
 
     @staticmethod
     def get_app_dir():
-
         splent_app = os.getenv("SPLENT_APP", "splent_app")
         return os.path.join(PathUtils.get_app_base_dir(), "src", splent_app)
-    
+
     @staticmethod
     def get_app_env_file():
         working_dir = PathUtils.get_working_dir()
@@ -37,7 +35,7 @@ class PathUtils:
     @staticmethod
     def get_modules_dir():
         return os.path.join(PathUtils.get_app_dir(), "modules")
-    
+
     @staticmethod
     def get_migrations_dir():
         return os.path.join(PathUtils.get_app_dir(), "migrations")
@@ -66,7 +64,7 @@ class PathUtils:
 
     @staticmethod
     def get_core_dir():
-        return os.path.join(PathUtils.get_splent_framework_dir(), "core")
+        return os.path.join(PathUtils.get_splent_framework_dir())
 
     @staticmethod
     def get_env_dir():
@@ -78,7 +76,6 @@ class PathUtils:
 
     @staticmethod
     def get_uploads_dir():
-
         splent_app = os.getenv("SPLENT_APP")
 
         working_dir = PathUtils.get_working_dir()

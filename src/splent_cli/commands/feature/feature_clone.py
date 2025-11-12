@@ -36,7 +36,9 @@ def _repo_is_private(namespace, repo):
         return False
 
 
-@click.command("feature:clone", help="Clone a SPLENT feature into the local cache namespace.")
+@click.command(
+    "feature:clone", help="Clone a SPLENT feature into the local cache namespace."
+)
 @click.argument("full_name", required=True)
 def feature_clone(full_name):
     """
@@ -82,10 +84,19 @@ def feature_clone(full_name):
 
     # --- Clone ---
     try:
-        subprocess.run(["git", "clone", "--depth", "1", "--branch", version, fork_url, local_path], check=True)
+        subprocess.run(
+            ["git", "clone", "--depth", "1", "--branch", version, fork_url, local_path],
+            check=True,
+        )
     except subprocess.CalledProcessError:
-        click.secho(f"⚠️ Tag {version} not found. Cloning main branch instead.", fg="yellow")
-        subprocess.run(["git", "clone", "--depth", "1", fork_url, local_path], check=True)
+        click.secho(
+            f"⚠️ Tag {version} not found. Cloning main branch instead.", fg="yellow"
+        )
+        subprocess.run(
+            ["git", "clone", "--depth", "1", fork_url, local_path], check=True
+        )
 
-    click.secho(f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green")
+    click.secho(
+        f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green"
+    )
     click.secho(f"📦 Cached at: {local_path}", fg="blue")

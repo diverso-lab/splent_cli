@@ -5,12 +5,35 @@ import shutil
 import click
 
 
-@click.command("product:env", help="Generate or merge .env files for the active product.")
-@click.option("--generate", is_flag=True, help="Generate the .env file for the product (and optionally all features).")
-@click.option("--merge", is_flag=True, help="Merge all feature .env files into the product .env.")
-@click.option("--dev", "env_name", flag_value="dev", help="Use development env (.env.dev.example).")
-@click.option("--prod", "env_name", flag_value="prod", help="Use production env (.env.prod.example).")
-@click.option("--all", "process_all", is_flag=True, help="Also process all features declared in pyproject.toml (only for --generate).")
+@click.command(
+    "product:env", help="Generate or merge .env files for the active product."
+)
+@click.option(
+    "--generate",
+    is_flag=True,
+    help="Generate the .env file for the product (and optionally all features).",
+)
+@click.option(
+    "--merge", is_flag=True, help="Merge all feature .env files into the product .env."
+)
+@click.option(
+    "--dev",
+    "env_name",
+    flag_value="dev",
+    help="Use development env (.env.dev.example).",
+)
+@click.option(
+    "--prod",
+    "env_name",
+    flag_value="prod",
+    help="Use production env (.env.prod.example).",
+)
+@click.option(
+    "--all",
+    "process_all",
+    is_flag=True,
+    help="Also process all features declared in pyproject.toml (only for --generate).",
+)
 def product_env(generate, merge, env_name, process_all):
     """
     Manage environment files for the active product.
@@ -61,10 +84,16 @@ def product_env(generate, merge, env_name, process_all):
         if os.path.exists(env_file):
             click.echo(f"ℹ️  Existing .env found for {product}, skipping creation.")
         else:
-            selected = example_specific if os.path.exists(example_specific) else example_generic
+            selected = (
+                example_specific
+                if os.path.exists(example_specific)
+                else example_generic
+            )
             if selected:
                 shutil.copyfile(selected, env_file)
-                click.echo(f"📄 Created {product}/docker/.env from {os.path.basename(selected)}")
+                click.echo(
+                    f"📄 Created {product}/docker/.env from {os.path.basename(selected)}"
+                )
             else:
                 click.echo(f"⚠️  No .env template found for {product} in {docker_dir}")
 
@@ -77,12 +106,16 @@ def product_env(generate, merge, env_name, process_all):
         with open(py_path, "rb") as f:
             data = tomllib.load(f)
 
-        features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        features = (
+            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        )
         if not features:
             click.echo("ℹ️ No features declared in pyproject.toml.")
             return
 
-        click.echo(f"🚀 Generating .env files for {len(features)} features ({env_name})...\n")
+        click.echo(
+            f"🚀 Generating .env files for {len(features)} features ({env_name})...\n"
+        )
 
         created, skipped, no_template, failed = 0, 0, 0, 0
         for f_entry in features:
@@ -133,7 +166,9 @@ def product_env(generate, merge, env_name, process_all):
         base_env = next((c for c in candidates if os.path.exists(c)), None)
 
         if not base_env:
-            click.echo(f"❌ No .env.{env_name}.example, .env.example or .env found in {docker_dir}")
+            click.echo(
+                f"❌ No .env.{env_name}.example, .env.example or .env found in {docker_dir}"
+            )
             raise SystemExit(1)
 
         target_env = os.path.join(docker_dir, ".env")
@@ -143,7 +178,9 @@ def product_env(generate, merge, env_name, process_all):
 
         with open(py_path, "rb") as f:
             data = tomllib.load(f)
-        features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        features = (
+            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        )
         if not features:
             click.echo("ℹ️ No features declared.")
             raise SystemExit(0)
@@ -157,8 +194,12 @@ def product_env(generate, merge, env_name, process_all):
 
         feature_env_paths = []
         for feature in features:
-            org_part, feat_part = feature.split("/", 1) if "/" in feature else ("splent_io", feature)
-            docker_dir_f = os.path.join(workspace, ".splent_cache", "features", org_part, feat_part, "docker")
+            org_part, feat_part = (
+                feature.split("/", 1) if "/" in feature else ("splent_io", feature)
+            )
+            docker_dir_f = os.path.join(
+                workspace, ".splent_cache", "features", org_part, feat_part, "docker"
+            )
 
             candidates_f = [
                 os.path.join(docker_dir_f, ".env"),  # preferimos la .env ya generada
@@ -167,7 +208,9 @@ def product_env(generate, merge, env_name, process_all):
             ]
             base_f = next((c for c in candidates_f if os.path.exists(c)), None)
             if not base_f:
-                click.echo(f"⚠️ {feature}: no .env.{env_name}.example, .env.example or .env found.")
+                click.echo(
+                    f"⚠️ {feature}: no .env.{env_name}.example, .env.example or .env found."
+                )
                 continue
 
             target_f = os.path.join(docker_dir_f, ".env")
@@ -190,4 +233,6 @@ def product_env(generate, merge, env_name, process_all):
             for k, v in merged.items():
                 f.write(f"{k}={v}\n")
 
-        click.echo(f"🔗 Merged {len(feature_env_paths)} feature .env files into {target_env}")
+        click.echo(
+            f"🔗 Merged {len(feature_env_paths)} feature .env files into {target_env}"
+        )

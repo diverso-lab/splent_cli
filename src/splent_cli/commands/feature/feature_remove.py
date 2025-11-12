@@ -5,9 +5,14 @@ import click
 from splent_cli.utils.path_utils import PathUtils
 
 
-@click.command("feature:remove", help="Removes a local (non-versioned) feature from the active product.")
+@click.command(
+    "feature:remove",
+    help="Removes a local (non-versioned) feature from the active product.",
+)
 @click.argument("feature_name", required=True)
-@click.option("--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io').")
+@click.option(
+    "--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io')."
+)
 def feature_remove(feature_name, namespace):
     """
     Removes a local feature (no version, no repo) from the current SPLENT product:
@@ -62,4 +67,6 @@ def feature_remove(feature_name, namespace):
     else:
         click.echo(f"ℹ️ Symlink not found: {link_path}")
 
-    click.echo(f"✅ Feature '{entry_name}' removed successfully from product '{product}'.")
+    click.echo(
+        f"✅ Feature '{entry_name}' removed successfully from product '{product}'."
+    )

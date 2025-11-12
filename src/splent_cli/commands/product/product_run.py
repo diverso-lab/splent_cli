@@ -28,16 +28,29 @@ def product_runc(env):
 
     result = subprocess.run(
         ["docker", "compose", "-p", project_name, "-f", compose_used, "ps", "-q"],
-        cwd=docker_dir, capture_output=True, text=True
+        cwd=docker_dir,
+        capture_output=True,
+        text=True,
     )
     container_ids = [c.strip() for c in result.stdout.splitlines() if c.strip()]
 
     target_id = None
     for cid in container_ids:
-        mounts = subprocess.run(
-            ["docker", "inspect", "-f", "{{ range .Mounts }}{{ .Destination }} {{ end }}", cid],
-            capture_output=True, text=True
-        ).stdout.strip().split()
+        mounts = (
+            subprocess.run(
+                [
+                    "docker",
+                    "inspect",
+                    "-f",
+                    "{{ range .Mounts }}{{ .Destination }} {{ end }}",
+                    cid,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            .stdout.strip()
+            .split()
+        )
         if "/workspace" in mounts:
             target_id = cid
             break
@@ -47,7 +60,9 @@ def product_runc(env):
 
     if target_id:
         click.echo(f"🧩 Executing entrypoint inside container {target_id[:12]}...")
-        subprocess.run(["docker", "exec", "-i", target_id, "bash", "-lc", f"bash {entrypoint}"])
+        subprocess.run(
+            ["docker", "exec", "-i", target_id, "bash", "-lc", f"bash {entrypoint}"]
+        )
     else:
         click.echo("⚠️ No containers found, running locally")
         subprocess.run(["bash", entrypoint], cwd=docker_dir, check=False)

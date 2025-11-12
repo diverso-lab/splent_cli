@@ -46,7 +46,9 @@ def product_edit_feature(feature_name):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    features = (
+        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    )
     if not features:
         click.echo("ℹ️ No features declared in pyproject.")
         raise SystemExit(1)
@@ -62,7 +64,9 @@ def product_edit_feature(feature_name):
     version = version or "v1.0.0"
     org_safe = org.replace("-", "_")
 
-    cache_dir = os.path.join(workspace, ".splent_cache", "features", org_safe, f"{name}@{version}")
+    cache_dir = os.path.join(
+        workspace, ".splent_cache", "features", org_safe, f"{name}@{version}"
+    )
     if not os.path.exists(cache_dir):
         click.echo(f"❌ Cached repository not found at {cache_dir}")
         raise SystemExit(1)
@@ -73,7 +77,10 @@ def product_edit_feature(feature_name):
     try:
         subprocess.run(
             ["ssh", "-T", "git@github.com"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=3,
         )
         can_push = True
     except Exception:
@@ -85,10 +92,14 @@ def product_edit_feature(feature_name):
     # --- Switch to editable branch ---
     os.chdir(cache_dir)
     # Fetch all branches
-    subprocess.run(["git", "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"], check=False)
+    subprocess.run(
+        ["git", "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"], check=False
+    )
 
     # Try to switch to main or create it if needed
-    r = subprocess.run(["git", "branch", "--list", "main"], capture_output=True, text=True)
+    r = subprocess.run(
+        ["git", "branch", "--list", "main"], capture_output=True, text=True
+    )
     if not r.stdout.strip():
         subprocess.run(["git", "checkout", "-b", "main", "origin/main"], check=False)
     else:
@@ -117,7 +128,7 @@ def product_edit_feature(feature_name):
         f.write(content)
 
     click.echo(f"✅ Removed version from {name} in pyproject.toml.")
-    
+
     # --- Recreate product symlink ---
     product_features_dir = os.path.join(product_path, "features", org_safe)
     os.makedirs(product_features_dir, exist_ok=True)

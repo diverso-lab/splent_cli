@@ -1,5 +1,4 @@
 import os
-import stat
 import click
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from splent_cli.utils.path_utils import PathUtils
@@ -26,7 +25,10 @@ def render_and_write_file(env, template_name, filename, context):
         f.write(content)
 
 
-@click.command("feature:create", help="Creates a new feature locally in the SPLENT cache using the pattern <namespace>/<feature_name>.")
+@click.command(
+    "feature:create",
+    help="Creates a new feature locally in the SPLENT cache using the pattern <namespace>/<feature_name>.",
+)
 @click.argument("full_name")
 def make_feature(full_name):
     """
@@ -47,12 +49,16 @@ def make_feature(full_name):
 
     # --- Target directory (local cache) ---
     workspace = PathUtils.get_working_dir()
-    cache_dir = os.path.join(workspace, ".splent_cache", "features", org_safe, feature_name)
+    cache_dir = os.path.join(
+        workspace, ".splent_cache", "features", org_safe, feature_name
+    )
     src_path = os.path.join(cache_dir, "src", org_safe, feature_name)
 
     # --- Validation ---
     if os.path.exists(cache_dir):
-        click.echo(click.style(f"⚠️  The feature '{full_name}' already exists.", fg="yellow"))
+        click.echo(
+            click.style(f"⚠️  The feature '{full_name}' already exists.", fg="yellow")
+        )
         return
 
     # --- Jinja setup ---
@@ -72,13 +78,21 @@ def make_feature(full_name):
         "services.py": "feature/feature_services.py.j2",
         "forms.py": "feature/feature_forms.py.j2",
         "seeders.py": "feature/feature_seeders.py.j2",
-        os.path.join("templates", feature_name, "index.html"): "feature/feature_templates_index.html.j2",
+        os.path.join(
+            "templates", feature_name, "index.html"
+        ): "feature/feature_templates_index.html.j2",
         os.path.join("assets", "js", "scripts.js"): "feature/feature_scripts.js.j2",
-        os.path.join("assets", "js", "webpack.config.js"): "feature/feature_webpack.config.js.j2",
+        os.path.join(
+            "assets", "js", "webpack.config.js"
+        ): "feature/feature_webpack.config.js.j2",
         os.path.join("tests", "__init__.py"): None,
         os.path.join("tests", "test_unit.py"): "feature/feature_tests_test_unit.py.j2",
-        os.path.join("tests", "locustfile.py"): "feature/feature_tests_locustfile.py.j2",
-        os.path.join("tests", "test_selenium.py"): "feature/feature_tests_test_selenium.py.j2",
+        os.path.join(
+            "tests", "locustfile.py"
+        ): "feature/feature_tests_locustfile.py.j2",
+        os.path.join(
+            "tests", "test_selenium.py"
+        ): "feature/feature_tests_test_selenium.py.j2",
     }
 
     base_files_and_templates = {
@@ -119,7 +133,9 @@ def make_feature(full_name):
         for f in files:
             os.chown(os.path.join(root, f), uid, gid)
 
-    click.echo(click.style(f"✅ Feature '{full_name}' created successfully!", fg="green"))
+    click.echo(
+        click.style(f"✅ Feature '{full_name}' created successfully!", fg="green")
+    )
     click.echo(click.style(f"📦 Cached at: {cache_dir}", fg="blue"))
     click.echo(click.style(f"🏷️  Namespace: {org_safe}", fg="bright_black"))
 

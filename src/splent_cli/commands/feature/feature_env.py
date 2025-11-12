@@ -6,9 +6,21 @@ import click
 
 @click.command("feature:env")
 @click.argument("feature_name", required=True)
-@click.option("--generate", is_flag=True, help="Generate the .env file for the given feature.")
-@click.option("--dev", "env_name", flag_value="dev", help="Use development template (.env.dev.example).")
-@click.option("--prod", "env_name", flag_value="prod", help="Use production template (.env.prod.example).")
+@click.option(
+    "--generate", is_flag=True, help="Generate the .env file for the given feature."
+)
+@click.option(
+    "--dev",
+    "env_name",
+    flag_value="dev",
+    help="Use development template (.env.dev.example).",
+)
+@click.option(
+    "--prod",
+    "env_name",
+    flag_value="prod",
+    help="Use production template (.env.prod.example).",
+)
 def feature_env(feature_name, generate, env_name):
     """
     Manage environment files for a feature (via symlink inside the active product).
@@ -33,15 +45,21 @@ def feature_env(feature_name, generate, env_name):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    feature_entries = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    feature_entries = (
+        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    )
     if not feature_entries:
         click.echo("❌ No features declared in pyproject.toml.")
         raise SystemExit(1)
 
     # 2️⃣ Buscar la feature pedida con su versión
-    feature_entry = next((f for f in feature_entries if f.startswith(feature_name)), None)
+    feature_entry = next(
+        (f for f in feature_entries if f.startswith(feature_name)), None
+    )
     if not feature_entry:
-        click.echo(f"❌ Feature '{feature_name}' not found in [features] section of {pyproject_path}")
+        click.echo(
+            f"❌ Feature '{feature_name}' not found in [features] section of {pyproject_path}"
+        )
         raise SystemExit(1)
 
     # 3️⃣ Determinar entorno
@@ -56,7 +74,9 @@ def feature_env(feature_name, generate, env_name):
     # 4️⃣ Ruta del symlink del producto (con versión incluida)
     symlink_path = os.path.join(workspace, product, "features", org_safe, feature_entry)
     if not os.path.islink(symlink_path):
-        click.echo(f"❌ Feature symlink not found for {feature_entry} in {symlink_path}")
+        click.echo(
+            f"❌ Feature symlink not found for {feature_entry} in {symlink_path}"
+        )
         raise SystemExit(1)
 
     # Resolver el destino real
@@ -72,7 +92,9 @@ def feature_env(feature_name, generate, env_name):
     if not generate:
         click.echo(f"📍 Feature: {feature_entry}")
         click.echo(f"🔗 Symlink: {symlink_path} → {feature_real_path}")
-        click.echo(f"🧾 Env file: {env_file if os.path.exists(env_file) else '(not created)'}")
+        click.echo(
+            f"🧾 Env file: {env_file if os.path.exists(env_file) else '(not created)'}"
+        )
         raise SystemExit(0)
 
     # 5️⃣ Seleccionar plantilla
@@ -91,6 +113,8 @@ def feature_env(feature_name, generate, env_name):
 
     if selected:
         subprocess.run(["cp", selected, env_file], check=True)
-        click.echo(f"📄 Created {feature_entry}/docker/.env from {os.path.basename(selected)}")
+        click.echo(
+            f"📄 Created {feature_entry}/docker/.env from {os.path.basename(selected)}"
+        )
     else:
         click.echo(f"⚠️  No .env template found for {feature_entry} in {docker_dir}")
