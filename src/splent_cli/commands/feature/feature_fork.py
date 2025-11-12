@@ -1,13 +1,7 @@
 import os
-import subprocess
 import time
 import click
 import requests
-
-
-# ============================================================
-# feature:fork
-# ============================================================
 
 
 @click.command("feature:fork", help="Fork a SPLENT feature on GitHub and clone it locally under your namespace")
@@ -49,79 +43,3 @@ def feature_fork(feature_name, version):
     click.secho("\n🚀 Cloning fork into local namespace...\n", fg="cyan")
     ctx = click.get_current_context()
     ctx.invoke(feature_clone, feature_name=feature_name, version=version)
-
-# ============================================================
-# feature:clone
-# ============================================================
-
-
-@click.command("feature:clone", help="Clone a forked SPLENT feature into your local cache namespace")
-@click.argument("feature_name", required=True)
-@click.option("--version", "-v", default="v1.0.0", help="Feature version (default: v1.0.0)")
-def feature_clone(feature_name, version):
-    """Clone your fork into .splent_cache/features/<user> and fix namespace + symlink + push."""
-    github_user = os.getenv("GITHUB_USER")
-    workspace = os.getenv("WORKING_DIR", "/workspace")
-    product = os.getenv("SPLENT_APP")
-
-    if not github_user:
-        click.secho("✖ GITHUB_USER not set.", fg="red")
-        raise SystemExit(1)
-
-    if not product:
-        click.secho("✖ SPLENT_APP not set. Run 'splent select <product>' first.", fg="red")
-        raise SystemExit(1)
-
-    org_safe = github_user.lower().replace("-", "_").replace(".", "_")
-    cache_root = os.path.join(workspace, ".splent_cache", "features", org_safe)
-    os.makedirs(cache_root, exist_ok=True)
-
-    local_path = os.path.join(cache_root, f"{feature_name}@{version}")
-    if os.path.exists(local_path):
-        click.secho(f"⚠️ Folder already exists: {local_path}", fg="yellow")
-        return
-
-    fork_url = f"git@github.com:{github_user}/{feature_name}.git"
-    click.secho(f"⬇️ Cloning {fork_url} into {local_path}", fg="cyan")
-    subprocess.run(["git", "clone", "--branch", version, "--depth", "1", fork_url, local_path], check=True)
-
-    # === Namespace fix ===
-    src_dir = os.path.join(local_path, "src")
-    old_ns_dir = os.path.join(src_dir, "splent_io")
-    new_ns_dir = os.path.join(src_dir, org_safe)
-    modified = False
-
-    if os.path.exists(old_ns_dir):
-        click.secho(f"🧩 Adjusting namespace: splent_io → {org_safe}", fg="yellow")
-        os.rename(old_ns_dir, new_ns_dir)
-        modified = True
-
-        for root, _, files in os.walk(new_ns_dir):
-            for file in files:
-                if file.endswith(".py"):
-                    file_path = os.path.join(root, file)
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    new_content = content.replace("splent_io.", f"{org_safe}.")
-                    if new_content != content:
-                        with open(file_path, "w", encoding="utf-8") as f:
-                            f.write(new_content)
-                        modified = True
-        if modified:
-            click.secho("✅ Namespace adjusted successfully.", fg="green")
-    else:
-        click.secho("ℹ️ No splent_io namespace found — nothing to adjust.", fg="cyan")
-
-    # === Commit y push si hubo cambios ===
-    if modified:
-        click.secho("💾 Committing and pushing namespace changes...", fg="cyan")
-        subprocess.run(["git", "add", "."], cwd=local_path, check=True)
-        subprocess.run(
-            ["git", "commit", "-m", f"chore: adjust namespace to {org_safe}"],
-            cwd=local_path,
-            check=False,
-        )
-        subprocess.run(["git", "push"], cwd=local_path, check=False)
-        click.secho("🚀 Changes pushed to your fork.", fg="green")
-    else:
-        click.secho("ℹ️ No changes to push.", fg="yellow")

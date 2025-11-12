@@ -64,7 +64,7 @@ def feature_env(feature_name, generate, env_name):
     docker_dir = os.path.join(feature_real_path, "docker")
 
     if not os.path.exists(docker_dir):
-        click.echo(f"❌ docker directory not found in feature path: {docker_dir}")
+        click.echo(f"📭 docker directory not found in feature path: {docker_dir}")
         raise SystemExit(1)
 
     env_file = os.path.join(docker_dir, ".env")

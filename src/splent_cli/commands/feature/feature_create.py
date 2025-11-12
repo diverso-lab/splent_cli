@@ -26,16 +26,24 @@ def render_and_write_file(env, template_name, filename, context):
         f.write(content)
 
 
-@click.command("feature:create", help="Creates a new feature locally in the SPLENT cache (no prefixes, no versions).")
-@click.argument("name")
-def make_feature(name):
-    # --- Namespace (organization) ---
-    github_user = os.getenv("GITHUB_USER")
-    org = github_user if github_user else "splent-io"
-    org_safe = org.replace("-", "_")
+@click.command("feature:create", help="Creates a new feature locally in the SPLENT cache using the pattern <namespace>/<feature_name>.")
+@click.argument("full_name")
+def make_feature(full_name):
+    """
+    Creates a new feature locally in the SPLENT cache.
+    The name must follow the pattern <namespace>/<feature_name>.
 
-    # --- Feature naming ---
-    feature_name = name.strip()
+    Example:
+      splent feature:create drorganvidez/notepad
+    """
+
+    # --- Validate input pattern ---
+    if "/" not in full_name:
+        click.echo("❌ Invalid format. Use: <namespace>/<feature_name>")
+        raise SystemExit(1)
+
+    namespace, feature_name = full_name.split("/", 1)
+    org_safe = namespace.replace("-", "_")
 
     # --- Target directory (local cache) ---
     workspace = PathUtils.get_working_dir()
@@ -44,7 +52,7 @@ def make_feature(name):
 
     # --- Validation ---
     if os.path.exists(cache_dir):
-        click.echo(click.style(f"⚠️  The feature '{feature_name}' already exists.", fg="yellow"))
+        click.echo(click.style(f"⚠️  The feature '{full_name}' already exists.", fg="yellow"))
         return
 
     # --- Jinja setup ---
@@ -76,7 +84,7 @@ def make_feature(name):
     base_files_and_templates = {
         ".gitignore": "feature/feature_.gitignore.j2",
         "pyproject.toml": "feature/feature_pyproject.toml.j2",
-        "MANIFEST.in": "feature/feature_MANIFEST.in.j2"
+        "MANIFEST.in": "feature/feature_MANIFEST.in.j2",
     }
 
     # --- Create src structure ---
@@ -111,7 +119,7 @@ def make_feature(name):
         for f in files:
             os.chown(os.path.join(root, f), uid, gid)
 
-    click.echo(click.style(f"✅ Feature '{feature_name}' created successfully!", fg="green"))
+    click.echo(click.style(f"✅ Feature '{full_name}' created successfully!", fg="green"))
     click.echo(click.style(f"📦 Cached at: {cache_dir}", fg="blue"))
     click.echo(click.style(f"🏷️  Namespace: {org_safe}", fg="bright_black"))
 

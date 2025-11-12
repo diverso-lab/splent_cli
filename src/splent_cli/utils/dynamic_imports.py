@@ -17,18 +17,10 @@ _module_cache = None
 module_name = os.getenv("SPLENT_APP")
 dotenv_path = None
 
-silent = os.getenv("SPLENT_SILENT") == "1"
-
 if module_name:
     dotenv_path = PathUtils.get_app_env_file()
     if os.path.exists(dotenv_path):
         load_dotenv(dotenv_path, override=True)
-    else:
-        if not silent:
-            print(f"⚠️ .env file not found at {dotenv_path} — continuing without app environment.")
-else:
-    if not silent:
-        print("ℹ️ No SPLENT_APP defined — running in detached CLI mode (no app context).")
 
 
 def install_features_if_needed():
