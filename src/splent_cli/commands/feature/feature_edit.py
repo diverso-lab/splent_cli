@@ -1,150 +1,171 @@
 import os
 import subprocess
+import shutil
 import tomllib
 import click
-import socket
 
 
-def _check_github_connectivity(host="github.com", port=443, timeout=3):
-    """Check if there's an active network connection to GitHub."""
-    try:
-        socket.create_connection((host, port), timeout=timeout)
-        return True
-    except OSError:
-        return False
+WORKSPACE = "/workspace"
+DEFAULT_ORG = "splent-io"         # GitHub org (con guión)
+DEFAULT_NAMESPACE = "splent_io"   # Filesystem namespace (con guión → guión bajo)
 
 
+# =====================================================================
+# PARSER: [namespace/]name[@version]
+# =====================================================================
+def parse_feature(feature: str):
+    """
+    Devuelve:
+        ns_git → splent-io
+        ns_fs  → splent_io
+        name   → splent_feature_auth
+        version→ v1.0.4 o None
+    """
+    if "/" in feature:
+        ns_git, rest = feature.split("/", 1)
+    else:
+        ns_git = DEFAULT_ORG
+        rest = feature
+
+    if "@" in rest:
+        name, version = rest.split("@", 1)
+    else:
+        name = rest
+        version = None
+
+    ns_fs = ns_git.replace("-", "_")
+    return ns_git, ns_fs, name, version
+
+
+# =====================================================================
+# CACHE PATH RESOLVER
+# =====================================================================
+def get_cache_paths(ns_git: str, name: str, version: str | None):
+    ns_fs = ns_git.replace("-", "_")
+    base = os.path.join(WORKSPACE, ".splent_cache", "features", ns_fs)
+
+    versioned = os.path.join(base, f"{name}@{version}") if version else None
+    editable = os.path.join(base, name)
+
+    return versioned, editable
+
+
+# =====================================================================
+# GIT → ensure main branch editable
+# =====================================================================
+def ensure_git_main(path: str, ns_git: str, name: str):
+    os.chdir(path)
+
+    # Fix remote origin to correct namespace + repo
+    subprocess.run(
+        ["git", "remote", "set-url", "origin", f"git@github.com:{ns_git}/{name}.git"],
+        check=True,
+    )
+
+    subprocess.run(
+        ["git", "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"],
+        check=True,
+    )
+
+    r = subprocess.run(["git", "branch", "--list", "main"], capture_output=True, text=True)
+
+    if not r.stdout.strip():
+        subprocess.run(["git", "checkout", "-b", "main", "origin/main"], check=True)
+    else:
+        subprocess.run(["git", "switch", "main"], check=True)
+
+    subprocess.run(["git", "pull", "origin", "main"], check=True)
+
+
+# =====================================================================
+# PYPROJECT UPDATE
+# =====================================================================
+def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
+    with open(pyproject_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    updated = content.replace(f"{name}@{version}", name)
+
+    with open(pyproject_path, "w", encoding="utf-8") as f:
+        f.write(updated)
+
+
+# =====================================================================
+# MAIN COMMAND
+# =====================================================================
 @click.command("feature:edit")
-@click.argument("feature_name", required=True)
-def product_edit_feature(feature_name):
-    """
-    Prepare a feature for editing:
-    - Checks write permissions.
-    - Removes the version suffix.
-    - Switches from detached HEAD to 'main' branch.
-    - Updates pyproject.toml to remove the version from [project.optional-dependencies.features].
-    """
-    workspace = "/workspace"
+@click.argument("feature_name")
+def feature_edit(feature_name):
     product = os.getenv("SPLENT_APP")
     if not product:
-        click.echo("❌ Environment variable SPLENT_APP not set.")
+        click.echo("❌ SPLENT_APP not set.")
         raise SystemExit(1)
 
-    product_path = os.path.join(workspace, product)
+    product_path = os.path.join(WORKSPACE, product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")
-    if not os.path.exists(pyproject_path):
-        click.echo("❌ pyproject.toml not found in product directory.")
-        raise SystemExit(1)
 
-    # --- Check internet connection before using git ---
-    click.echo("🌐 Checking GitHub connectivity...")
-    if not _check_github_connectivity():
-        click.echo("❌ No connection to GitHub detected. Please check your network.")
+    if not os.path.exists(pyproject_path):
+        click.echo("❌ pyproject.toml not found.")
         raise SystemExit(1)
 
     # Load pyproject
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = (
-        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-    )
-    if not features:
-        click.echo("ℹ️ No features declared in pyproject.")
-        raise SystemExit(1)
+    features = data["project"]["optional-dependencies"]["features"]
 
-    # Find the feature
-    match = next((f for f in features if feature_name in f), None)
+    # Soporta:
+    # - splent_feature_auth
+    # - splent-io/splent_feature_auth
+    # porque hacemos startswith(feature_name)
+    # Normalizar: si el usuario pasó splent_io/name, nos quedamos con name
+    if "/" in feature_name:
+        _, feature_name = feature_name.split("/", 1)
+
+    # Buscar por nombre real, sin namespace
+    match = next((f for f in features if f.split("@")[0] == feature_name), None)
+
     if not match:
         click.echo(f"❌ Feature {feature_name} not found in pyproject.")
         raise SystemExit(1)
 
-    org, rest = match.split("/", 1) if "/" in match else ("splent-io", match)
-    name, _, version = rest.partition("@")
-    version = version or "v1.0.0"
-    org_safe = org.replace("-", "_")
 
-    cache_dir = os.path.join(
-        workspace, ".splent_cache", "features", org_safe, f"{name}@{version}"
-    )
-    if not os.path.exists(cache_dir):
-        click.echo(f"❌ Cached repository not found at {cache_dir}")
+    ns_git, ns_fs, name, version = parse_feature(match)
+
+    if not version:
+        click.echo("ℹ️ Feature already editable.")
+        return
+
+    click.echo(f"🧩 Editing feature {ns_git}/{name}@{version}")
+
+    versioned_path, editable_path = get_cache_paths(ns_git, name, version)
+
+    if not os.path.exists(versioned_path):
+        click.echo(f"❌ Versioned cache not found: {versioned_path}")
         raise SystemExit(1)
 
-    click.echo(f"🧩 Editing feature: {org_safe}/{name}@{version}")
+    # Create editable copy only if missing
+    if not os.path.exists(editable_path):
+        click.echo(f"📦 Creating editable copy → {editable_path}")
+        shutil.copytree(versioned_path, editable_path)
 
-    # --- Check SSH write access ---
-    try:
-        subprocess.run(
-            ["ssh", "-T", "git@github.com"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=3,
-        )
-        can_push = True
-    except Exception:
-        can_push = False
+    # Ensure Git repo points to main branch and right remote
+    ensure_git_main(editable_path, ns_git, name)
 
-    if not can_push:
-        click.echo("⚠️ Could not verify SSH write access. Continuing anyway...")
+    # Update pyproject to remove @version
+    replace_pyproject_reference(pyproject_path, name, version)
 
-    # --- Switch to editable branch ---
-    os.chdir(cache_dir)
-    # Fetch all branches
-    subprocess.run(
-        ["git", "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"], check=False
-    )
-
-    # Try to switch to main or create it if needed
-    r = subprocess.run(
-        ["git", "branch", "--list", "main"], capture_output=True, text=True
-    )
-    if not r.stdout.strip():
-        subprocess.run(["git", "checkout", "-b", "main", "origin/main"], check=False)
-    else:
-        subprocess.run(["git", "switch", "main"], check=False)
-
-    # Pull latest changes
-    subprocess.run(["git", "pull", "origin", "main"], check=False)
-    click.echo("🔄 Checked out to 'main' branch (editable mode).")
-
-    # --- Rename cache folder ---
-    new_dir = os.path.join(workspace, ".splent_cache", "features", org_safe, name)
-    if new_dir != cache_dir:
-        if os.path.exists(new_dir):
-            click.echo(f"⚠️ {new_dir} already exists, skipping rename.")
-        else:
-            os.rename(cache_dir, new_dir)
-            click.echo(f"📦 Renamed {cache_dir} → {new_dir}")
-
-    # --- Update pyproject.toml (remove @version) ---
-    with open(pyproject_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    content = content.replace(f"{name}@{version}", name)
-
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    click.echo(f"✅ Removed version from {name} in pyproject.toml.")
-
-    # --- Recreate product symlink ---
-    product_features_dir = os.path.join(product_path, "features", org_safe)
+    # Fix symlink
+    product_features_dir = os.path.join(product_path, "features", ns_fs)
     os.makedirs(product_features_dir, exist_ok=True)
 
-    old_link = os.path.join(product_features_dir, f"{name}@{version}")
-    new_link = os.path.join(product_features_dir, name)
+    old = os.path.join(product_features_dir, f"{name}@{version}")
+    new = os.path.join(product_features_dir, name)
 
-    if os.path.islink(old_link):
-        os.unlink(old_link)
-        click.echo(f"🧹 Removed old symlink {old_link}")
+    if os.path.islink(old):
+        os.unlink(old)
 
-    target_path = os.path.join(workspace, ".splent_cache", "features", org_safe, name)
-    if not os.path.exists(new_link):
-        os.symlink(target_path, new_link)
-        click.echo(f"🔗 Linked {new_link} → {target_path}")
-    else:
-        click.echo(f"✅ Symlink already up to date: {new_link}")
+    if not os.path.islink(new):
+        os.symlink(editable_path, new)
 
-    click.echo("🎯 Feature ready for editing.")
+    click.echo("🎯 Feature ready for editing (editable, main branch, correct origin).")
