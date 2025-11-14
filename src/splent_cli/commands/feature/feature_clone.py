@@ -4,6 +4,14 @@ import requests
 import click
 
 
+DEFAULT_NAMESPACE = os.getenv('SPLENT_DEFAULT_NAMESPACE', 'splent_io')
+WORKSPACE = os.getenv("WORKING_DIR", "/workspace")
+
+
+# =====================================================================
+# UTILS
+# =====================================================================
+
 def _get_latest_tag(namespace, repo):
     """Fetch the latest tag from GitHub (or 'main' if none)."""
     api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags"
@@ -18,62 +26,85 @@ def _get_latest_tag(namespace, repo):
         return "main"
 
 
-def _repo_is_private(namespace, repo):
-    """Check if a GitHub repo is private using the API."""
-    api_url = f"https://api.github.com/repos/{namespace}/{repo}"
-    headers = {}
-    token = os.getenv("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"token {token}"
-
-    try:
-        r = requests.get(api_url, headers=headers, timeout=5)
-        if r.status_code == 404:
-            return True  # cannot access → probably private
-        data = r.json()
-        return data.get("private", False)
-    except Exception:
+def _repo_belongs_to_me(namespace: str) -> bool:
+    """
+    Determines if the repo belongs to the user's organization.
+    SPLENT_GITHUB_NAMESPACE or GITHUB_ORG define what 'mine' means.
+    """
+    my_org = os.getenv("SPLENT_GITHUB_NAMESPACE") or os.getenv("GITHUB_ORG")
+    if not my_org:
         return False
+    return namespace.lower() == my_org.lower()
 
+
+def _build_repo_url(namespace, repo):
+    """
+    Decide cómo clonar un repo según si es del usuario/orga.
+    - Si pertenece a mi org -> SSH (push habilitado)
+    - Si NO pertenece -> HTTPS con token si existe, sino HTTPS normal
+    """
+    token = os.getenv("GITHUB_TOKEN")
+
+    if _repo_belongs_to_me(namespace):
+        click.secho("🔐 Repository belongs to your organization → using SSH", fg="cyan")
+        return f"git@github.com:{namespace}/{repo}.git"
+
+    if token:
+        click.secho("🌐 External repository → using HTTPS with token", fg="cyan")
+        return f"https://{token}@github.com/{namespace}/{repo}.git"
+
+    click.secho("🌍 External repository (no token) → HTTPS read-only", fg="yellow")
+    return f"https://github.com/{namespace}/{repo}.git"
+
+
+def _parse_full_name(full_name: str):
+    """
+    full_name = <namespace>/<repo>[@version]
+    """
+    if "/" not in full_name:
+        raise SystemExit("❌ Invalid format. Use <namespace>/<repo>[@version]")
+
+    namespace, rest = full_name.split("/", 1)
+
+    if "@" in rest:
+        repo, version = rest.split("@", 1)
+    else:
+        repo = rest
+        version = None
+
+    return namespace, repo, version
+
+
+# =====================================================================
+# MAIN
+# =====================================================================
 
 @click.command(
-    "feature:clone", help="Clone a SPLENT feature into the local cache namespace."
+    "feature:clone",
+    help="Clone a SPLENT feature into the local cache namespace."
 )
 @click.argument("full_name", required=True)
 def feature_clone(full_name):
     """
-    Clone <namespace>/<repo> into .splent_cache/features/<namespace>/<repo>@<version>.
-    - If no version is specified, uses the latest Git tag or 'main'.
-    - Detects whether repo is public or private to choose HTTPS or SSH.
+    Clone <namespace>/<repo> into:
+      .splent_cache/features/<namespace>/<repo>@<version>
+
+    - If version is omitted, fetches latest tag or 'main'.
     """
+    namespace, repo, version = _parse_full_name(full_name)
 
-    workspace = os.getenv("WORKING_DIR", "/workspace")
-
-    if "@" in full_name:
-        namespace, rest = full_name.split("/", 1)
-        repo, version = rest.split("@", 1)
-    else:
-        if "/" not in full_name:
-            click.secho("❌ Invalid format. Use <namespace>/<repo>", fg="red")
-            raise SystemExit(1)
-        namespace, repo = full_name.split("/", 1)
+    if not version:
+        click.echo(f"🔍 No version provided → fetching latest tag for {namespace}/{repo}...")
         version = _get_latest_tag(namespace, repo)
 
-    click.echo(f"🌐 Checking repository: {namespace}/{repo}")
-    is_private = _repo_is_private(namespace, repo)
+    # Build Git URL based on your ownership
+    fork_url = _build_repo_url(namespace, repo)
 
-    # --- Clone URL ---
-    if is_private:
-        fork_url = f"git@github.com:{namespace}/{repo}.git"
-        click.secho("🔒 Private repository detected, using SSH.", fg="cyan")
-    else:
-        fork_url = f"https://github.com/{namespace}/{repo}.git"
-        click.secho("🌍 Public repository detected, using HTTPS.", fg="cyan")
-
-    # --- Local path ---
+    # Local destination
     namespace_safe = namespace.replace("-", "_").replace(".", "_")
-    cache_dir = os.path.join(workspace, ".splent_cache", "features", namespace_safe)
+    cache_dir = os.path.join(WORKSPACE, ".splent_cache", "features", namespace_safe)
     os.makedirs(cache_dir, exist_ok=True)
+
     local_path = os.path.join(cache_dir, f"{repo}@{version}")
 
     if os.path.exists(local_path):
@@ -82,21 +113,15 @@ def feature_clone(full_name):
 
     click.secho(f"⬇️ Cloning {fork_url}@{version}", fg="cyan")
 
-    # --- Clone ---
+    # Try clone specific tag/branch
     try:
         subprocess.run(
             ["git", "clone", "--depth", "1", "--branch", version, fork_url, local_path],
             check=True,
         )
     except subprocess.CalledProcessError:
-        click.secho(
-            f"⚠️ Tag {version} not found. Cloning main branch instead.", fg="yellow"
-        )
-        subprocess.run(
-            ["git", "clone", "--depth", "1", fork_url, local_path], check=True
-        )
+        click.secho(f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow")
+        subprocess.run(["git", "clone", "--depth", "1", fork_url, local_path], check=True)
 
-    click.secho(
-        f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green"
-    )
+    click.secho(f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green")
     click.secho(f"📦 Cached at: {local_path}", fg="blue")

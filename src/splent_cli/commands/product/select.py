@@ -4,7 +4,7 @@ import click
 
 
 @click.command(
-    "select",
+    "product:select",
     help="Select the active SPLENT app (updates .env, prompt, and session env vars)",
 )
 @click.argument("app_name", required=True)
