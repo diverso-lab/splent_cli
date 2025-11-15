@@ -42,14 +42,20 @@ def _find_products_using_editable(workspace, feature_name, ns_safe):
     return used_in
 
 
-@click.command("feature:discard")
+@click.command(
+    "feature:discard",
+    short_help="Discard the editable version of a feature.",
+)
 @click.argument("feature_name", required=True)
 @click.option("--namespace", default=DEFAULT_NAMESPACE, help="Feature namespace.")
 def feature_discard(feature_name, namespace):
     """
     Delete the editable version of a feature:
-    - Ensures no product depends on it in editable mode.
-    - Removes ONLY the editable folder.
+
+      - Ensures that no product depends on it in editable mode.
+      - Removes ONLY the editable folder, never the versioned cache.
+
+    This is a safe operation: versioned snapshots remain untouched.
     """
 
     workspace = "/workspace"

@@ -7,7 +7,7 @@ from splent_cli.utils.path_utils import PathUtils
 
 @click.command(
     "feature:remove",
-    help="Removes a local (non-versioned) feature from the active product.",
+    short_help="Removes a local (non-versioned) feature from the active product.",
 )
 @click.argument("feature_name", required=True)
 @click.option(

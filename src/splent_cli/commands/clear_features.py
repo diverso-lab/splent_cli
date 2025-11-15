@@ -6,7 +6,7 @@ from pathlib import Path
 
 @click.command(
     "clear:features",
-    help="Clears SPLENT feature cache (.splent_cache/features) and broken symlinks in products.",
+    short_help="Clears feature cache (.splent_cache/features) and broken symlinks in products.",
 )
 @click.option(
     "--namespace",

@@ -10,7 +10,10 @@ def _mask(value: str, key: str) -> str:
     return value
 
 
-@click.command("env:show")
+@click.command(
+    "env:show",
+    short_help="Display .env variables and check which ones are currently loaded in the shell."
+)
 def env_show():
     """Check which variables from .env are actually available in the current Bash shell."""
     workspace = "/workspace"

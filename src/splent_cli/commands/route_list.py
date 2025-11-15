@@ -90,5 +90,3 @@ def print_route_table(rules):
             f"{route}"
         )
 
-
-cli_command = route_list

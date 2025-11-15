@@ -53,7 +53,7 @@ def get_installed_seeders(specific_module=None):
 
 
 @requires_app
-@click.command("db:seed", help="Populate the database using feature-level seeders.")
+@click.command("db:seed", short_help="Populate the database using feature-level seeders.")
 @click.option("--reset", is_flag=True, help="Reset the database before seeding.")
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
 @click.argument("module", required=False)

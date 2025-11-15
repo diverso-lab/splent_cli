@@ -268,7 +268,10 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
 # =====================================================================
 # COMMAND
 # =====================================================================
-@click.command("feature:release")
+@click.command(
+    "feature:release",
+    short_help="Release a feature: bump version, tag, publish to GitHub/PyPI, and snapshot."
+)
 @click.argument("feature_ref")
 @click.argument("version")
 @click.option("--attach", is_flag=True)

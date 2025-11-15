@@ -81,7 +81,8 @@ def _parse_full_name(full_name: str):
 
 @click.command(
     "feature:clone",
-    help="Clone a SPLENT feature into the local cache namespace."
+    short_help="Clone a feature into the local cache.",
+    help="Clone a feature into the local cache namespace."
 )
 @click.argument("full_name", required=True)
 def feature_clone(full_name):
@@ -89,8 +90,9 @@ def feature_clone(full_name):
     Clone <namespace>/<repo> into:
       .splent_cache/features/<namespace>/<repo>@<version>
 
-    - If version is omitted, fetches latest tag or 'main'.
+    - If version is omitted, fetches the latest tag or 'main'.
     """
+
     namespace, repo, version = _parse_full_name(full_name)
 
     if not version:

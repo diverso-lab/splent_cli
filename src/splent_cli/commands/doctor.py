@@ -6,7 +6,7 @@ import importlib.metadata
 
 
 @click.command(
-    "doctor", help="Diagnose SPLENT workspace consistency and feature cache state"
+    "doctor", short_help="Diagnose workspace consistency and feature cache state"
 )
 def doctor():
     """

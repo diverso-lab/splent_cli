@@ -7,7 +7,7 @@ from datetime import datetime
 
 @click.command(
     "db:dump",
-    help="Creates a dump of the MariaDB database with credentials from .env.",
+    short_help="Creates a dump of the MariaDB database with credentials from .env.",
 )
 @click.argument("filename", required=False)
 def db_dump(filename):

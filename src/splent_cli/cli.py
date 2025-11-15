@@ -32,7 +32,7 @@ class SPLENTCLI(click.Group):
             "🌿 Feature Management": [
                 cmd for cmd in self.commands if cmd.startswith("feature:")
             ],
-            "🏗️ Product Management": [
+            "🏗️  Product Management": [
                 cmd for cmd in self.commands if cmd.startswith("product:")
             ],
             "🧱 Database": [cmd for cmd in self.commands if cmd.startswith("db:")],
@@ -71,7 +71,7 @@ class SPLENTCLI(click.Group):
 
 @click.group(cls=SPLENTCLI)
 def cli():
-    """SPLENT CLI: unified management of features, products, and Flask apps."""
+    """Command-line interface for managing SPLENT products, features, environments, and development workflows."""
     pass
 
 

@@ -9,7 +9,7 @@ from splent_cli.utils.path_utils import PathUtils
 
 @click.command(
     "clear:cache",
-    help="Clears pytest cache in workspace and the build directory at the root.",
+    short_help="Clears pytest cache in workspace and the build directory",
 )
 def clear_cache():
     if click.confirm(

@@ -6,7 +6,8 @@ import click
 
 
 @click.command(
-    "product:env", help="Generate or merge .env files for the active product."
+    "product:env",
+    short_help="Generate or merge .env files for the active product."
 )
 @click.option(
     "--generate",

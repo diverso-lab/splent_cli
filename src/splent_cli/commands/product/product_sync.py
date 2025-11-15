@@ -7,7 +7,7 @@ import click
 
 @click.command(
     "product:sync",
-    help="Sync (clone + link) all versioned features declared in the active product.",
+    short_help="Sync all versioned features declared in the active product."
 )
 @click.option(
     "--force",

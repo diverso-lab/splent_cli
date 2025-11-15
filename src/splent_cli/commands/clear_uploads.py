@@ -7,7 +7,7 @@ from splent_cli.utils.path_utils import PathUtils
 
 @click.command(
     "clear:uploads",
-    help="Clears the contents of the 'uploads' directory without removing the folder.",
+    short_help="Clears the contents of the 'uploads' directory without removing the folder.",
 )
 def clear_uploads():
     uploads_dir = PathUtils.get_uploads_dir()

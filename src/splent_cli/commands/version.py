@@ -16,7 +16,7 @@ def _pkg_version(name: str) -> str | None:
         return None
 
 
-@click.command("version", help="Show SPLENT and environment version information")
+@click.command("version", short_help="Show SPLENT and environment version information")
 @click.option("--json", "as_json", is_flag=True, help="Output in JSON format")
 def version(as_json: bool) -> None:
     """

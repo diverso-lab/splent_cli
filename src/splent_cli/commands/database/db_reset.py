@@ -14,7 +14,7 @@ from splent_cli.utils.path_utils import PathUtils
 @requires_app
 @click.command(
     "db:reset",
-    help="Resets the database, optionally clears migrations and recreates them.",
+    short_help="Resets the database, optionally clears migrations and recreates them.",
 )
 @click.option(
     "--clear-migrations",

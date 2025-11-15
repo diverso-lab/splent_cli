@@ -6,7 +6,7 @@ import requests
 
 @click.command(
     "feature:fork",
-    help="Fork a SPLENT feature on GitHub and clone it locally under your namespace",
+    short_help="Fork a feature on GitHub and clone it locally",
 )
 @click.argument("feature_name", required=True)
 @click.option(

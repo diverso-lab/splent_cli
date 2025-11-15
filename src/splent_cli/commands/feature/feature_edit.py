@@ -93,7 +93,11 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
 # =====================================================================
 # MAIN COMMAND
 # =====================================================================
-@click.command("feature:edit")
+@click.command(
+    "feature:edit",
+    short_help="Convert a released feature into a local editable version.",
+)
+@click.argument("feature_name")
 @click.argument("feature_name")
 def feature_edit(feature_name):
     product = os.getenv("SPLENT_APP")

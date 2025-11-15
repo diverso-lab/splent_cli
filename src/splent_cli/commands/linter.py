@@ -3,7 +3,7 @@ import click
 from splent_cli.utils.path_utils import PathUtils
 
 
-@click.command("linter", help="Run Ruff to lint and optionally fix the project.")
+@click.command("linter", short_help="Run Ruff to lint and optionally fix the project.")
 @click.option("--fix", is_flag=True, help="Automatically fix issues.")
 @click.option("--format", is_flag=True, help="Format code with Ruff formatter.")
 def linter(fix, format):

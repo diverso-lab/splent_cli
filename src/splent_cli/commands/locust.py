@@ -7,7 +7,7 @@ import psutil
 
 
 @click.command(
-    "locust", help="Launches Locust for load testing based on the environment."
+    "locust", short_help="Launches Locust for load testing based on the environment."
 )
 @click.argument("module", required=False)
 def locust(module):
@@ -164,7 +164,7 @@ def locust(module):
         click.echo(click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red"))
 
 
-@click.command("locust:stop", help="Stops the Locust container if it is running.")
+@click.command("locust:stop", short_help="Stops the Locust container if it is running.")
 def stop():
     working_dir = os.getenv("WORKING_DIR", "")
 

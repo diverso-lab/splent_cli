@@ -9,7 +9,7 @@ from splent_cli.utils.feature_utils import (
 )
 
 
-@click.command("test", help="Runs pytest on registered SPLENT features.")
+@click.command("test", short_help="Runs pytest on loaded features.")
 @click.argument("feature_name", required=False)
 @click.option("-k", "keyword", help="Only run tests that match the given keyword.")
 def test(feature_name, keyword):

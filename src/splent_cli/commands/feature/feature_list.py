@@ -5,7 +5,7 @@ from splent_framework.managers.feature_manager import FeatureManager
 
 
 @requires_app
-@click.command("feature:list", help="Lists all features declared in pyproject.toml.")
+@click.command("feature:list", short_help="Lists all features declared in pyproject.toml.")
 def feature_list():
     """Lists all features declared in the active product's pyproject.toml."""
     app = current_app

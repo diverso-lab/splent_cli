@@ -5,17 +5,26 @@ import click
 import requests
 
 
-@click.command("feature:attach")
+@click.command(
+    "feature:attach",
+    short_help="Attach a released feature version to the current product.",
+)
 @click.argument("feature_name", required=True)
 @click.argument("version", required=True)
 def feature_attach(feature_name, version):
     """
-    Attach a released feature version to the current product:
-    - Verify the GitHub tag exists
-    - Clone the repo if missing in cache
-    - Update pyproject.toml in the product
-    - Rename cache folder
-    - Update symlink under /workspace/<product>/features
+    Attach a released feature version to the current product.
+
+    This command performs the full attach workflow:
+
+      - Verifies that the GitHub tag exists.
+      - Clones the feature version into the cache if missing.
+      - Updates the product's pyproject.toml with the versioned reference.
+      - Creates/updates the versioned snapshot directory.
+      - Rewrites the symlink inside /workspace/<product>/features/<namespace>/.
+
+    In short, it links a published feature version to the active product and
+    ensures the local workspace reflects that version consistently.
     """
     workspace = "/workspace"
     product = os.getenv("SPLENT_APP")

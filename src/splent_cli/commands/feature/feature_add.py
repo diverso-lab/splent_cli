@@ -7,7 +7,7 @@ from splent_cli.utils.path_utils import PathUtils
 
 @click.command(
     "feature:add",
-    help="Adds a local (non-versioned) feature to the active product (namespace/feature_name).",
+    short_help="Adds a local (non-versioned) feature to the active product.",
 )
 @click.argument("full_name", required=True)
 def feature_add(full_name):

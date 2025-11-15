@@ -7,7 +7,7 @@ from splent_cli.utils.path_utils import PathUtils
 
 @click.command(
     "coverage",
-    help="Runs pytest coverage on the blueprints directory or a specific module.",
+    short_help="Runs pytest coverage on the selected feature",
 )
 @click.argument("module_name", required=False)
 @click.option("--html", is_flag=True, help="Generates an HTML coverage report.")

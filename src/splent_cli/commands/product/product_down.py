@@ -25,7 +25,10 @@ def _normalize_feature_ref(feat: str) -> str:
     return feat
 
 
-@click.command("product:down")
+@click.command(
+    "product:down",
+    short_help="Stop the product and its features (optionally removing volumes)."
+)
 @click.option("--env", default="dev", help="Environment name (dev or prod)")
 @click.option("--v", is_flag=True, help="Remove all volumes (requires confirmation)")
 def product_down(env, v):

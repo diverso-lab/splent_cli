@@ -4,7 +4,10 @@ import tomllib
 import click
 
 
-@click.command("feature:env")
+@click.command(
+    "feature:env",
+    short_help="Manage .env files for a feature",
+)
 @click.argument("feature_name", required=True)
 @click.option(
     "--generate", is_flag=True, help="Generate the .env file for the given feature."

@@ -27,7 +27,8 @@ def render_and_write_file(env, template_name, filename, context):
 
 @click.command(
     "feature:create",
-    help="Creates a new feature locally in the SPLENT cache using the pattern <namespace>/<feature_name>.",
+    short_help="Create a new feature in the local cache.",
+    help="Creates a new feature locally in the cache using the pattern <namespace>/<feature_name>.",
 )
 @click.argument("full_name")
 def make_feature(full_name):

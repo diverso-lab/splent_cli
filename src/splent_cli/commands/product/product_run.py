@@ -11,7 +11,10 @@ def _get_product_path(product, workspace="/workspace"):
     return os.path.join(workspace, product)
 
 
-@click.command("product:run")
+@click.command(
+    "product:run",
+    short_help="Run the product entrypoint inside its main container."
+)
 @click.option("--env", default="dev", help="Environment name (dev or prod)")
 def product_runc(env):
     """Ejecuta el entrypoint dentro del contenedor del producto."""

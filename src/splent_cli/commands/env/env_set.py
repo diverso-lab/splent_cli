@@ -3,7 +3,11 @@ import click
 from pathlib import Path
 
 
-@click.command("env:set")
+@click.command(
+    "env:set",
+    short_help="Set the SPLENT_ENV variable (dev or prod) and update the project .env file."
+)
+
 @click.argument("environment", type=click.Choice(["dev", "prod"], case_sensitive=False))
 def env_set(environment):
     """Set SPLENT_ENV to 'dev' or 'prod' (updates .env and current session)."""

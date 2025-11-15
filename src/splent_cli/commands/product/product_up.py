@@ -28,7 +28,10 @@ def _normalize_feature_ref(feat: str) -> str:
     return feat
 
 
-@click.command("product:up")
+@click.command(
+    "product:up",
+    short_help="Start the active product and all its features with Docker Compose."
+)
 @click.option("--dev", is_flag=True, help="Run in development mode.")
 @click.option("--prod", is_flag=True, help="Run in production mode.")
 def product_up(dev, prod):
