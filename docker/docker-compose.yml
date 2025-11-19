@@ -1,0 +1,23 @@
+services:
+
+  cli:
+    container_name: splent_cli_container
+    build:
+      context: ../../
+      dockerfile: splent_cli/docker/images/Dockerfile.cli
+    user: "1000:1000"
+    group_add:
+      - ${DOCKER_GID:-999}
+    volumes:
+      - ../../:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.ssh:/home/splent/.ssh:ro
+      - ~/.gitconfig:/home/splent/.gitconfig:rw
+    stdin_open: true
+    tty: true
+    networks:
+      - splent_network
+
+networks:
+  splent_network:
+    name: splent_network

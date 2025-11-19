@@ -1,0 +1,51 @@
+SPLENT_DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+
+.PHONY: setup setup-rebuild
+
+setup:
+	@if [ ! -f ../.env ]; then \
+		echo "🚀 Copying .env.example → ../.env"; \
+		cp .env.example ../.env; \
+		if [ ! -d "$(shell realpath ..)/.vagrant" ]; then \
+			echo "🛠️  Injecting real path into SPLENT_HOST_PROJECT_DIR"; \
+			grep -qxF "SPLENT_HOST_PROJECT_DIR=$(shell realpath ..)" ../.env || \
+			printf "\nSPLENT_HOST_PROJECT_DIR=%s\n" "$(shell realpath ..)" >> ../.env; \
+		else \
+			echo "📁 .vagrant detected — injecting /workspace into SPLENT_HOST_PROJECT_DIR"; \
+			grep -qxF "SPLENT_HOST_PROJECT_DIR=/workspace" ../.env || \
+			printf "\nSPLENT_HOST_PROJECT_DIR=/workspace\n" >> ../.env; \
+		fi; \
+	else \
+		echo "✅ .env already exists — skipping copy and injection."; \
+	fi
+
+	@echo "🐳 Getting Docker GID..."
+	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
+	echo "🐳 Using GID $$DOCKER_GID"; \
+	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d --build
+
+	@echo "🧠 Entering SPLENT CLI..."
+	@docker exec -it splent_cli_container bash
+
+
+# ------------------------------------------------------------
+# Force rebuild of all images (use when Dockerfile changes)
+# ------------------------------------------------------------
+setup-rebuild:
+	@echo "🧹 Stopping existing containers..."
+	@$(SPLENT_DOCKER_COMPOSE) down -v --remove-orphans || true
+
+	@echo "🔥 Removing old images..."
+	@docker image prune -a -f || true
+
+	@echo "🔧 Rebuilding with correct Docker GID..."
+	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
+	echo "🐳 Using GID $$DOCKER_GID"; \
+	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) build --no-cache
+
+	@echo "🚀 Starting containers fresh..."
+	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
+	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d
+
+	@echo "🧠 Entering SPLENT CLI..."
+	@docker exec -it splent_cli_container bash

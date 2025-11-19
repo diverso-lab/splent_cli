@@ -1,0 +1,89 @@
+FROM python:3.13
+
+# ----------------------------------------------------
+# Create non-root user splent (UID=1000, GID=1000)
+# ----------------------------------------------------
+RUN addgroup --gid 1000 splent && \
+    adduser --disabled-password --gecos "" --uid 1000 --gid 1000 splent && \
+    mkdir -p /workspace && chown -R 1000:1000 /workspace
+
+WORKDIR /workspace
+
+# ----------------------------------------------------
+# Copy source code before switching to non-root user
+# ----------------------------------------------------
+COPY splent_framework/ splent_framework/
+COPY splent_cli/ splent_cli/
+
+# ----------------------------------------------------
+# System dependencies
+# ----------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        mariadb-client \
+        curl \
+        ca-certificates \
+        gnupg \
+        lsb-release && \
+    rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
+# Node.js (for CLI assets)
+# ----------------------------------------------------
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends nodejs && \
+    npm install -g npm@11 npx && \
+    rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
+# Docker CLI + Compose plugin
+# ----------------------------------------------------
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+         https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
+         > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin && \
+    rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
+# Python packages (editable mode)
+# ----------------------------------------------------
+RUN pip install --no-cache-dir --root-user-action=ignore -e ./splent_framework && \
+    pip install --no-cache-dir --root-user-action=ignore -e ./splent_cli && \
+    pip install --no-cache-dir --root-user-action=ignore -e ./splent_cli[dev]
+
+# ----------------------------------------------------
+# Install CLI Node dependencies
+# ----------------------------------------------------
+WORKDIR /workspace/splent_cli
+RUN npm install
+
+# ----------------------------------------------------
+# Cleanup Python cache
+# ----------------------------------------------------
+WORKDIR /workspace
+RUN find . -type d -name "__pycache__" -exec rm -r {} + \
+    && find . -type f -name "*.pyc" -exec rm -f {} +
+
+# ----------------------------------------------------
+# Custom shell prompt
+# ----------------------------------------------------
+RUN bash /workspace/splent_cli/scripts/setup_prompt.sh
+
+# ----------------------------------------------------
+# Set entrypoint permissions (before switching user)
+# ----------------------------------------------------
+COPY splent_cli/entrypoints/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# ----------------------------------------------------
+# Allow splent user to access Docker socket
+# ----------------------------------------------------
+ARG DOCKER_GID=999
+RUN groupadd -g $DOCKER_GID docker && usermod -aG docker splent
+
+USER splent
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
