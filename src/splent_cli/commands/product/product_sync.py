@@ -77,7 +77,12 @@ def product_sync(force):
         # 2️⃣ Clone if missing
         if not os.path.exists(cache_dir):
             cmd = ["splent", "feature:clone", f"{namespace}/{repo}@{version}"]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                env=os.environ.copy()
+            )
 
             if result.returncode != 0:
                 click.secho(f"❌ Failed to clone {entry}:\n{result.stderr}", fg="red")

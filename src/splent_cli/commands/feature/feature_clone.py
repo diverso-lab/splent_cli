@@ -26,34 +26,26 @@ def _get_latest_tag(namespace, repo):
         return "main"
 
 
-def _repo_belongs_to_me(namespace: str) -> bool:
-    """
-    Determines if the repo belongs to the user's organization.
-    SPLENT_GITHUB_NAMESPACE or GITHUB_ORG define what 'mine' means.
-    """
-    my_org = os.getenv("SPLENT_GITHUB_NAMESPACE") or os.getenv("GITHUB_ORG")
-    if not my_org:
-        return False
-    return namespace.lower() == my_org.lower()
-
-
 def _build_repo_url(namespace, repo):
     """
-    Decide cómo clonar un repo según si es del usuario/orga.
-    - Si pertenece a mi org -> SSH (push habilitado)
-    - Si NO pertenece -> HTTPS con token si existe, sino HTTPS normal
+    Build the Git URL depending on SPLENT_USE_SSH.
+    Priority:
+      1. If SPLENT_USE_SSH=true → SSH
+      2. Else if GITHUB_TOKEN exists → HTTPS with token
+      3. Else → HTTPS read-only
     """
+    use_ssh = os.getenv("SPLENT_USE_SSH", "false").lower() == "true"
     token = os.getenv("GITHUB_TOKEN")
 
-    if _repo_belongs_to_me(namespace):
-        click.secho("🔐 Repository belongs to your organization → using SSH", fg="cyan")
+    if use_ssh:
+        click.secho("🔐 SSH mode enabled (SPLENT_USE_SSH=true)", fg="cyan")
         return f"git@github.com:{namespace}/{repo}.git"
 
     if token:
-        click.secho("🌐 External repository → using HTTPS with token", fg="cyan")
+        click.secho("🌐 HTTPS with token (SPLENT_USE_SSH not true)", fg="cyan")
         return f"https://{token}@github.com/{namespace}/{repo}.git"
 
-    click.secho("🌍 External repository (no token) → HTTPS read-only", fg="yellow")
+    click.secho("🌍 HTTPS read-only (no token, no SSH)", fg="yellow")
     return f"https://github.com/{namespace}/{repo}.git"
 
 
