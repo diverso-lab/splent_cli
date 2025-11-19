@@ -19,22 +19,31 @@ def _get_product_path(product, workspace="/workspace"):
     "--dev",
     "env_dev",
     is_flag=True,
-    help="Run using the development environment",
+    help="Run using the development environment."
 )
 @click.option(
     "--prod",
     "env_prod",
     is_flag=True,
-    help="Run using the production environment",
+    help="Run using the production environment."
 )
 def product_runc(env_dev, env_prod):
     """
-    Execute the product entrypoint in the container.
-    --dev (default)
-    --prod
+    Execute the product entrypoint inside the main container.
+    Only one of --dev or --prod is allowed.
+    Default environment: dev
     """
 
-    # Determine environment
+    # -------------------------------------------------------------
+    # 1. MUTUAL EXCLUSION CHECK
+    # -------------------------------------------------------------
+    if env_dev and env_prod:
+        click.secho("❌ You cannot use --dev and --prod at the same time.", fg="red")
+        raise SystemExit(1)
+
+    # -------------------------------------------------------------
+    # 2. DETERMINE ENVIRONMENT
+    # -------------------------------------------------------------
     if env_prod:
         env = "prod"
     else:
@@ -57,7 +66,9 @@ def product_runc(env_dev, env_prod):
     compose_used = compose_file if os.path.exists(compose_file) else fallback_file
     project_name = _compose_project_name(product, env)
 
-    # Find containers
+    # -------------------------------------------------------------
+    # 3. FIND CONTAINER
+    # -------------------------------------------------------------
     result = subprocess.run(
         ["docker", "compose", "-p", project_name, "-f", compose_used, "ps", "-q"],
         cwd=docker_dir,
@@ -66,7 +77,6 @@ def product_runc(env_dev, env_prod):
     )
     container_ids = [c.strip() for c in result.stdout.splitlines() if c.strip()]
 
-    # Pick main container (the one mounting /workspace)
     target_id = None
     for cid in container_ids:
         mounts = (
@@ -91,7 +101,9 @@ def product_runc(env_dev, env_prod):
     if not target_id and container_ids:
         target_id = container_ids[0]
 
-    # Exec inside container or locally
+    # -------------------------------------------------------------
+    # 4. EXEC ENTRYPOINT
+    # -------------------------------------------------------------
     if target_id:
         click.echo(f"🧩 Executing entrypoint ({env}) in container {target_id[:12]}...")
         subprocess.run(
