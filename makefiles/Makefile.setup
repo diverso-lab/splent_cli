@@ -1,8 +1,12 @@
 SPLENT_DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 
-.PHONY: setup setup-rebuild
+.PHONY: setup setup-rebuild env-prepare docker-up cli-enter
 
-setup:
+
+# ------------------------------------------------------------
+#  ENV: Copy .env and inject SPLENT_HOST_PROJECT_DIR
+# ------------------------------------------------------------
+env-prepare:
 	@if [ ! -f ../.env ]; then \
 		echo "🚀 Copying .env.example → ../.env"; \
 		cp .env.example ../.env; \
@@ -19,19 +23,35 @@ setup:
 		echo "✅ .env already exists — skipping copy and injection."; \
 	fi
 
+
+# ------------------------------------------------------------
+#  Docker: start environment with correct GID
+# ------------------------------------------------------------
+docker-up:
 	@echo "🐳 Getting Docker GID..."
 	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
 	echo "🐳 Using GID $$DOCKER_GID"; \
-	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d --build
+	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d
 
+
+# ------------------------------------------------------------
+#  Enter CLI with .bashrc loaded
+# ------------------------------------------------------------
+cli-enter:
 	@echo "🧠 Entering SPLENT CLI..."
-	@docker exec -it splent_cli_container bash
+	@docker exec -it splent_cli_container bash --rcfile /home/splent/.bashrc
 
 
 # ------------------------------------------------------------
-# Force rebuild of all images (use when Dockerfile changes)
+#  SETUP (fresh or existing environment)
 # ------------------------------------------------------------
-setup-rebuild:
+setup: env-prepare docker-up cli-enter
+
+
+# ------------------------------------------------------------
+#  Force rebuild of all images
+# ------------------------------------------------------------
+setup-rebuild: env-prepare
 	@echo "🧹 Stopping existing containers..."
 	@$(SPLENT_DOCKER_COMPOSE) down -v --remove-orphans || true
 
@@ -45,7 +65,6 @@ setup-rebuild:
 
 	@echo "🚀 Starting containers fresh..."
 	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
-	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d
+	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d --build
 
-	@echo "🧠 Entering SPLENT CLI..."
-	@docker exec -it splent_cli_container bash
+	$(MAKE) cli-enter
