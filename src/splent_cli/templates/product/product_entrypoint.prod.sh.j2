@@ -8,9 +8,35 @@
 # https://creativecommons.org/licenses/by/4.0/
 # ---------------------------------------------------------------------------
 
-set -e  # Exit immediately on error
+set -e
 
-# Main startup sequence
+if [ "$(id -u)" -eq 0 ]; then
+  LOG_DIR="/var/log/splent"
+else
+  if [ -z "$SPLENT_HOST_PROJECT_DIR" ]; then
+    echo "❌ SPLENT_HOST_PROJECT_DIR not defined."
+    exit 1
+  fi
+  LOG_DIR="${SPLENT_HOST_PROJECT_DIR}/.splent/logs"
+fi
+
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/entrypoint.log"
+touch "$LOG_FILE"
+exec >>"$LOG_FILE" 2>&1
+
+echo "--------------------------------------------------"
+echo "SPLENT PROD ENTRYPOINT START"
+echo "User: $(whoami)"
+echo "Date: $(date)"
+echo "Log file: $LOG_FILE"
+echo "--------------------------------------------------"
+
+# ---------------------------------------------------------------------------
+# MAIN STARTUP SEQUENCE
+# ---------------------------------------------------------------------------
 bash /workspace/{{ product_name }}/scripts/02_0_db_wait_connection.sh
 bash /workspace/{{ product_name }}/scripts/04_handle_migrations.sh
 bash /workspace/{{ product_name }}/scripts/05_1_start_app_prod.sh
+
+echo "SPLENT PROD ENTRYPOINT FINISHED"
