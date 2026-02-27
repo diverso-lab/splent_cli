@@ -7,6 +7,20 @@ BASHRC="$HOME_DIR/.bashrc"
 mkdir -p "$HOME_DIR"
 touch "$BASHRC"
 
+# ------------------------------------------------------------
+# Clean previous SPLENT injections
+# ------------------------------------------------------------
+
+# Remove any old splent_env sourcing
+sed -i '/splent_env/d' "$BASHRC"
+
+# Remove previous SPLENT block (between markers if exists)
+sed -i '/# --- SPLENT CLI enhancements ---/,/# --- END SPLENT CLI ---/d' "$BASHRC"
+
+# ------------------------------------------------------------
+# Inject clean SPLENT block
+# ------------------------------------------------------------
+
 cat <<'EOF' >> "$BASHRC"
 
 # --- SPLENT CLI enhancements ---
@@ -33,4 +47,6 @@ splent() {
     command splent "$@"
   fi
 }
+
+# --- END SPLENT CLI ---
 EOF
