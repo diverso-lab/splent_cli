@@ -32,8 +32,11 @@ class SPLENTCLI(click.Group):
             "🌿 Feature Management": [
                 cmd for cmd in self.commands if cmd.startswith("feature:")
             ],
-            "🏗️  Product Management": [
+            "🏗️ Product Management": [
                 cmd for cmd in self.commands if cmd.startswith("product:")
+            ],
+            "🧬 UVL & Variability": [
+                cmd for cmd in self.commands if cmd.startswith("uvl:")
             ],
             "🧱 Database": [cmd for cmd in self.commands if cmd.startswith("db:")],
             "🧰 Utilities": [
@@ -52,7 +55,6 @@ class SPLENTCLI(click.Group):
                 cmd for cmd in self.commands if cmd.startswith("webpack:")
             ],
         }
-
         for title, cmds in groups.items():
             cmds = [c for c in cmds if c in self.commands]
             if not cmds:
