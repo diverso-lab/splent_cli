@@ -8,12 +8,12 @@
 # https://creativecommons.org/licenses/by/4.0/
 # ---------------------------------------------------------------------------
 
-set -e
+set -Eeuo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
   LOG_DIR="/var/log/splent"
 else
-  if [ -z "$SPLENT_HOST_PROJECT_DIR" ]; then
+  if [ -z "${SPLENT_HOST_PROJECT_DIR:-}" ]; then
     echo "❌ SPLENT_HOST_PROJECT_DIR not defined."
     exit 1
   fi
@@ -23,7 +23,8 @@ fi
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/entrypoint.log"
 touch "$LOG_FILE"
-exec >>"$LOG_FILE" 2>&1
+
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "--------------------------------------------------"
 echo "SPLENT DEV ENTRYPOINT START"
@@ -32,17 +33,36 @@ echo "Date: $(date)"
 echo "Log file: $LOG_FILE"
 echo "--------------------------------------------------"
 
+_last_cmd=""
+trap '_last_cmd=$BASH_COMMAND' DEBUG
+trap 'rc=$?; echo "❌ FAIL (rc=$rc) while running: ${_last_cmd}"; echo "   at ${BASH_SOURCE[0]}:${LINENO}"; exit $rc' ERR
+
+run_step () {
+  local step="$1"
+  local script="$2"
+
+  echo ""
+  echo "==> [$step] $script"
+  bash "$script"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+  echo "❌ Step failed: [$step] (rc=$rc) $script"
+  exit $rc
+  fi
+  echo "✅ Step ok: [$step]"
+}
+
 # ---------------------------------------------------------------------------
 # MAIN STARTUP SEQUENCE
 # ---------------------------------------------------------------------------
-# Main startup sequence
-bash /workspace/{{ product_name }}/scripts/00_core_requirements_dev.sh
-bash /workspace/{{ product_name }}/scripts/00_install_features.sh
-bash /workspace/{{ product_name }}/scripts/01_compile_assets.sh
-bash /workspace/{{ product_name }}/scripts/02_0_db_wait_connection.sh
-bash /workspace/{{ product_name }}/scripts/02_1_db_create_db_test.sh
-bash /workspace/{{ product_name }}/scripts/03_initialize_migrations.sh
-bash /workspace/{{ product_name }}/scripts/04_handle_migrations.sh
-bash /workspace/{{ product_name }}/scripts/05_0_start_app_dev.sh
+run_step "00_core_requirements_dev" "/workspace/{{ product_name }}/scripts/00_core_requirements_dev.sh"
+run_step "00_install_features"      "/workspace/{{ product_name }}/scripts/00_install_features.sh"
+run_step "01_compile_assets"        "/workspace/{{ product_name }}/scripts/01_compile_assets.sh"
+run_step "02_0_db_wait"             "/workspace/{{ product_name }}/scripts/02_0_db_wait_connection.sh"
+run_step "02_1_db_create_test"      "/workspace/{{ product_name }}/scripts/02_1_db_create_db_test.sh"
+run_step "03_init_migrations"       "/workspace/{{ product_name }}/scripts/03_initialize_migrations.sh"
+run_step "04_handle_migrations"     "/workspace/{{ product_name }}/scripts/04_handle_migrations.sh"
+run_step "05_0_start_app_dev"       "/workspace/{{ product_name }}/scripts/05_0_start_app_dev.sh"
 
+echo ""
 echo "SPLENT DEV ENTRYPOINT FINISHED"
