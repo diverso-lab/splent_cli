@@ -8,24 +8,49 @@ SOCKET="/var/run/docker.sock"
 
 echo "→ Preparing runtime user..."
 
-# Ajustar GID principal
-CURRENT_GID="$(id -g "$USER_NAME")"
-if [ "$CURRENT_GID" != "$USER_GID" ]; then
-    groupmod -g "$USER_GID" "$USER_NAME" 2>/dev/null || true
-fi
-
-# Ajustar UID principal
 CURRENT_UID="$(id -u "$USER_NAME")"
+CURRENT_GID="$(id -g "$USER_NAME")"
+
+# ------------------------------------------------------------
+# Remap UID safely
+# ------------------------------------------------------------
 if [ "$CURRENT_UID" != "$USER_UID" ]; then
-    usermod -u "$USER_UID" -g "$USER_GID" "$USER_NAME" 2>/dev/null || true
+    usermod -u "$USER_UID" "$USER_NAME" 2>/dev/null || true
 fi
 
-# Ownership básico
+# ------------------------------------------------------------
+# Remap primary GID only if safe
+# If HOST_GID already belongs to another group, do not force it.
+# This avoids collisions on macOS (e.g. GID 20 -> dialout).
+# ------------------------------------------------------------
+EXISTING_GROUP_NAME="$(getent group "$USER_GID" | cut -d: -f1 || true)"
+
+if [ -n "$EXISTING_GROUP_NAME" ]; then
+    if [ "$EXISTING_GROUP_NAME" = "$USER_NAME" ]; then
+        if [ "$CURRENT_GID" != "$USER_GID" ]; then
+            usermod -g "$USER_GID" "$USER_NAME" 2>/dev/null || true
+        fi
+    else
+        echo "→ HOST_GID $USER_GID already exists as group '$EXISTING_GROUP_NAME'; keeping primary group unchanged"
+    fi
+else
+    if [ "$CURRENT_GID" != "$USER_GID" ]; then
+        groupmod -g "$USER_GID" "$USER_NAME" 2>/dev/null || true
+        usermod -g "$USER_GID" "$USER_NAME" 2>/dev/null || true
+    fi
+fi
+
+# Refresh current ids after possible remap
+CURRENT_UID="$(id -u "$USER_NAME")"
+CURRENT_GID="$(id -g "$USER_NAME")"
+
 mkdir -p /home/"$USER_NAME"/.ssh
 touch /home/"$USER_NAME"/.gitconfig || true
-chown -R "$USER_UID":"$USER_GID" /home/"$USER_NAME" /workspace 2>/dev/null || true
+chown -R "$CURRENT_UID":"$CURRENT_GID" /home/"$USER_NAME" /workspace 2>/dev/null || true
 
-# Detectar y mapear grupo del socket Docker
+# ------------------------------------------------------------
+# Docker socket supplementary group
+# ------------------------------------------------------------
 if [ -S "$SOCKET" ]; then
     echo "→ Docker socket detected"
 
@@ -46,7 +71,6 @@ if [ -S "$SOCKET" ]; then
     fi
 fi
 
-# Git safe.directory
 runuser -u "$USER_NAME" -- git config --global --add safe.directory /workspace 2>/dev/null || true
 for dir in /workspace/*; do
     [ -d "$dir" ] && runuser -u "$USER_NAME" -- git config --global --add safe.directory "$dir" 2>/dev/null || true

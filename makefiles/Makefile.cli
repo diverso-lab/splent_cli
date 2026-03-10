@@ -2,6 +2,10 @@
 
 cli:
 	@echo "🚀 Entering SPLENT CLI shell..."
-	@docker exec -it splent_cli_container \
-		runuser -u splent -- \
-		bash --rcfile /home/splent/.bashrc -i
+	@docker exec -it splent_cli_container bash -lc '\
+		uid=$$(id -u splent); \
+		gid=$$(id -g splent); \
+		sock_gid=$$(stat -c %g /var/run/docker.sock); \
+		exec setpriv --reuid "$$uid" --regid "$$gid" --groups "$$gid,$$sock_gid" \
+			env HOME=/home/splent USER=splent LOGNAME=splent \
+			bash --rcfile /home/splent/.bashrc -i'
