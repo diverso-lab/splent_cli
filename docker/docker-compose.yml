@@ -11,8 +11,8 @@ services:
     volumes:
       - ../../:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
-      - ~/.ssh:/home/splent/.ssh:ro
-      - ~/.gitconfig:/home/splent/.gitconfig:rw
+      - ${HOME}/.ssh:/home/splent/.ssh:ro
+      - ${HOME}/.gitconfig:/home/splent/.gitconfig:rw
     stdin_open: true
     tty: true
     networks:
