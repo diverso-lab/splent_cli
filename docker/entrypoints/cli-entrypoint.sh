@@ -71,10 +71,12 @@ if [ -S "$SOCKET" ]; then
     fi
 fi
 
-runuser -u "$USER_NAME" -- git config --global --add safe.directory /workspace 2>/dev/null || true
+git config --system --add safe.directory /workspace || true
+
 for dir in /workspace/*; do
-    [ -d "$dir" ] && runuser -u "$USER_NAME" -- git config --global --add safe.directory "$dir" 2>/dev/null || true
+    [ -d "$dir" ] && git config --system --add safe.directory "$dir" || true
 done
+
 echo "Git safe.directory configured."
 
 echo "→ Container ready. Running as $USER_NAME"
