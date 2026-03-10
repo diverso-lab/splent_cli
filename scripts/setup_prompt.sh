@@ -10,20 +10,29 @@ touch "$BASHRC"
 # ------------------------------------------------------------
 # Clean previous SPLENT injections
 # ------------------------------------------------------------
-
-# Remove any old splent_env sourcing
-sed -i '/splent_env/d' "$BASHRC"
-
-# Remove previous SPLENT block (between markers if exists)
 sed -i '/# --- SPLENT CLI enhancements ---/,/# --- END SPLENT CLI ---/d' "$BASHRC"
 
 # ------------------------------------------------------------
 # Inject clean SPLENT block
 # ------------------------------------------------------------
-
 cat <<'EOF' >> "$BASHRC"
 
 # --- SPLENT CLI enhancements ---
+
+load_splent_env() {
+  if [ -z "${SPLENT_ENV_LOADED:-}" ] && [ -f /workspace/.env ]; then
+    set -a
+    . /workspace/.env
+    set +a
+    export SPLENT_ENV_LOADED=1
+  fi
+}
+
+enter_workspace() {
+  if [ -d /workspace ] && [ "$PWD" = "$HOME" ]; then
+    cd /workspace
+  fi
+}
 
 set_prompt() {
   local app_path="/workspace/${SPLENT_APP}"
@@ -37,8 +46,6 @@ set_prompt() {
   fi
 }
 
-PROMPT_COMMAND=set_prompt
-
 splent() {
   if [ "$1" = "product:select" ]; then
     shift
@@ -47,6 +54,10 @@ splent() {
     command splent "$@"
   fi
 }
+
+load_splent_env
+enter_workspace
+PROMPT_COMMAND=set_prompt
 
 # --- END SPLENT CLI ---
 EOF

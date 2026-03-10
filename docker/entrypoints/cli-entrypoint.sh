@@ -8,25 +8,28 @@ SOCKET="/var/run/docker.sock"
 
 echo "→ Preparing runtime user..."
 
-CURRENT_UID="$(id -u "$USER_NAME")"
+# Ajustar GID principal
 CURRENT_GID="$(id -g "$USER_NAME")"
-
 if [ "$CURRENT_GID" != "$USER_GID" ]; then
     groupmod -g "$USER_GID" "$USER_NAME" 2>/dev/null || true
 fi
 
+# Ajustar UID principal
+CURRENT_UID="$(id -u "$USER_NAME")"
 if [ "$CURRENT_UID" != "$USER_UID" ]; then
     usermod -u "$USER_UID" -g "$USER_GID" "$USER_NAME" 2>/dev/null || true
 fi
 
+# Ownership básico
 mkdir -p /home/"$USER_NAME"/.ssh
 touch /home/"$USER_NAME"/.gitconfig || true
 chown -R "$USER_UID":"$USER_GID" /home/"$USER_NAME" /workspace 2>/dev/null || true
 
+# Detectar y mapear grupo del socket Docker
 if [ -S "$SOCKET" ]; then
     echo "→ Docker socket detected"
 
-    SOCKET_GID="$(stat -c %g "$SOCKET" 2>/dev/null || stat -f %g "$SOCKET" 2>/dev/null || echo "")"
+    SOCKET_GID="$(stat -c %g "$SOCKET" 2>/dev/null || stat -f %g "$SOCKET" 2>/dev/null || true)"
 
     if [ -n "$SOCKET_GID" ]; then
         echo "→ Docker socket GID: $SOCKET_GID"
@@ -43,16 +46,12 @@ if [ -S "$SOCKET" ]; then
     fi
 fi
 
-su - "$USER_NAME" -c 'git config --global --add safe.directory /workspace 2>/dev/null || true'
+# Git safe.directory
+runuser -u "$USER_NAME" -- git config --global --add safe.directory /workspace 2>/dev/null || true
 for dir in /workspace/*; do
-    if [ -d "$dir" ]; then
-        su - "$USER_NAME" -c "git config --global --add safe.directory '$dir' 2>/dev/null || true"
-    fi
+    [ -d "$dir" ] && runuser -u "$USER_NAME" -- git config --global --add safe.directory "$dir" 2>/dev/null || true
 done
 echo "Git safe.directory configured."
 
-if [ $# -eq 0 ]; then
-    exec su - "$USER_NAME"
-else
-    exec su - "$USER_NAME" -c "splent $*"
-fi
+echo "→ Container ready. Running as $USER_NAME"
+exec runuser -u "$USER_NAME" -- tail -f /dev/null

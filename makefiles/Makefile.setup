@@ -3,9 +3,6 @@ HOST_PROJECT_DIR := $(shell cd .. && pwd)
 
 .PHONY: setup setup-rebuild env-prepare docker-up cli-enter
 
-# ------------------------------------------------------------
-#  ENV: Copy .env and inject SPLENT_HOST_PROJECT_DIR
-# ------------------------------------------------------------
 env-prepare:
 	@if [ ! -f ../.env ]; then \
 		echo "🚀 Copying .env.example → ../.env"; \
@@ -23,9 +20,6 @@ env-prepare:
 		echo "✅ .env already exists — skipping copy and injection."; \
 	fi
 
-# ------------------------------------------------------------
-#  Docker: start environment with correct host UID/GID
-# ------------------------------------------------------------
 docker-up:
 	@echo "🐳 Starting containers..."
 	@HOST_UID=$$(id -u); \
@@ -33,28 +27,14 @@ docker-up:
 	echo "🐳 Using UID=$$HOST_UID GID=$$HOST_GID"; \
 	HOST_UID=$$HOST_UID HOST_GID=$$HOST_GID $(SPLENT_DOCKER_COMPOSE) up -d
 
-# ------------------------------------------------------------
-#  Enter CLI with .bashrc loaded
-# ------------------------------------------------------------
 cli-enter:
 	@echo "🧠 Entering SPLENT CLI..."
-	@docker exec -u splent -it splent_cli_container bash -lc '\
-		export HOME=/home/splent; \
-		if [ -f /workspace/.env ]; then \
-			set -a; \
-			. /workspace/.env; \
-			set +a; \
-		fi; \
-		exec bash --rcfile /home/splent/.bashrc -i'
+	@docker exec -it splent_cli_container \
+		runuser -u splent -- \
+		bash --rcfile /home/splent/.bashrc -i
 
-# ------------------------------------------------------------
-#  SETUP (fresh or existing environment)
-# ------------------------------------------------------------
 setup: env-prepare docker-up cli-enter
 
-# ------------------------------------------------------------
-#  Force rebuild of all images
-# ------------------------------------------------------------
 setup-rebuild: env-prepare
 	@echo "🧹 Stopping existing containers..."
 	@$(SPLENT_DOCKER_COMPOSE) down -v --remove-orphans || true

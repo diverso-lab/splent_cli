@@ -10,7 +10,7 @@ RUN groupadd -g 1000 splent && \
 WORKDIR /workspace
 
 # ----------------------------------------------------
-# Copy source code before switching to non-root user
+# Copy source code
 # ----------------------------------------------------
 COPY splent_framework/ splent_framework/
 COPY splent_cli/ splent_cli/
@@ -30,7 +30,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------------------
-# Node.js (for CLI assets)
+# Node.js
 # ----------------------------------------------------
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get update && \
@@ -50,7 +50,7 @@ RUN mkdir -p /etc/apt/keyrings && \
     rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------------------
-# Python packages (editable mode)
+# Python packages
 # ----------------------------------------------------
 RUN pip install --no-cache-dir --root-user-action=ignore -e ./splent_framework && \
     pip install --no-cache-dir --root-user-action=ignore -e ./splent_cli && \

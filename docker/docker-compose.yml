@@ -5,6 +5,9 @@ services:
     build:
       context: ../../
       dockerfile: splent_cli/docker/images/Dockerfile.cli
+    environment:
+      HOST_UID: ${HOST_UID:-1000}
+      HOST_GID: ${HOST_GID:-1000}
     volumes:
       - ../../:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
