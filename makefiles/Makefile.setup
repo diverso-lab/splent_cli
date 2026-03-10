@@ -1,7 +1,7 @@
 SPLENT_DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+HOST_PROJECT_DIR := $(shell cd .. && pwd)
 
 .PHONY: setup setup-rebuild env-prepare docker-up cli-enter
-
 
 # ------------------------------------------------------------
 #  ENV: Copy .env and inject SPLENT_HOST_PROJECT_DIR
@@ -10,10 +10,10 @@ env-prepare:
 	@if [ ! -f ../.env ]; then \
 		echo "🚀 Copying .env.example → ../.env"; \
 		cp .env.example ../.env; \
-		if [ ! -d "$(shell realpath ..)/.vagrant" ]; then \
+		if [ ! -d "$(HOST_PROJECT_DIR)/.vagrant" ]; then \
 			echo "🛠️  Injecting real path into SPLENT_HOST_PROJECT_DIR"; \
-			grep -qxF "SPLENT_HOST_PROJECT_DIR=$(shell realpath ..)" ../.env || \
-			printf "\nSPLENT_HOST_PROJECT_DIR=%s\n" "$(shell realpath ..)" >> ../.env; \
+			grep -qxF "SPLENT_HOST_PROJECT_DIR=$(HOST_PROJECT_DIR)" ../.env || \
+			printf "\nSPLENT_HOST_PROJECT_DIR=%s\n" "$(HOST_PROJECT_DIR)" >> ../.env; \
 		else \
 			echo "📁 .vagrant detected — injecting /workspace into SPLENT_HOST_PROJECT_DIR"; \
 			grep -qxF "SPLENT_HOST_PROJECT_DIR=/workspace" ../.env || \
@@ -23,30 +23,34 @@ env-prepare:
 		echo "✅ .env already exists — skipping copy and injection."; \
 	fi
 
-
 # ------------------------------------------------------------
-#  Docker: start environment with correct GID
+#  Docker: start environment with correct host UID/GID
 # ------------------------------------------------------------
 docker-up:
-	@echo "🐳 Getting Docker GID..."
-	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
-	echo "🐳 Using GID $$DOCKER_GID"; \
-	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d
-
+	@echo "🐳 Starting containers..."
+	@HOST_UID=$$(id -u); \
+	HOST_GID=$$(id -g); \
+	echo "🐳 Using UID=$$HOST_UID GID=$$HOST_GID"; \
+	HOST_UID=$$HOST_UID HOST_GID=$$HOST_GID $(SPLENT_DOCKER_COMPOSE) up -d
 
 # ------------------------------------------------------------
 #  Enter CLI with .bashrc loaded
 # ------------------------------------------------------------
 cli-enter:
 	@echo "🧠 Entering SPLENT CLI..."
-	@docker exec -it splent_cli_container bash --rcfile /home/splent/.bashrc
-
+	@docker exec -u splent -it splent_cli_container bash -lc '\
+		export HOME=/home/splent; \
+		if [ -f /workspace/.env ]; then \
+			set -a; \
+			. /workspace/.env; \
+			set +a; \
+		fi; \
+		exec bash --rcfile /home/splent/.bashrc -i'
 
 # ------------------------------------------------------------
 #  SETUP (fresh or existing environment)
 # ------------------------------------------------------------
 setup: env-prepare docker-up cli-enter
-
 
 # ------------------------------------------------------------
 #  Force rebuild of all images
@@ -58,13 +62,16 @@ setup-rebuild: env-prepare
 	@echo "🔥 Removing old images..."
 	@docker image prune -a -f || true
 
-	@echo "🔧 Rebuilding with correct Docker GID..."
-	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
-	echo "🐳 Using GID $$DOCKER_GID"; \
-	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) build --no-cache
+	@echo "🔧 Rebuilding containers..."
+	@HOST_UID=$$(id -u); \
+	HOST_GID=$$(id -g); \
+	echo "🐳 Using UID=$$HOST_UID GID=$$HOST_GID"; \
+	HOST_UID=$$HOST_UID HOST_GID=$$HOST_GID $(SPLENT_DOCKER_COMPOSE) build --no-cache
 
 	@echo "🚀 Starting containers fresh..."
-	@DOCKER_GID=$$(getent group docker | cut -d: -f3); \
-	DOCKER_GID=$$DOCKER_GID $(SPLENT_DOCKER_COMPOSE) up -d --build
+	@HOST_UID=$$(id -u); \
+	HOST_GID=$$(id -g); \
+	echo "🐳 Using UID=$$HOST_UID GID=$$HOST_GID"; \
+	HOST_UID=$$HOST_UID HOST_GID=$$HOST_GID $(SPLENT_DOCKER_COMPOSE) up -d --build
 
-	$(MAKE) cli-enter
+	@$(MAKE) cli-enter
