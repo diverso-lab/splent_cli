@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# Hook commit-msg para validar el formato de los mensajes de commit
+# Se ejecuta automáticamente durante un `git commit`
+
+set -eu
+
+# Obtener el mensaje del commit
+commit_subject=$(sed -n '1p' "$1")
+
+# Ignorar ciertos tipos de commits automáticos
+case "$commit_subject" in
+  Merge\ *|Revert\ *|Pull\ *|fixup\!*|squash\!*)
+    exit 0
+    ;;
+esac
+
+# Expresión regular para el formato esperado en los mensajes
+commit_regex='^(feat|fix|docs|style|refactor|test|chore|build|ci|perf|revert)(\([a-z0-9._/-]+\))?: .{5,}$'
+
+# Comprobar si el mensaje de commit cumple con el formato
+if echo "$commit_subject" | grep -Eq "$commit_regex"; then
+    echo "✅ ¡El mensaje de commit es válido!"
+else
+    echo "❌ El mensaje de commit no es válido."
+    echo "Formato esperado: tipo(alcance): descripcion"
+    echo "Ejemplo: feat(cli): add product env merge command"
+    exit 1
+fi

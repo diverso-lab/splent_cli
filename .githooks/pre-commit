@@ -1,0 +1,113 @@
+#!/bin/sh
+# Hook pre-commit para SPLENT CLI.
+# - Solo trabaja con Python staged.
+# - Usa el contenedor `splent_cli_container` si está disponible.
+
+set -eu
+
+TARGET_DIRS=${HOOK_TARGETS:-"src scripts"}
+ROOT_DIR=$(git rev-parse --show-toplevel)
+cd "$ROOT_DIR"
+
+STAGED_TMP=$(mktemp)
+trap 'rm -f "$STAGED_TMP"' EXIT
+git diff --cached --name-only --diff-filter=ACM -z -- '*.py' >"$STAGED_TMP" || true
+
+if [ ! -s "$STAGED_TMP" ]; then
+    echo "No hay archivos Python staged."
+    exit 0
+fi
+
+DIRS_FOUND=""
+for dir in $TARGET_DIRS; do
+    if [ -d "$dir" ]; then
+        DIRS_FOUND="$DIRS_FOUND $dir"
+    fi
+done
+
+if [ -z "$DIRS_FOUND" ]; then
+    echo "No se encontraron rutas objetivo en este repositorio: $TARGET_DIRS"
+    exit 0
+fi
+
+run_tools_local() {
+    echo "Ejecutando format/lint en host..."
+
+    if command -v autoflake >/dev/null 2>&1; then
+        find $DIRS_FOUND -type f -name '*.py' -exec autoflake --in-place --remove-all-unused-imports --ignore-init-module-imports {} +
+    fi
+
+    if command -v isort >/dev/null 2>&1; then
+        find $DIRS_FOUND -type f -name '*.py' -exec isort {} +
+    fi
+
+    if command -v black >/dev/null 2>&1; then
+        find $DIRS_FOUND -type f -name '*.py' -exec black {} +
+    fi
+
+    find $DIRS_FOUND -type f -name '*.py' -print0 | while IFS= read -r -d '' file; do
+        python3 - "$file" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+fixed = "\n".join(line.rstrip() for line in text.splitlines())
+if text.endswith("\n"):
+    fixed += "\n"
+if fixed != text:
+    path.write_text(fixed)
+PY
+    done
+
+    if command -v flake8 >/dev/null 2>&1; then
+        find $DIRS_FOUND -type f -name '*.py' -exec flake8 --max-line-length 79 --extend-ignore E203,W503 {} +
+    fi
+}
+
+run_tools_container() {
+    echo "Ejecutando format/lint en contenedor splent_cli_container..."
+    docker exec splent_cli_container sh -lc "
+        set -eu
+        cd /workspace/splent_cli
+        TARGET_DIRS='$TARGET_DIRS'
+        DIRS_FOUND=''
+        for dir in \$TARGET_DIRS; do
+            if [ -d \"\$dir\" ]; then
+                DIRS_FOUND=\"\$DIRS_FOUND \$dir\"
+            fi
+        done
+
+        if command -v autoflake >/dev/null 2>&1; then
+            find \$DIRS_FOUND -type f -name '*.py' -exec autoflake --in-place --remove-all-unused-imports --ignore-init-module-imports {} +
+        fi
+
+        if command -v isort >/dev/null 2>&1; then
+            find \$DIRS_FOUND -type f -name '*.py' -exec isort {} +
+        fi
+
+        if command -v black >/dev/null 2>&1; then
+            find \$DIRS_FOUND -type f -name '*.py' -exec black {} +
+        fi
+
+        if command -v flake8 >/dev/null 2>&1; then
+            find \$DIRS_FOUND -type f -name '*.py' -exec flake8 --max-line-length 79 --extend-ignore E203,W503 {} +
+        fi
+    "
+}
+
+if command -v docker >/dev/null 2>&1 && docker inspect -f '{{.State.Running}}' splent_cli_container >/dev/null 2>&1; then
+    if [ "$(docker inspect -f '{{.State.Running}}' splent_cli_container)" = "true" ]; then
+        run_tools_container
+    else
+        run_tools_local
+    fi
+else
+    run_tools_local
+fi
+
+# Re-staged only previously staged Python files.
+xargs -0 git add <"$STAGED_TMP"
+
+echo "✅ Pre-commit completado."
+exit 0
