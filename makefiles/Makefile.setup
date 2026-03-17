@@ -1,4 +1,8 @@
+ifeq ($(shell docker compose version >/dev/null 2>&1; echo $$?),0)
 SPLENT_DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+else
+SPLENT_DOCKER_COMPOSE = docker-compose -f docker/docker-compose.yml
+endif
 HOST_PROJECT_DIR := $(shell cd .. && pwd)
 
 .PHONY: setup setup-rebuild env-prepare docker-up cli-enter
