@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splent_cli"
-version = "0.0.3"
+version = "1.1.1"
 description = "SPLENT-CLI is a CLI to be able to work on your development more easily."
 readme = "README.md"
 requires-python = ">=3.13"
