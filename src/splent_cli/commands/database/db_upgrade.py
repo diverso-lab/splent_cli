@@ -1,6 +1,6 @@
 import click
 from flask import current_app
-from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
+from flask_migrate import upgrade as alembic_upgrade
 
 from splent_cli.utils.decorators import requires_app
 from splent_framework.managers.migration_manager import MigrationManager
@@ -8,11 +8,11 @@ from splent_framework.managers.migration_manager import MigrationManager
 
 @requires_app
 @click.command(
-    "db:migrate",
-    short_help="Generate and apply migrations (all features or a single one).",
+    "db:upgrade",
+    short_help="Apply pending migrations (all features or a single one).",
 )
 @click.argument("feature", required=False, default=None)
-def db_migrate(feature):
+def db_upgrade(feature):
     app = current_app
 
     if feature:
@@ -29,12 +29,6 @@ def db_migrate(feature):
             return
 
     for feat, mdir in dirs.items():
-        click.echo(click.style(f"  ⚙️  Generating migrations for {feat}...", fg="cyan"))
-        try:
-            alembic_migrate(directory=mdir, message=feat)
-        except Exception as e:
-            click.echo(click.style(f"  ℹ️  {e}", fg="yellow"))
-
         click.echo(click.style(f"  ⬆️  Applying migrations for {feat}...", fg="cyan"))
         try:
             alembic_upgrade(directory=mdir)
@@ -45,4 +39,4 @@ def db_migrate(feature):
             click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
 
 
-cli_command = db_migrate
+cli_command = db_upgrade

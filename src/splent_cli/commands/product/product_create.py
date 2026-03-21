@@ -125,19 +125,28 @@ def make_product(name, features_file):
 
     uid = 1000
     gid = 1000
-    os.chown(base_path, uid, gid)
+    try:
+        os.chown(base_path, uid, gid)
+    except PermissionError:
+        pass
     os.chmod(base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
 
     for root, dirs, files in os.walk(base_path):
         for d in dirs:
             dir_path = os.path.join(root, d)
-            os.chown(dir_path, uid, gid)
+            try:
+                os.chown(dir_path, uid, gid)
+            except PermissionError:
+                pass
             os.chmod(
                 dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
             )
         for f in files:
             file_path = os.path.join(root, f)
-            os.chown(file_path, uid, gid)
+            try:
+                os.chown(file_path, uid, gid)
+            except PermissionError:
+                pass
             os.chmod(
                 file_path,
                 stat.S_IRUSR
