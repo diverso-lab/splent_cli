@@ -1,11 +1,13 @@
 import os
 import json
+import hashlib
 import click
 import importlib.metadata
 
+import tomllib
+
 
 def _pkg_version(name: str) -> str | None:
-    """Return the installed version of a package, or None if not found."""
     if not name:
         return None
     try:
@@ -16,45 +18,165 @@ def _pkg_version(name: str) -> str | None:
         return None
 
 
-@click.command("version", short_help="Show SPLENT and environment version information")
-@click.option("--json", "as_json", is_flag=True, help="Output in JSON format")
+def _pyproject_version(pyproject_path: str) -> str | None:
+    """Read version directly from a pyproject.toml — always up to date."""
+    if not os.path.exists(pyproject_path):
+        return None
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("project", {}).get("version")
+    except Exception:
+        return None
+
+
+def _workspace_pkg_version(workspace: str, pkg_name: str) -> str | None:
+    """
+    Read version from the package's pyproject.toml in the workspace (source of truth
+    for editable installs). Falls back to importlib.metadata if not found.
+    """
+    pyproject_path = os.path.join(workspace, pkg_name, "pyproject.toml")
+    return _pyproject_version(pyproject_path) or _pkg_version(pkg_name)
+
+
+def _product_version(app_path: str) -> str | None:
+    pyproject_path = os.path.join(app_path, "pyproject.toml")
+    if not os.path.exists(pyproject_path):
+        return None
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("project", {}).get("version")
+    except Exception:
+        return None
+
+
+def _declared_features(app_path: str) -> list:
+    pyproject_path = os.path.join(app_path, "pyproject.toml")
+    if not os.path.exists(pyproject_path):
+        return []
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    except Exception:
+        return []
+
+
+def _in_cache(workspace: str, ref: str) -> bool:
+    if "/" in ref:
+        ns, rest = ref.split("/", 1)
+    else:
+        ns, rest = "splent_io", ref
+    ns_fs = ns.replace("-", "_")
+    if "@" in rest:
+        name, version = rest.split("@", 1)
+        path = os.path.join(workspace, ".splent_cache", "features", ns_fs, f"{name}@{version}")
+    else:
+        path = os.path.join(workspace, ".splent_cache", "features", ns_fs, rest)
+    return os.path.isdir(path)
+
+
+def _fingerprint(parts: list) -> str:
+    raw = "|".join(str(p) for p in parts)
+    return hashlib.sha256(raw.encode()).hexdigest()[:8]
+
+
+def _parse_feature_ref(ref: str) -> tuple:
+    """Returns (display_name, version_or_None)."""
+    base = ref.split("/", 1)[1] if "/" in ref else ref
+    if "@" in base:
+        name, version = base.split("@", 1)
+        return name, version
+    return base, None
+
+
+@click.command("version", short_help="Show full workspace version snapshot")
+@click.option("--json", "as_json", is_flag=True, help="Output in JSON format.")
 def version(as_json: bool) -> None:
     """
-    Displays the version of the SPLENT CLI, framework, active app, and Python.
+    Displays a complete version snapshot of the SPLENT workspace:
+    CLI, framework, Python, active product, declared features and their cache status.
 
-    Example:
-        $ splent version
-        SPLENT CLI 0.8.0
-        Framework: 0.8.0
-        App: uvlhub 1.2.0
-        Python: 3.12.6
+    A short fingerprint is computed from all versions combined — identical fingerprints
+    mean identical workspace states.
     """
-    try:
-        cli_v = _pkg_version("splent_cli") or "unknown"
-        fw_v = _pkg_version("splent_framework") or "unknown"
+    workspace = os.getenv("WORKING_DIR", "/workspace")
+    app_name = os.getenv("SPLENT_APP")
 
-        app_name = os.getenv("SPLENT_APP")
-        app_v = _pkg_version(app_name) if app_name else None
-        py_v = os.sys.version.split()[0]
+    cli_v = _workspace_pkg_version(workspace, "splent_cli") or "unknown"
+    fw_v = _workspace_pkg_version(workspace, "splent_framework") or "unknown"
+    py_v = os.sys.version.split()[0]
 
-        if as_json:
-            payload = {
-                "cli": cli_v,
-                "framework": fw_v,
-                "app": {"name": app_name, "version": app_v} if app_name else None,
-                "python": py_v,
-            }
-            click.echo(json.dumps(payload, ensure_ascii=False))
-            return
+    app_v = None
+    features = []
+    feature_status = []
 
-        click.echo(f"CLI version: {cli_v}")
-        click.echo(f"Framework version: {fw_v}")
-        if app_name:
-            click.echo(f"Active product: {app_name} {app_v or '(not installed)'}")
-        else:
-            click.echo("App: (not selected)")
-        click.echo(f"Python: {py_v}")
+    if app_name:
+        app_path = os.path.join(workspace, app_name)
+        app_v = _product_version(app_path)
+        features = _declared_features(app_path)
+        for ref in features:
+            name, ver = _parse_feature_ref(ref)
+            cached = _in_cache(workspace, ref)
+            feature_status.append({
+                "name": name,
+                "version": ver,
+                "in_cache": cached,
+                "ref": ref,
+            })
 
-    except Exception as exc:
-        click.echo(f"error: {type(exc).__name__}: {exc}", err=True)
-        raise SystemExit(2)
+    cli_compat = (
+        cli_v != "unknown"
+        and fw_v != "unknown"
+        and cli_v.split(".")[0] == fw_v.split(".")[0]
+    )
+
+    fp_parts = [cli_v, fw_v, py_v, app_name or "", app_v or ""]
+    for f in feature_status:
+        fp_parts.append(f"{f['name']}={f['version'] or 'editable'}")
+    fingerprint = _fingerprint(fp_parts)
+
+    if as_json:
+        payload = {
+            "cli": cli_v,
+            "framework": fw_v,
+            "python": py_v,
+            "compatible": cli_compat,
+            "product": {"name": app_name, "version": app_v} if app_name else None,
+            "features": feature_status,
+            "fingerprint": fingerprint,
+        }
+        click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+
+    w = 56
+    click.secho("\nSPLENT workspace snapshot", bold=True)
+    click.echo("─" * w)
+
+    compat_label = click.style("✔ compatible", fg="green") if cli_compat else click.style("✖ mismatch", fg="red")
+    click.echo(f"  {'CLI':<14} {cli_v}")
+    click.echo(f"  {'Framework':<14} {fw_v:<10}  {compat_label}")
+    click.echo(f"  {'Python':<14} {py_v}")
+
+    if app_name:
+        app_label = f"{app_name}  {app_v or '(version unknown)'}"
+        click.echo(f"  {'Product':<14} {app_label}")
+    else:
+        click.echo(f"  {'Product':<14} " + click.style("(not selected)", fg="yellow"))
+
+    if feature_status:
+        click.echo()
+        click.echo("  Features declared in pyproject:")
+        for i, f in enumerate(feature_status):
+            connector = "└──" if i == len(feature_status) - 1 else "├──"
+            ver_label = click.style(f"@{f['version']}", fg="cyan") if f["version"] else click.style("editable", fg="blue")
+            cache_label = click.style("✔ in cache", fg="green") if f["in_cache"] else click.style("✖ missing from cache", fg="red")
+            click.echo(f"  {connector} {f['name']:<32} {ver_label:<18}  {cache_label}")
+    elif app_name:
+        click.echo()
+        click.echo("  " + click.style("No features declared.", fg="yellow"))
+
+    click.echo("─" * w)
+    click.echo(f"  Fingerprint  {click.style(fingerprint, fg='cyan', bold=True)}")
+    click.echo()

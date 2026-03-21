@@ -95,7 +95,7 @@ def set_developer_interactive():
 # ROOT COMMAND
 # -------------------------
 
-@click.group("env:set", short_help="Set environment variables interactively")
+@click.group("env:set", short_help="Set environment variables interactively", invoke_without_command=True)
 @click.option("--wizard", is_flag=True, help="Run interactive environment setup wizard.")
 @click.pass_context
 def env_set_group(ctx, wizard):

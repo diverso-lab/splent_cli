@@ -39,6 +39,9 @@ class SPLENTCLI(click.Group):
                 cmd for cmd in self.commands if cmd.startswith("uvl:")
             ],
             "🧱 Database": [cmd for cmd in self.commands if cmd.startswith("db:")],
+            "💾 Cache": [
+                cmd for cmd in self.commands if cmd.startswith("cache:")
+            ],
             "🧰 Utilities": [
                 cmd
                 for cmd in self.commands
