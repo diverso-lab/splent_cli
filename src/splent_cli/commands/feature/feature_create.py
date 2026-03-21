@@ -94,6 +94,17 @@ def make_feature(full_name):
         os.path.join(
             "tests", "test_selenium.py"
         ): "feature/feature_tests_test_selenium.py.j2",
+        # Migrations scaffold — env.py uses the feature_env helper from splent_framework
+        os.path.join(
+            "migrations", "env.py"
+        ): "feature/feature_migrations_env.py.j2",
+        os.path.join(
+            "migrations", "alembic.ini"
+        ): "feature/feature_migrations_alembic.ini.j2",
+        os.path.join("migrations", "versions", ".gitkeep"): None,
+        os.path.join(
+            "migrations", "script.py.mako"
+        ): "feature/feature_migrations_script.py.mako.j2",
     }
 
     base_files_and_templates = {
@@ -128,11 +139,20 @@ def make_feature(full_name):
     # --- Permissions (UID:GID 1000:1000) ---
     uid, gid = 1000, 1000
     for root, dirs, files in os.walk(cache_dir):
-        os.chown(root, uid, gid)
+        try:
+            os.chown(root, uid, gid)
+        except PermissionError:
+            pass
         for d in dirs:
-            os.chown(os.path.join(root, d), uid, gid)
+            try:
+                os.chown(os.path.join(root, d), uid, gid)
+            except PermissionError:
+                pass
         for f in files:
-            os.chown(os.path.join(root, f), uid, gid)
+            try:
+                os.chown(os.path.join(root, f), uid, gid)
+            except PermissionError:
+                pass
 
     click.echo(
         click.style(f"✅ Feature '{full_name}' created successfully!", fg="green")

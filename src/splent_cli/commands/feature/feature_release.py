@@ -311,6 +311,6 @@ def feature_release(feature_ref, version, attach):
     if attach:
         click.echo("🔗 Attaching to product...")
         ctx = click.get_current_context()
-        ctx.invoke(feature_attach, feature_name=feature_ref, version=version)
+        ctx.invoke(feature_attach, feature_identifier=feature_ref, version=version)
 
     click.echo("🎉 Release completed!")

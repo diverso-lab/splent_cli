@@ -43,16 +43,10 @@ setup-rebuild: env-prepare
 	@echo "🧹 Stopping existing containers..."
 	@$(SPLENT_DOCKER_COMPOSE) down -v --remove-orphans || true
 
-	@echo "🔥 Removing old images..."
-	@docker image prune -a -f || true
+	@echo "🔥 Removing project image..."
+	@docker image rm -f docker-cli 2>/dev/null || true
 
-	@echo "🔧 Rebuilding containers..."
-	@HOST_UID=$$(id -u); \
-	HOST_GID=$$(id -g); \
-	echo "🐳 Using UID=$$HOST_UID GID=$$HOST_GID"; \
-	HOST_UID=$$HOST_UID HOST_GID=$$HOST_GID $(SPLENT_DOCKER_COMPOSE) build --no-cache
-
-	@echo "🚀 Starting containers fresh..."
+	@echo "🔧 Rebuilding and starting containers..."
 	@HOST_UID=$$(id -u); \
 	HOST_GID=$$(id -g); \
 	echo "🐳 Using UID=$$HOST_UID GID=$$HOST_GID"; \

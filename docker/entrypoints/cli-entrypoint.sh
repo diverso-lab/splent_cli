@@ -71,11 +71,7 @@ if [ -S "$SOCKET" ]; then
     fi
 fi
 
-git config --system --add safe.directory /workspace || true
-
-for dir in /workspace/*; do
-    [ -d "$dir" ] && git config --system --add safe.directory "$dir" || true
-done
+git config --system safe.directory '*' || true
 
 echo "Git safe.directory configured."
 

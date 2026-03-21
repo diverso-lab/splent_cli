@@ -10,13 +10,8 @@ RUN groupadd -g 1000 splent && \
 WORKDIR /workspace
 
 # ----------------------------------------------------
-# Copy source code
-# ----------------------------------------------------
-COPY splent_framework/ splent_framework/
-COPY splent_cli/ splent_cli/
-
-# ----------------------------------------------------
 # System dependencies
+# Layer invalidated only when this block changes.
 # ----------------------------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -31,6 +26,7 @@ RUN apt-get update && \
 
 # ----------------------------------------------------
 # Node.js
+# Layer invalidated only when Node version changes.
 # ----------------------------------------------------
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get update && \
@@ -40,6 +36,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 
 # ----------------------------------------------------
 # Docker CLI + Compose plugin
+# Layer invalidated only when Docker version changes.
 # ----------------------------------------------------
 RUN mkdir -p /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
@@ -50,22 +47,52 @@ RUN mkdir -p /etc/apt/keyrings && \
     rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------------------
-# Python packages
+# Python dependencies cache
+# Copy ONLY pyproject.toml files + minimal package
+# stubs so pip can resolve and download all deps.
+# This layer is only re-run when pyproject.toml changes,
+# NOT when source .py files change.
 # ----------------------------------------------------
-RUN pip install --no-cache-dir --root-user-action=ignore -e ./splent_framework && \
-    pip install --no-cache-dir --root-user-action=ignore -e ./splent_cli && \
-    pip install --no-cache-dir --root-user-action=ignore -e ./splent_cli[dev]
+COPY splent_framework/pyproject.toml splent_framework/pyproject.toml
+COPY splent_cli/pyproject.toml       splent_cli/pyproject.toml
+
+RUN mkdir -p splent_framework/src/splent_framework && \
+    touch splent_framework/src/splent_framework/__init__.py && \
+    mkdir -p splent_cli/src/splent_cli && \
+    touch splent_cli/src/splent_cli/__init__.py
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --root-user-action=ignore -e ./splent_framework && \
+    pip install --root-user-action=ignore -e ./splent_cli && \
+    pip install --root-user-action=ignore -e ./splent_cli[dev] && \
+    pip install --root-user-action=ignore -e ./splent_cli[uvl] || \
+    echo "⚠️  flamapy (splent uvl:* commands) could not be installed on this platform."
 
 # ----------------------------------------------------
-# Install CLI Node dependencies
+# Node dependencies cache
+# Copy ONLY package.json (and lock file if present)
+# so npm install is cached until deps change.
 # ----------------------------------------------------
+COPY splent_cli/package*.json splent_cli/
+
 WORKDIR /workspace/splent_cli
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm \
+    npm install
+
+# ----------------------------------------------------
+# Copy full source code
+# Placed LAST so that editing .py files only
+# invalidates from this layer onward (fast steps only).
+# The editable pip install already points here, so no
+# reinstall is needed after source changes.
+# ----------------------------------------------------
+WORKDIR /workspace
+COPY splent_framework/ splent_framework/
+COPY splent_cli/       splent_cli/
 
 # ----------------------------------------------------
 # Cleanup Python cache
 # ----------------------------------------------------
-WORKDIR /workspace
 RUN find . -type d -name "__pycache__" -exec rm -r {} + && \
     find . -type f -name "*.pyc" -exec rm -f {} +
 

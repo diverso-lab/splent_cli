@@ -1,6 +1,5 @@
 import os
 import subprocess
-import shutil
 import tomllib
 import click
 
@@ -53,28 +52,49 @@ def get_cache_paths(ns_git: str, name: str, version: str | None):
 # =====================================================================
 # GIT → ensure main branch editable
 # =====================================================================
+def git(path: str, *args):
+    """Run a git command with safe.directory bypass (for Docker UID mismatch)."""
+    return subprocess.run(
+        ["git", "-C", path, "-c", "safe.directory=*", *args],
+        capture_output=False,
+    )
+
+
+def git_check(path: str, *args):
+    """Same as git() but raises on non-zero exit."""
+    return subprocess.run(
+        ["git", "-C", path, "-c", "safe.directory=*", *args],
+        check=True,
+    )
+
+
+def git_out(path: str, *args):
+    """Same as git() but captures output."""
+    return subprocess.run(
+        ["git", "-C", path, "-c", "safe.directory=*", *args],
+        capture_output=True,
+        text=True,
+    )
+
+
 def ensure_git_main(path: str, ns_git: str, name: str):
-    os.chdir(path)
-
     # Fix remote origin to correct namespace + repo
-    subprocess.run(
-        ["git", "remote", "set-url", "origin", f"git@github.com:{ns_git}/{name}.git"],
-        check=True,
-    )
-
-    subprocess.run(
-        ["git", "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"],
-        check=True,
-    )
-
-    r = subprocess.run(["git", "branch", "--list", "main"], capture_output=True, text=True)
-
-    if not r.stdout.strip():
-        subprocess.run(["git", "checkout", "-b", "main", "origin/main"], check=True)
+    remote_url = f"git@github.com:{ns_git}/{name}.git"
+    r = git_out(path, "remote", "get-url", "origin")
+    if r.returncode == 0:
+        git_check(path, "remote", "set-url", "origin", remote_url)
     else:
-        subprocess.run(["git", "switch", "main"], check=True)
+        git_check(path, "remote", "add", "origin", remote_url)
 
-    subprocess.run(["git", "pull", "origin", "main"], check=True)
+    git_check(path, "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*")
+
+    r = git_out(path, "branch", "--list", "main")
+    if not r.stdout.strip():
+        git_check(path, "checkout", "-b", "main", "origin/main")
+    else:
+        git_check(path, "switch", "main")
+
+    git_check(path, "pull", "origin", "main")
 
 
 # =====================================================================
@@ -97,7 +117,6 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
     "feature:edit",
     short_help="Convert a released feature into a local editable version.",
 )
-@click.argument("feature_name")
 @click.argument("feature_name")
 def feature_edit(feature_name):
     product = os.getenv("SPLENT_APP")
@@ -148,10 +167,14 @@ def feature_edit(feature_name):
         click.echo(f"❌ Versioned cache not found: {versioned_path}")
         raise SystemExit(1)
 
-    # Create editable copy only if missing
+    # Create editable copy only if missing (clean up any partial previous attempt first)
     if not os.path.exists(editable_path):
         click.echo(f"📦 Creating editable copy → {editable_path}")
-        shutil.copytree(versioned_path, editable_path)
+        subprocess.run(["rm", "-rf", editable_path], check=True)
+        result = subprocess.run(["cp", "-r", versioned_path, editable_path])
+        if result.returncode != 0:
+            click.echo(f"❌ Failed to copy feature to editable path.")
+            raise SystemExit(1)
 
     # Ensure Git repo points to main branch and right remote
     ensure_git_main(editable_path, ns_git, name)

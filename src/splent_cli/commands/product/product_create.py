@@ -88,6 +88,7 @@ def make_product(name, features_file):
         "scripts/01_compile_assets.sh": "product/product_01_compile_assets.sh.j2",
         "scripts/02_0_db_wait_connection.sh": "product/product_02_0_db_wait_connection.sh.j2",
         "scripts/02_1_db_create_db_test.sh": "product/product_02_1_db_create_db_test.sh.j2",
+        "scripts/02_2_db_create_splent_migrations.sh": "product/product_02_2_db_create_splent_migrations.sh.j2",
         "scripts/03_initialize_migrations.sh": "product/product_03_initialize_migrations.sh.j2",
         "scripts/04_handle_migrations.sh": "product/product_04_handle_migrations.sh.j2",
         "scripts/05_0_start_app_dev.sh": "product/product_05_0_start_app_dev.sh.j2",
@@ -125,19 +126,28 @@ def make_product(name, features_file):
 
     uid = 1000
     gid = 1000
-    os.chown(base_path, uid, gid)
+    try:
+        os.chown(base_path, uid, gid)
+    except PermissionError:
+        pass
     os.chmod(base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
 
     for root, dirs, files in os.walk(base_path):
         for d in dirs:
             dir_path = os.path.join(root, d)
-            os.chown(dir_path, uid, gid)
+            try:
+                os.chown(dir_path, uid, gid)
+            except PermissionError:
+                pass
             os.chmod(
                 dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
             )
         for f in files:
             file_path = os.path.join(root, f)
-            os.chown(file_path, uid, gid)
+            try:
+                os.chown(file_path, uid, gid)
+            except PermissionError:
+                pass
             os.chmod(
                 file_path,
                 stat.S_IRUSR
