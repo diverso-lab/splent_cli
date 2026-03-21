@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from importlib.metadata import distributions
 from flask import Flask
 
-from splent_cli.utils.path_utils import PathUtils
+from splent_framework.utils.path_utils import PathUtils
 
 load_dotenv()
 

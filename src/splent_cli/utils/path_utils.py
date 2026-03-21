@@ -1,48 +1,15 @@
 import os
-import importlib.util
-from dotenv import load_dotenv
-from splent_framework.configuration.configuration import uploads_folder_name
-
-load_dotenv()
+# Base PathUtils (framework-level paths) lives in splent_framework.
+# This module re-exports it and adds CLI-specific path helpers on top.
+from splent_framework.utils.path_utils import PathUtils as _BasePathUtils, is_splent_dev_mode  # noqa: F401
 
 
-def is_splent_dev_mode():
-    return os.getenv("SPLENT", "false").lower() in ("true", "1", "yes")
-
-
-class PathUtils:
-    @staticmethod
-    def get_working_dir():
-        return os.getenv("WORKING_DIR", "")
-
-    @staticmethod
-    def get_app_base_dir():
-        working_dir = PathUtils.get_working_dir()
-        splent_app = os.getenv("SPLENT_APP", "splent_app")
-        return os.path.join(working_dir, splent_app)
-
-    @staticmethod
-    def get_app_dir():
-        splent_app = os.getenv("SPLENT_APP", "splent_app")
-        return os.path.join(PathUtils.get_app_base_dir(), "src", splent_app)
-
-    @staticmethod
-    def get_app_env_file():
-        working_dir = PathUtils.get_working_dir()
-        splent_app = os.getenv("SPLENT_APP", "splent_app")
-        return os.path.join(working_dir, splent_app, "docker", ".env")
-
-    @staticmethod
-    def get_modules_dir():
-        return os.path.join(PathUtils.get_app_dir(), "modules")
-
-    @staticmethod
-    def get_migrations_dir():
-        return os.path.join(PathUtils.get_app_dir(), "migrations")
+class PathUtils(_BasePathUtils):
+    """PathUtils extended with SPLENT CLI-specific paths."""
 
     @staticmethod
     def get_splent_cli_dir():
-        working_dir = PathUtils.get_working_dir()
+        working_dir = _BasePathUtils.get_working_dir()
         return os.path.join(working_dir, "splent_cli", "src", "splent_cli")
 
     @staticmethod
@@ -59,32 +26,9 @@ class PathUtils:
 
     @staticmethod
     def get_splent_framework_dir():
-        working_dir = PathUtils.get_working_dir()
+        working_dir = _BasePathUtils.get_working_dir()
         return os.path.join(working_dir, "splent_framework", "src", "splent_framework")
 
     @staticmethod
     def get_core_dir():
-        return os.path.join(PathUtils.get_splent_framework_dir())
-
-    @staticmethod
-    def get_env_dir():
-        return os.path.join(PathUtils.get_working_dir(), ".env")
-
-    @staticmethod
-    def get_app_log_dir():
-        return os.path.join(PathUtils.get_working_dir(), "app.log")
-
-    @staticmethod
-    def get_uploads_dir():
-        splent_app = os.getenv("SPLENT_APP")
-
-        working_dir = PathUtils.get_working_dir()
-
-        if is_splent_dev_mode():
-            return os.path.join(working_dir, splent_app, uploads_folder_name())
-
-        package = importlib.util.find_spec(splent_app)
-        if package and package.origin:
-            return os.path.join(os.path.dirname(package.origin), uploads_folder_name())
-
-        raise FileNotFoundError("Could not resolve uploads directory.")
+        return PathUtils.get_splent_framework_dir()

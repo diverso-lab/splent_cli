@@ -19,7 +19,9 @@ def load_commands(cli_group):
                 try:
                     module = importlib.import_module(module_name)
                 except Exception as e:
-                    print(f"❌ Error al importar {module_name}: {e}")
+                    if os.getenv("SPLENT_DEBUG"):
+                        import sys
+                        print(f"⚠  Skipping {module_name}: {e}", file=sys.stderr)
                     continue
 
                 # Preferencia por cli_command explícito
