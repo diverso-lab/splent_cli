@@ -1,20 +1,7 @@
 import os
 import re
 import click
-from splent_cli.services import context
-
-
-def parse_feature_identifier(identifier: str):
-    if "/" in identifier:
-        namespace, fname = identifier.split("/", 1)
-    else:
-        namespace = "splent-io"
-        fname = identifier
-
-    namespace_github = namespace.replace("_", "-")
-    namespace_fs = namespace.replace("-", "_")
-
-    return namespace, namespace_github, namespace_fs, fname
+from splent_cli.services import context, compose
 
 
 @click.command(
@@ -36,7 +23,7 @@ def feature_detach(feature_identifier, version):
 
     # --- Parse namespace + feature -----------------------------------------
     namespace, namespace_github, namespace_fs, feature_name = \
-        parse_feature_identifier(feature_identifier)
+        compose.parse_feature_identifier(feature_identifier)
 
     product_path = str(ws / product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")

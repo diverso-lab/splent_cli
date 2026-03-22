@@ -35,11 +35,14 @@ def product_up(dev, prod):
             click.echo(f"⚠️ No docker-compose file for {name}")
             return
         project_name = compose.project_name(name, env)
-        subprocess.run(
+        result = subprocess.run(
             ["docker", "compose", "-p", project_name, "-f", compose_file, "up", "-d"],
             check=False,
         )
-        click.echo(f"✅  {name}: started successfully")
+        if result.returncode != 0:
+            click.secho(f"❌  {name}: failed to start (exit {result.returncode})", fg="red")
+        else:
+            click.echo(f"✅  {name}: started successfully")
 
     # Load features
     py = os.path.join(product_path, "pyproject.toml")

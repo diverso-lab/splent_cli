@@ -1,21 +1,22 @@
 import os
 import tomllib
-import subprocess
 import shutil
 import click
 from splent_cli.services import context
+from splent_cli.commands.feature.feature_clone import feature_clone
 
 
 @click.command(
     "product:sync",
     short_help="Sync all versioned features declared in the active product."
 )
+@click.pass_context
 @click.option(
     "--force",
     is_flag=True,
     help="Force reclone each feature (delete its cache folder first).",
 )
-def product_sync(force):
+def product_sync(ctx, force):
     workspace = str(context.workspace())
     product = context.require_app()
 
@@ -54,7 +55,9 @@ def product_sync(force):
             rest = entry
 
         repo, _, version = rest.partition("@")
-        version = version or "main"
+        if not version:
+            click.secho(f"⚠️  Skipping '{entry}': no version specified.", fg="yellow")
+            continue
 
         namespace_safe = namespace.replace("-", "_").replace(".", "_")
 
@@ -73,17 +76,12 @@ def product_sync(force):
 
         # 2️⃣ Clone if missing
         if not os.path.exists(cache_dir):
-            cmd = ["splent", "feature:clone", f"{namespace}/{repo}@{version}"]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                env=os.environ.copy()
-            )
-
-            if result.returncode != 0:
-                click.secho(f"❌ Failed to clone {entry}:\n{result.stderr}", fg="red")
-                continue
+            try:
+                ctx.invoke(feature_clone, full_name=f"{namespace}/{repo}@{version}")
+            except SystemExit as e:
+                if e.code != 0:
+                    click.secho(f"❌ Failed to clone {entry}", fg="red")
+                    continue
 
         else:
             click.secho(f"✅ Using cached {namespace}/{repo}@{version}", fg="cyan")

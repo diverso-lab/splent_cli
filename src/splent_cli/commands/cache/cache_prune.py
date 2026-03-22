@@ -1,5 +1,5 @@
 import os
-from splent_cli.services import context
+from splent_cli.services import context, compose
 import re
 import shutil
 import click
@@ -62,22 +62,6 @@ def _get_all_product_refs(workspace: Path) -> set:
     return refs
 
 
-def _remove_broken_symlinks(workspace: Path) -> int:
-    removed = 0
-    for product_dir in workspace.iterdir():
-        features_dir = product_dir / "features"
-        if not features_dir.is_dir():
-            continue
-        for org_dir in features_dir.iterdir():
-            if not org_dir.is_dir():
-                continue
-            for link in org_dir.iterdir():
-                if link.is_symlink() and not link.exists():
-                    link.unlink()
-                    removed += 1
-    return removed
-
-
 @click.command("cache:prune", short_help="Remove orphaned cache entries not used by any product.")
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
 def cache_prune(yes):
@@ -119,7 +103,7 @@ def cache_prune(yes):
 
     click.secho(f"🧹 Pruned {len(orphans)} orphaned cache entry/entries.", fg="green")
 
-    removed = _remove_broken_symlinks(workspace)
+    removed = compose.remove_broken_symlinks(workspace)
     if removed:
         click.secho(f"🔗 Removed {removed} broken feature symlink(s).", fg="yellow")
     else:

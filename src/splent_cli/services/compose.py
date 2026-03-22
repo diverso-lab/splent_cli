@@ -2,6 +2,7 @@
 Docker Compose helpers shared across all product commands.
 """
 import os
+from pathlib import Path
 
 
 def project_name(name: str, env: str) -> str:
@@ -46,3 +47,46 @@ def normalize_feature_ref(feat: str) -> str:
 def product_path(product: str, workspace: str) -> str:
     """Return the absolute path to a product directory."""
     return os.path.join(workspace, product)
+
+
+def parse_feature_identifier(identifier: str) -> tuple[str, str, str, str]:
+    """Parse a feature identifier into its components.
+
+    Accepts two forms:
+      - "namespace/feature_name"   → explicit namespace
+      - "feature_name"             → defaults to "splent-io"
+
+    Returns (namespace, namespace_github, namespace_fs, feature_name) where:
+      namespace_github  dash-separated  (GitHub org name)
+      namespace_fs      underscore-separated (filesystem safe)
+    """
+    if "/" in identifier:
+        namespace, feature_name = identifier.split("/", 1)
+    else:
+        namespace = "splent-io"
+        feature_name = identifier
+
+    namespace_github = namespace.replace("_", "-")
+    namespace_fs = namespace.replace("-", "_").replace(".", "_")
+
+    return namespace, namespace_github, namespace_fs, feature_name
+
+
+def remove_broken_symlinks(workspace: Path) -> int:
+    """Remove broken feature symlinks from all products under workspace.
+
+    Returns the number of symlinks removed.
+    """
+    removed = 0
+    for product_dir in workspace.iterdir():
+        features_dir = product_dir / "features"
+        if not features_dir.is_dir():
+            continue
+        for org_dir in features_dir.iterdir():
+            if not org_dir.is_dir():
+                continue
+            for link in org_dir.iterdir():
+                if link.is_symlink() and not link.exists():
+                    link.unlink()
+                    removed += 1
+    return removed

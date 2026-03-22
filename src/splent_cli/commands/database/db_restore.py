@@ -52,12 +52,13 @@ def db_restore(filename, yes):
             click.echo("❎ Cancelled.")
             raise SystemExit(0)
 
-    restore_cmd = (
-        f"mysql -h{host} -u{user} -p{password} {database} < {filename}"
-    )
-
     try:
-        subprocess.run(restore_cmd, shell=True, check=True, executable="/bin/bash")
+        with open(filename, "rb") as sql_file:
+            subprocess.run(
+                ["mysql", f"-h{host}", f"-u{user}", f"-p{password}", database],
+                stdin=sql_file,
+                check=True,
+            )
         click.secho(f"✅ Database restored from: {filename}", fg="green")
     except subprocess.CalledProcessError as e:
         click.secho(f"❌ Error restoring database: {e}", fg="red")

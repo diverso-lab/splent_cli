@@ -33,7 +33,6 @@ def feature_env(feature_name, generate, env_name):
         splent feature:env splent_feature_auth --generate --dev
     """
     workspace = str(context.workspace())
-    org_safe = "splent_io"
     product = context.require_app()
 
     # 1️⃣ Leer el pyproject.toml del producto
@@ -62,6 +61,14 @@ def feature_env(feature_name, generate, env_name):
         )
         raise SystemExit(1)
 
+    # Derive org_safe from the entry itself (e.g. "splent_io/splent_feature_auth@v1")
+    if "/" in feature_entry:
+        org_safe = feature_entry.split("/", 1)[0].replace("-", "_").replace(".", "_")
+        entry_basename = feature_entry.split("/", 1)[1]
+    else:
+        org_safe = "splent_io"
+        entry_basename = feature_entry
+
     # 3️⃣ Determinar entorno
     env_from_var = os.getenv("SPLENT_ENV")
     if not env_name and env_from_var:
@@ -72,7 +79,7 @@ def feature_env(feature_name, generate, env_name):
         raise SystemExit(1)
 
     # 4️⃣ Ruta del symlink del producto (con versión incluida)
-    symlink_path = os.path.join(workspace, product, "features", org_safe, feature_entry)
+    symlink_path = os.path.join(workspace, product, "features", org_safe, entry_basename)
     if not os.path.islink(symlink_path):
         click.echo(
             f"❌ Feature symlink not found for {feature_entry} in {symlink_path}"

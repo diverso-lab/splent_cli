@@ -45,9 +45,11 @@ def compile_feature(feature, watch, production):
     base_name, _, version = name_version.partition("@")
     version = version or "v1.0.0"
 
+    workspace = str(context.workspace())
+
     # Ruta en el producto (symlink)
     webpack_file = os.path.join(
-        "/workspace",
+        workspace,
         product,
         "features",
         org_safe,
@@ -63,7 +65,7 @@ def compile_feature(feature, watch, production):
     # Si no existe, probar en la caché real
     if not os.path.exists(webpack_file):
         webpack_file = os.path.join(
-            "/workspace",
+            workspace,
             ".splent_cache",
             "features",
             org_safe,
@@ -87,24 +89,21 @@ def compile_feature(feature, watch, production):
     click.echo(click.style(f"🚀 Compiling {feature}...", fg="cyan"))
 
     mode = "production" if production else "development"
-    extra_flags = "--devtool=source-map --no-cache" if not production else ""
-    watch_flag = "--watch" if watch and not production else ""
 
-    webpack_command = f"npx webpack --config '{webpack_file}' --mode {mode} {watch_flag} {extra_flags} --color"
+    cmd = ["npx", "webpack", "--config", webpack_file, "--mode", mode, "--color"]
+    if watch and not production:
+        cmd.append("--watch")
+    if not production:
+        cmd.extend(["--devtool=source-map", "--no-cache"])
 
     try:
         if watch:
-            subprocess.Popen(
-                webpack_command,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             click.echo(
                 click.style(f"👀 Watching {feature} in {mode} mode...", fg="blue")
             )
         else:
-            subprocess.run(webpack_command, shell=True, check=True)
+            subprocess.run(cmd, check=True)
             click.echo(
                 click.style(
                     f"✅ Successfully compiled {feature} in {mode} mode!", fg="green"

@@ -1,24 +1,8 @@
 import os
-from splent_cli.services import context
+from splent_cli.services import context, compose
 import shutil
 import click
 from pathlib import Path
-
-
-def _remove_broken_symlinks(workspace: Path) -> int:
-    removed = 0
-    for product_dir in workspace.iterdir():
-        features_dir = product_dir / "features"
-        if not features_dir.is_dir():
-            continue
-        for org_dir in features_dir.iterdir():
-            if not org_dir.is_dir():
-                continue
-            for link in org_dir.iterdir():
-                if link.is_symlink() and not link.exists():
-                    link.unlink()
-                    removed += 1
-    return removed
 
 
 @click.command("cache:clear", short_help="Clear the feature cache (total or partial).")
@@ -81,7 +65,7 @@ def cache_clear(namespace, feature, yes):
     click.secho(f"🧹 Cleared: {description}.", fg="green")
 
     # Clean broken symlinks
-    removed = _remove_broken_symlinks(workspace)
+    removed = compose.remove_broken_symlinks(workspace)
     if removed:
         click.secho(f"🔗 Removed {removed} broken feature symlink(s).", fg="yellow")
     else:

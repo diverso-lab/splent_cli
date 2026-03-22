@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import subprocess
 import click
 import tomllib
@@ -36,7 +37,7 @@ def doctor():
     click.echo(click.style("🧱 Environment", fg="cyan", bold=True))
     results = []
 
-    py_v = os.sys.version.split()[0]
+    py_v = sys.version.split()[0]
     results.append(_ok(f"Python {py_v}"))
 
     if os.getenv("WORKING_DIR"):

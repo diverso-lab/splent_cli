@@ -2,47 +2,14 @@ import os
 import subprocess
 import tomllib
 import click
-from splent_cli.services import context
-
-
-WORKSPACE = str(context.workspace())
-DEFAULT_ORG = "splent-io"         # GitHub org (con guión)
-DEFAULT_NAMESPACE = "splent_io"   # Filesystem namespace (con guión → guión bajo)
-
-
-# =====================================================================
-# PARSER: [namespace/]name[@version]
-# =====================================================================
-def parse_feature(feature: str):
-    """
-    Devuelve:
-        ns_git → splent-io
-        ns_fs  → splent_io
-        name   → splent_feature_auth
-        version→ v1.0.4 o None
-    """
-    if "/" in feature:
-        ns_git, rest = feature.split("/", 1)
-    else:
-        ns_git = DEFAULT_ORG
-        rest = feature
-
-    if "@" in rest:
-        name, version = rest.split("@", 1)
-    else:
-        name = rest
-        version = None
-
-    ns_fs = ns_git.replace("-", "_")
-    return ns_git, ns_fs, name, version
+from splent_cli.services import context, compose
 
 
 # =====================================================================
 # CACHE PATH RESOLVER
 # =====================================================================
-def get_cache_paths(ns_git: str, name: str, version: str | None):
-    ns_fs = ns_git.replace("-", "_")
-    base = os.path.join(WORKSPACE, ".splent_cache", "features", ns_fs)
+def get_cache_paths(workspace: str, ns_fs: str, name: str, version: str | None):
+    base = os.path.join(workspace, ".splent_cache", "features", ns_fs)
 
     versioned = os.path.join(base, f"{name}@{version}") if version else None
     editable = os.path.join(base, name)
@@ -120,9 +87,10 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
 )
 @click.argument("feature_name")
 def feature_edit(feature_name):
+    workspace = str(context.workspace())
     product = context.require_app()
 
-    product_path = os.path.join(WORKSPACE, product)
+    product_path = os.path.join(workspace, product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(pyproject_path):
@@ -146,7 +114,11 @@ def feature_edit(feature_name):
         click.echo(f"❌ Feature {feature_name} not found in pyproject.")
         raise SystemExit(1)
 
-    ns_git, ns_fs, name, version = parse_feature(match)
+    _, ns_git, ns_fs, rest = compose.parse_feature_identifier(match)
+    if "@" in rest:
+        name, version = rest.split("@", 1)
+    else:
+        name, version = rest, None
 
     if not version:
         click.echo("ℹ️ Feature already editable.")
@@ -154,7 +126,7 @@ def feature_edit(feature_name):
 
     click.echo(f"🧩 Editing feature {ns_git}/{name}@{version}")
 
-    versioned_path, editable_path = get_cache_paths(ns_git, name, version)
+    versioned_path, editable_path = get_cache_paths(workspace, ns_fs, name, version)
 
     if not os.path.exists(versioned_path):
         click.echo(f"❌ Versioned cache not found: {versioned_path}")

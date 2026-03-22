@@ -126,19 +126,16 @@ def product_env(generate, merge, env_name, process_all):
             if cleaned:
                 click.echo(cleaned)
 
-            if "docker directory not found" in cleaned:
-                no_template += 1
-                continue
-            if "No .env template" in cleaned or "⚠️" in cleaned:
-                no_template += 1
-                continue
             if result.returncode != 0:
-                failed += 1
+                if "docker directory not found" in cleaned:
+                    no_template += 1
+                else:
+                    failed += 1
                 continue
-            if "Created" in cleaned:
+            if "No .env template" in cleaned:
+                no_template += 1
+            elif "Created" in cleaned:
                 created += 1
-            elif "Existing" in cleaned:
-                skipped += 1
             else:
                 skipped += 1
 

@@ -27,13 +27,13 @@ def db_dump(filename):
         if not filename.endswith(".sql"):
             filename += ".sql"
 
-    # Build the mysqldump command
-    dump_cmd = f"mysqldump -h{mariadb_hostname} -u{mariadb_user} -p{mariadb_password} \
-        {mariadb_database} > {filename}"
-
-    # Execute the command
     try:
-        subprocess.run(dump_cmd, shell=True, check=True, executable="/bin/bash")
+        with open(filename, "wb") as out:
+            subprocess.run(
+                ["mysqldump", f"-h{mariadb_hostname}", f"-u{mariadb_user}", f"-p{mariadb_password}", mariadb_database],
+                stdout=out,
+                check=True,
+            )
         click.echo(
             click.style(f"Database dump created successfully: {filename}", fg="green")
         )

@@ -1,20 +1,22 @@
 import click
-from pathlib import Path
-
-WORKSPACE_ENV = Path("/workspace/.env")
+from splent_cli.services import context
 
 
 # -------------------------
 # UTILS
 # -------------------------
 
+def _env_path():
+    return context.workspace() / ".env"
+
+
 def load_env():
     """Return dict with all key=value from .env."""
-    if not WORKSPACE_ENV.exists():
-        WORKSPACE_ENV.write_text("")
+    env_file = _env_path()
+    if not env_file.exists():
         return {}
     data = {}
-    for line in WORKSPACE_ENV.read_text().splitlines():
+    for line in env_file.read_text().splitlines():
         if "=" in line and not line.startswith("#"):
             k, v = line.split("=", 1)
             data[k.strip()] = v.strip()
@@ -24,7 +26,7 @@ def load_env():
 def write_env(env: dict):
     """Write dict back to .env."""
     lines = [f"{k}={v}" for k, v in env.items()]
-    WORKSPACE_ENV.write_text("\n".join(lines) + "\n")
+    _env_path().write_text("\n".join(lines) + "\n")
 
 
 def set_var(key: str, value: str):

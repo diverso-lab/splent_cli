@@ -95,6 +95,7 @@ def product_deploy():
         )
         click.echo("🎯 Deployment successful!")
     except subprocess.CalledProcessError as e:
-        click.echo("❌ Deployment failed.")
-        click.echo(e)
+        click.secho("❌ Deployment failed.", fg="red")
+        if e.stderr:
+            click.echo(e.stderr)
         raise SystemExit(1)

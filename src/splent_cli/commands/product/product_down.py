@@ -20,15 +20,11 @@ def product_down(env, v):
 
     remove_volumes = False
     if v:
-        confirm = input(
-            "⚠️  This will remove ALL Docker volumes for the product and its features. Continue? (y/N): "
-        )
-        if confirm.lower() in ("y", "yes"):
-            remove_volumes = True
-            click.echo("🧹 Volumes will be removed.")
-        else:
+        if not click.confirm("⚠️  This will remove ALL Docker volumes for the product and its features. Continue?", default=False):
             click.echo("❎ Operation cancelled.")
             return
+        remove_volumes = True
+        click.echo("🧹 Volumes will be removed.")
 
     def shutdown(name, docker_dir):
         compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")

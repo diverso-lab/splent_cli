@@ -5,6 +5,7 @@ import shutil
 import os
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command(
@@ -15,11 +16,11 @@ def clear_cache():
     if click.confirm(
         "Are you sure you want to clear the pytest cache and the build directory?"
     ):
-        project_root = Path(os.getenv("WORKING_DIR", ""))
+        project_root = context.workspace()
 
         pytest_cache_dir = os.path.join(PathUtils.get_modules_dir(), ".pytest_cache")
 
-        build_dir = os.path.join(os.getenv("WORKING_DIR", ""), "build")
+        build_dir = str(project_root / "build")
 
         if os.path.exists(pytest_cache_dir):
             try:

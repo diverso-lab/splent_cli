@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 import stat
 import click
@@ -46,7 +47,7 @@ def make_product(name, features_file):
     web_port = 5000 + offset
     db_port = 33060 + offset
     redis_port = 6379 + offset
-    context = {
+    template_ctx = {
         "product_name": name,
         "pascal_name": pascalcase(name),
         "web_port": web_port,
@@ -73,7 +74,7 @@ def make_product(name, features_file):
     ]:
         os.makedirs(os.path.join(base_path, subdir), exist_ok=True)
 
-    open(os.path.join(base_path, "src", "__init__.py"), "a").close()
+    Path(os.path.join(base_path, "src", "__init__.py")).touch()
 
     jinja_templates = {
         "docker/.env.dev.example": "product/product_.env.dev.example.j2",
@@ -118,7 +119,7 @@ def make_product(name, features_file):
 
     for rel_path, tpl in jinja_templates.items():
         abs_path = os.path.join(base_path, rel_path)
-        render_and_write_file(env, tpl, abs_path, context)
+        render_and_write_file(env, tpl, abs_path, template_ctx)
 
     for rel_path, tpl in raw_files.items():
         abs_path = os.path.join(base_path, rel_path)

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import click
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from splent_cli.utils.path_utils import PathUtils
@@ -121,7 +122,7 @@ def make_feature(full_name):
             render_and_write_file(env, template, full_path, context)
         else:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            open(full_path, "a").close()
+            Path(full_path).touch()
 
     # --- Create base files ---
     for filename, template in base_files_and_templates.items():
@@ -130,7 +131,7 @@ def make_feature(full_name):
             render_and_write_file(env, template, full_path, context)
         else:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            open(full_path, "a").close()
+            Path(full_path).touch()
 
     # --- src/__init__.py (namespace root) ---
     src_root = os.path.join(cache_dir, "src")

@@ -4,9 +4,7 @@ import sys
 import subprocess
 import click
 import requests
-
-
-WORKSPACE = "/workspace"
+from splent_cli.services import context
 
 
 # =====================================================================
@@ -42,8 +40,9 @@ def update_version(pyproject_path: str, version: str):
 
 
 def commit_and_push(package_path: str, version: str):
-    os.chdir(package_path)
-    r = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+    r = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=package_path
+    )
     if not r.stdout.strip():
         click.echo("✅ Working tree clean — nothing to commit.")
         return
@@ -51,32 +50,32 @@ def commit_and_push(package_path: str, version: str):
     click.echo(r.stdout.strip())
     if not click.confirm("Commit and push?", default=True):
         raise SystemExit("🚫 Release cancelled.")
-    subprocess.run(["git", "add", "-A"], check=True)
-    subprocess.run(["git", "commit", "-m", f"chore: bump version to {version}"], check=True)
-    subprocess.run(["git", "push", "origin", "main"], check=True)
+    subprocess.run(["git", "add", "-A"], check=True, cwd=package_path)
+    subprocess.run(["git", "commit", "-m", f"chore: bump version to {version}"], check=True, cwd=package_path)
+    subprocess.run(["git", "push", "origin", "main"], check=True, cwd=package_path)
     click.echo("☁️  Changes committed and pushed.")
 
 
 def tag_and_push(package_path: str, version: str) -> str:
-    os.chdir(package_path)
-    subprocess.run(["git", "fetch", "origin", "--tags"])
-    tags = subprocess.run(["git", "tag"], capture_output=True, text=True).stdout.splitlines()
+    subprocess.run(["git", "fetch", "origin", "--tags"], cwd=package_path)
+    tags = subprocess.run(
+        ["git", "tag"], capture_output=True, text=True, cwd=package_path
+    ).stdout.splitlines()
     tag = f"v{version}"
     if tag not in tags:
-        subprocess.run(["git", "tag", "-a", tag, "-m", f"Release {tag}"], check=True)
+        subprocess.run(["git", "tag", "-a", tag, "-m", f"Release {tag}"], check=True, cwd=package_path)
         click.echo(f"🏷️  Tag {tag} created.")
     else:
         click.echo(f"⚠️  Tag {tag} already exists — skipping.")
-    subprocess.run(["git", "push", "origin", tag], check=True)
+    subprocess.run(["git", "push", "origin", tag], check=True, cwd=package_path)
     click.echo("☁️  Tag pushed.")
     return tag
 
 
 def extract_repo(package_path: str) -> str:
-    os.chdir(package_path)
     url = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
-        capture_output=True, text=True
+        capture_output=True, text=True, cwd=package_path,
     ).stdout.strip()
     for pattern in [
         r"https://[^@]+@github\.com/(?P<org>[^/]+)/(?P<repo>.+?)(?:\.git)?$",
@@ -125,17 +124,17 @@ def create_github_release(repo: str, tag: str, version: str, token: str):
 
 
 def build_and_upload(package_path: str):
-    os.chdir(package_path)
     click.echo("📦 Building package...")
-    subprocess.run(["rm", "-rf", "dist", "build"], check=True)
-    subprocess.run(["find", ".", "-maxdepth", "1", "-name", "*.egg-info", "-exec", "rm", "-rf", "{}", "+"])
-    subprocess.run(["find", ".", "-maxdepth", "1", "-type", "d", "-name", "*-*.*.*", "-exec", "rm", "-rf", "{}", "+"])
-    subprocess.run([sys.executable, "-m", "build"], check=True)
+    subprocess.run(["rm", "-rf", "dist", "build"], check=True, cwd=package_path)
+    subprocess.run(["find", ".", "-maxdepth", "1", "-name", "*.egg-info", "-exec", "rm", "-rf", "{}", "+"], cwd=package_path)
+    subprocess.run(["find", ".", "-maxdepth", "1", "-type", "d", "-name", "*-*.*.*", "-exec", "rm", "-rf", "{}", "+"], cwd=package_path)
+    subprocess.run([sys.executable, "-m", "build"], check=True, cwd=package_path)
     click.echo("📤 Uploading to PyPI...")
     subprocess.run(
         [sys.executable, "-m", "twine", "upload", "dist/*"],
         env=os.environ.copy(),
         check=True,
+        cwd=package_path,
     )
     click.echo("✅ PyPI upload complete.")
 
@@ -176,7 +175,8 @@ def run_release(package_name: str, package_path: str, version: str):
 )
 @click.argument("version")
 def release_cli(version: str):
-    run_release("splent_cli", os.path.join(WORKSPACE, "splent_cli"), version)
+    workspace = str(context.workspace())
+    run_release("splent_cli", os.path.join(workspace, "splent_cli"), version)
 
 
 @click.command(
@@ -185,4 +185,5 @@ def release_cli(version: str):
 )
 @click.argument("version")
 def release_framework(version: str):
-    run_release("splent_framework", os.path.join(WORKSPACE, "splent_framework"), version)
+    workspace = str(context.workspace())
+    run_release("splent_framework", os.path.join(workspace, "splent_framework"), version)

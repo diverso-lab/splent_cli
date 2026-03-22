@@ -4,7 +4,8 @@ Tests for the cache:clear command.
 import pytest
 from click.testing import CliRunner
 
-from splent_cli.commands.cache.cache_clear import cache_clear, _remove_broken_symlinks
+from splent_cli.commands.cache.cache_clear import cache_clear
+from splent_cli.services.compose import remove_broken_symlinks as _remove_broken_symlinks
 
 
 @pytest.fixture

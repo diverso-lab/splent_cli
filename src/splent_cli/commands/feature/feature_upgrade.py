@@ -137,8 +137,9 @@ def feature_upgrade(feature_ref, yes):
         ns_dir = None
         ns_fs = None
         for ns in cache_root.iterdir():
-            if ns.is_dir() and (ns / name).exists() or any(
-                d.name.startswith(f"{name}@") for d in ns.iterdir() if d.is_dir()
+            if ns.is_dir() and (
+                (ns / name).exists()
+                or any(d.name.startswith(f"{name}@") for d in ns.iterdir() if d.is_dir())
             ):
                 ns_dir = ns
                 ns_fs = ns.name

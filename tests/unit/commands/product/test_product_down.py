@@ -65,19 +65,16 @@ class TestBasicShutdown:
 # ---------------------------------------------------------------------------
 
 class TestVolumeRemoval:
-    def test_cancel_skips_removal(self, runner, product_workspace, monkeypatch):
-        monkeypatch.setattr("builtins.input", lambda _: "n")
+    def test_cancel_skips_removal(self, runner, product_workspace):
         with patch("subprocess.run", side_effect=_success_run) as mock_run:
-            result = runner.invoke(product_down, ["--v"])
+            result = runner.invoke(product_down, ["--v"], input="n\n")
         assert result.exit_code == 0
         assert "cancelled" in result.output.lower()
-        # docker compose down should NOT have been called
         assert mock_run.call_count == 0
 
-    def test_confirm_adds_v_flag(self, runner, product_workspace, monkeypatch):
-        monkeypatch.setattr("builtins.input", lambda _: "y")
+    def test_confirm_adds_v_flag(self, runner, product_workspace):
         with patch("subprocess.run", side_effect=_success_run) as mock_run:
-            result = runner.invoke(product_down, ["--v"])
+            result = runner.invoke(product_down, ["--v"], input="y\n")
         calls_flat = [arg for c in mock_run.call_args_list for arg in c[0][0]]
         assert "-v" in calls_flat
 

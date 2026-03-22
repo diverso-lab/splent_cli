@@ -3,20 +3,7 @@ import re
 import subprocess
 import click
 import requests
-from splent_cli.services import context
-
-
-def parse_feature_identifier(identifier: str):
-    if "/" in identifier:
-        namespace, fname = identifier.split("/", 1)
-    else:
-        namespace = "splent-io"
-        fname = identifier
-
-    namespace_github = namespace.replace("_", "-")
-    namespace_fs = namespace.replace("-", "_")
-
-    return namespace, namespace_github, namespace_fs, fname
+from splent_cli.services import context, compose
 
 
 @click.command(
@@ -39,7 +26,7 @@ def feature_attach(feature_identifier, version):
 
     # --- Parse feature identifier -------------------------------------------
     namespace, namespace_github, namespace_fs, feature_name = \
-        parse_feature_identifier(feature_identifier)
+        compose.parse_feature_identifier(feature_identifier)
 
     cache_base = str(ws / ".splent_cache" / "features" / namespace_fs)
     product_path = str(ws / product)
