@@ -1,7 +1,10 @@
 import os
+
 # Base PathUtils (framework-level paths) lives in splent_framework.
 # This module re-exports it and adds CLI-specific path helpers on top.
-from splent_framework.utils.path_utils import PathUtils as _BasePathUtils, is_splent_dev_mode  # noqa: F401
+from splent_framework.utils.path_utils import (
+    PathUtils as _BasePathUtils,
+)  # noqa: F401
 
 
 class PathUtils(_BasePathUtils):

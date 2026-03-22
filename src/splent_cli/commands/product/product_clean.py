@@ -8,18 +8,25 @@ from splent_cli.services import compose, context
 def _docker_down(name: str, docker_dir: str, env: str):
     compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
     compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
-    compose_file = compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+    compose_file = (
+        compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+    )
     if not os.path.exists(compose_file):
         return
     project_name = compose.project_name(name, env)
     subprocess.run(
         ["docker", "compose", "-p", project_name, "-f", compose_file, "down", "-v"],
-        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     click.echo(f"  🛑  {name} stopped and volumes removed.")
 
 
-@click.command("product:clean", short_help="Full reset: stop containers, wipe volumes, reset DB, clear files.")
+@click.command(
+    "product:clean",
+    short_help="Full reset: stop containers, wipe volumes, reset DB, clear files.",
+)
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
@@ -63,7 +70,9 @@ def product_clean(env_dev, env_prod, yes):
     if os.path.exists(pyproject_path):
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        features = (
+            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        )
 
     _docker_down(product, os.path.join(product_path, "docker"), env)
     for feat in features:
@@ -77,7 +86,9 @@ def product_clean(env_dev, env_prod, yes):
         check=False,
     )
     if result.returncode != 0:
-        click.secho("  ⚠️  db:reset exited with errors — check output above.", fg="yellow")
+        click.secho(
+            "  ⚠️  db:reset exited with errors — check output above.", fg="yellow"
+        )
     else:
         click.secho("  ✔ Database reset.", fg="green")
 
@@ -94,7 +105,10 @@ def product_clean(env_dev, env_prod, yes):
         click.secho("  ✔ Log cleared.", fg="green")
 
     click.echo()
-    click.secho(f"✅ {product} ({env}) fully cleaned. Run 'splent product:up' to start fresh.", fg="green")
+    click.secho(
+        f"✅ {product} ({env}) fully cleaned. Run 'splent product:up' to start fresh.",
+        fg="green",
+    )
 
 
 cli_command = product_clean

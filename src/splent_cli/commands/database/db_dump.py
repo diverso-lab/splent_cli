@@ -30,7 +30,13 @@ def db_dump(filename):
     try:
         with open(filename, "wb") as out:
             subprocess.run(
-                ["mysqldump", f"-h{mariadb_hostname}", f"-u{mariadb_user}", f"-p{mariadb_password}", mariadb_database],
+                [
+                    "mysqldump",
+                    f"-h{mariadb_hostname}",
+                    f"-u{mariadb_user}",
+                    f"-p{mariadb_password}",
+                    mariadb_database,
+                ],
                 stdout=out,
                 check=True,
             )

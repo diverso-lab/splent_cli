@@ -7,7 +7,7 @@ from splent_cli.services import compose, context
 
 @click.command(
     "product:up",
-    short_help="Start the active product and all its features with Docker Compose."
+    short_help="Start the active product and all its features with Docker Compose.",
 )
 @click.option("--dev", is_flag=True, help="Run in development mode.")
 @click.option("--prod", is_flag=True, help="Run in production mode.")
@@ -40,7 +40,9 @@ def product_up(dev, prod):
             check=False,
         )
         if result.returncode != 0:
-            click.secho(f"❌  {name}: failed to start (exit {result.returncode})", fg="red")
+            click.secho(
+                f"❌  {name}: failed to start (exit {result.returncode})", fg="red"
+            )
         else:
             click.echo(f"✅  {name}: started successfully")
 

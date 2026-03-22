@@ -7,6 +7,7 @@ from splent_cli.commands.uvl.uvl_utils import (
     load_pyproject as _load_pyproject,
     get_uvl_cfg as _get_uvl_cfg,
     resolve_uvlhub_raw_url as _resolve_uvlhub_raw_url,
+    list_all_features_from_uvl as _list_all_features_from_uvl,
 )
 from splent_cli.services import context
 
@@ -36,22 +37,25 @@ def uvl_info():
     local_path = os.path.join(product_path, "uvl", file)
     exists = os.path.exists(local_path)
 
+    n_features = len(_list_all_features_from_uvl(local_path)[0]) if exists else None
+
     click.echo()
-    click.echo(click.style("🧬 UVL Information", fg="cyan", bold=True))
+    click.echo("UVL info")
+    click.echo(f"Product  : {app_name}")
+    click.echo(f"UVL      : {local_path}")
+    if n_features is not None:
+        click.echo(f"Features : {n_features}")
     click.echo()
 
-    click.echo(f"Product       : {app_name}")
-    click.echo(f"Mirror        : {mirror}")
-    click.echo(f"DOI           : {doi}")
-    click.echo(f"File          : {file}")
+    click.echo(f"Mirror   : {mirror}")
+    click.echo(f"DOI      : {doi}")
+    click.echo(f"File     : {file}")
+    click.echo(f"URL      : {url}")
     click.echo()
-
-    click.echo(f"Resolved URL  : {url}")
-    click.echo(f"Local path    : {local_path}")
 
     if exists:
-        click.echo(click.style("Status        : downloaded", fg="green"))
+        click.echo(click.style("Status   : downloaded", fg="green"))
     else:
-        click.echo(click.style("Status        : not downloaded", fg="yellow"))
+        click.echo(click.style("Status   : not downloaded", fg="yellow"))
 
     click.echo()

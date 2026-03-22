@@ -5,6 +5,7 @@ import click
 
 from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
 
+from splent_cli.services import context
 from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
     load_pyproject as _load_pyproject,
@@ -14,6 +15,7 @@ from splent_cli.commands.uvl.uvl_utils import (
     resolve_uvlhub_raw_url as _resolve_uvlhub_raw_url,
     list_all_features_from_uvl as _list_all_features_from_uvl,
     write_csvconf_full as _write_csvconf_full,
+    print_uvl_header as _print_uvl_header,
 )
 
 
@@ -21,10 +23,10 @@ from splent_cli.commands.uvl.uvl_utils import (
     "uvl:check",
     short_help="Validate pyproject feature selection against the downloaded UVL",
 )
-@click.option("--workspace", default="/workspace", show_default=True)
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option("--print-config", is_flag=True, help="Print the generated 0/1 assignment")
-def uvl_check(workspace, pyproject, print_config):
+def uvl_check(pyproject, print_config):
+    workspace = str(context.workspace())
     # 1) Active product
     app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
@@ -40,7 +42,9 @@ def uvl_check(workspace, pyproject, print_config):
     file = uvl_cfg.get("file")
 
     if not mirror or not doi or not file:
-        raise click.ClickException("Missing one of: mirror, doi, file in [tool.splent.uvl]")
+        raise click.ClickException(
+            "Missing one of: mirror, doi, file in [tool.splent.uvl]"
+        )
 
     resolved_url = _resolve_uvlhub_raw_url(mirror, doi, file)
 
@@ -65,7 +69,9 @@ def uvl_check(workspace, pyproject, print_config):
     # 6) Sanity: unknown features in pyproject
     unknown = sorted([f for f in selected if f not in universe])
     if unknown:
-        raise click.ClickException(f"pyproject contains features not present in UVL: {', '.join(unknown)}")
+        raise click.ClickException(
+            f"pyproject contains features not present in UVL: {', '.join(unknown)}"
+        )
 
     # 7) Build full csvconf (0/1 for all universe features)
     conf_path = _write_csvconf_full(universe, selected)
@@ -81,13 +87,9 @@ def uvl_check(workspace, pyproject, print_config):
             pass
 
     # 9) Output
-    click.echo()
-    click.echo("UVL check")
-    click.echo(f"Product      : {app_name}")
-    click.echo(f"UVL file     : {local_uvl}")
-    click.echo(f"UVL URL      : {resolved_url}")
-    click.echo(f"Universe     : {len(universe)} features")
-    click.echo(f"Selected     : {', '.join(sorted(selected))}")
+    _print_uvl_header("check", app_name, local_uvl, len(universe))
+    click.echo(f"URL      : {resolved_url}")
+    click.echo(f"Selected : {', '.join(sorted(selected))}")
     click.echo()
 
     if print_config:
@@ -96,7 +98,10 @@ def uvl_check(workspace, pyproject, print_config):
         click.echo()
 
     if not ok:
-        click.echo("FAIL: configuration is NOT satisfiable under the UVL constraints.", err=True)
+        click.echo(
+            "FAIL: configuration is NOT satisfiable under the UVL constraints.",
+            err=True,
+        )
         sys.exit(2)
 
     click.echo("OK: configuration is satisfiable.")

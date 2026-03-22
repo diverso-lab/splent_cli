@@ -41,17 +41,22 @@ def release_docker_image(product, version, docker_dir):
     password = os.getenv("DOCKERHUB_PASSWORD")
 
     click.echo("🐳 Logging into Docker Hub...")
-    subprocess.run(
-        ["docker", "login", "-u", username, "-p", password],
-        check=True
-    )
+    subprocess.run(["docker", "login", "-u", username, "-p", password], check=True)
 
     image_name = f"{username}/{product}"
 
     click.echo("🐳 Building Docker image...")
     subprocess.run(
-        ["docker", "build", "-t", f"{image_name}:{version}", "-t", f"{image_name}:latest", docker_dir],
-        check=True
+        [
+            "docker",
+            "build",
+            "-t",
+            f"{image_name}:{version}",
+            "-t",
+            f"{image_name}:latest",
+            docker_dir,
+        ],
+        check=True,
     )
 
     click.echo("📤 Pushing Docker images...")
@@ -95,7 +100,9 @@ def product_release(version, product):
     release.create_and_push_git_tag(product_path, version)
     remote_url = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
-        capture_output=True, text=True, cwd=product_path,
+        capture_output=True,
+        text=True,
+        cwd=product_path,
     ).stdout.strip()
     repo = release.extract_repo(remote_url)
 

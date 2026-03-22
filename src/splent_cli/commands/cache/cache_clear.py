@@ -1,4 +1,3 @@
-import os
 from splent_cli.services import context, compose
 import shutil
 import click
@@ -6,8 +5,16 @@ from pathlib import Path
 
 
 @click.command("cache:clear", short_help="Clear the feature cache (total or partial).")
-@click.option("--namespace", default=None, help="Clear only a specific namespace (e.g. splent_io).")
-@click.option("--feature", default=None, help="Clear all entries for a specific feature (e.g. splent_feature_auth).")
+@click.option(
+    "--namespace",
+    default=None,
+    help="Clear only a specific namespace (e.g. splent_io).",
+)
+@click.option(
+    "--feature",
+    default=None,
+    help="Clear all entries for a specific feature (e.g. splent_feature_auth).",
+)
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
 def cache_clear(namespace, feature, yes):
     """
@@ -28,10 +35,9 @@ def cache_clear(namespace, feature, yes):
 
     # Resolve targets
     if feature:
-        ns_filter = namespace or "*"
         targets = []
         search_in = [cache_root / namespace] if namespace else cache_root.iterdir()
-        for ns_dir in (search_in if namespace else cache_root.iterdir()):
+        for ns_dir in search_in if namespace else cache_root.iterdir():
             ns_dir = Path(ns_dir)
             if not ns_dir.is_dir():
                 continue
@@ -40,7 +46,9 @@ def cache_clear(namespace, feature, yes):
                 if base == feature:
                     targets.append(feat_dir)
         if not targets:
-            label = f"'{feature}'" + (f" in namespace '{namespace}'" if namespace else "")
+            label = f"'{feature}'" + (
+                f" in namespace '{namespace}'" if namespace else ""
+            )
             click.secho(f"⚠️  No cache entries found for {label}.", fg="yellow")
             raise SystemExit(0)
         description = f"{len(targets)} entry/entries for feature '{feature}'"
@@ -54,7 +62,9 @@ def cache_clear(namespace, feature, yes):
         targets = [cache_root]
         description = "entire feature cache"
 
-    if not yes and not click.confirm(f"⚠️  This will permanently delete the {description}. Continue?"):
+    if not yes and not click.confirm(
+        f"⚠️  This will permanently delete the {description}. Continue?"
+    ):
         click.echo("❎ Cancelled.")
         raise SystemExit(0)
 
@@ -73,5 +83,3 @@ def cache_clear(namespace, feature, yes):
 
 
 cli_command = cache_clear
-
-

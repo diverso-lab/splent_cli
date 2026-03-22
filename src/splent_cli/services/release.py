@@ -1,6 +1,7 @@
 """
 Shared release pipeline helpers used by product:release and feature:release.
 """
+
 import os
 import re
 import sys
@@ -12,7 +13,9 @@ import click
 def extract_repo(remote_url: str) -> str:
     """Extract 'org/repo' from a GitHub remote URL (HTTPS with/without token, or SSH)."""
     # HTTPS with token
-    m = re.match(r"https://[^@]+@github\.com/(?P<org>[^/]+)/(?P<repo>.+?)\.git$", remote_url)
+    m = re.match(
+        r"https://[^@]+@github\.com/(?P<org>[^/]+)/(?P<repo>.+?)\.git$", remote_url
+    )
     if m:
         return f"{m.group('org')}/{m.group('repo')}"
 
@@ -75,7 +78,9 @@ def create_and_push_git_tag(cwd: str, version: str):
     ).stdout.splitlines()
 
     if version not in tags:
-        subprocess.run(["git", "tag", "-a", version, "-m", f"Release {version}"], cwd=cwd)
+        subprocess.run(
+            ["git", "tag", "-a", version, "-m", f"Release {version}"], cwd=cwd
+        )
         click.echo(f"🏷️ Tag {version} created.")
     else:
         click.echo("⚠️ Tag already exists locally.")

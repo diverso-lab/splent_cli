@@ -1,4 +1,3 @@
-import os
 from splent_cli.services import context
 import re
 import click
@@ -17,7 +16,7 @@ def _get_feature_usage(workspace: Path) -> dict:
             continue
         content = pyproject.read_text()
         m = re.search(
-            r'\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]',
+            r"\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]",
             content,
             re.DOTALL,
         )
@@ -58,5 +57,3 @@ def cache_usage(feature):
 
 
 cli_command = cache_usage
-
-

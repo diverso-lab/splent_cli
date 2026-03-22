@@ -29,11 +29,15 @@ def product_deploy():
     # Validate required build artifacts
     # ---------------------------------------------------------
     if not os.path.isfile(env_example_path):
-        click.echo("❌ .env.deploy.example not found. Run `splent product:build` first.")
+        click.echo(
+            "❌ .env.deploy.example not found. Run `splent product:build` first."
+        )
         raise SystemExit(1)
 
     if not os.path.isfile(compose_path):
-        click.echo("❌ docker-compose.deploy.yml not found. Run `splent product:build` first.")
+        click.echo(
+            "❌ docker-compose.deploy.yml not found. Run `splent product:build` first."
+        )
         raise SystemExit(1)
 
     # ---------------------------------------------------------

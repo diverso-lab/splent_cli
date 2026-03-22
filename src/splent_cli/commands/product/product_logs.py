@@ -3,11 +3,20 @@ import click
 from splent_cli.services import compose, context
 
 
-@click.command("product:logs", short_help="Tail logs of the active product's containers.")
+@click.command(
+    "product:logs", short_help="Tail logs of the active product's containers."
+)
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")
-@click.option("--tail", default=50, show_default=True, help="Number of lines to show from the end.")
-@click.option("--no-follow", is_flag=True, help="Print logs and exit without following.")
+@click.option(
+    "--tail",
+    default=50,
+    show_default=True,
+    help="Number of lines to show from the end.",
+)
+@click.option(
+    "--no-follow", is_flag=True, help="Print logs and exit without following."
+)
 @click.option("--service", default=None, help="Show logs for a specific service only.")
 def product_logs(env_dev, env_prod, tail, no_follow, service):
     """
@@ -31,11 +40,15 @@ def product_logs(env_dev, env_prod, tail, no_follow, service):
 
     project_name = compose.project_name(product, env)
     cmd = [
-        "docker", "compose",
-        "-p", project_name,
-        "-f", compose_file,
+        "docker",
+        "compose",
+        "-p",
+        project_name,
+        "-f",
+        compose_file,
         "logs",
-        "--tail", str(tail),
+        "--tail",
+        str(tail),
     ]
     if not no_follow:
         cmd.append("-f")

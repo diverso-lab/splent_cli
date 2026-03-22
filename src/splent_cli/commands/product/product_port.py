@@ -10,6 +10,7 @@ from splent_cli.services import context
 # ENV LOADERS
 # ---------------------------------------------------------
 
+
 def load_global_env():
     """
     Load <workspace>/.env (global). Only needed for SPLENT_APP and global settings.
@@ -48,6 +49,7 @@ def load_product_env(app_name: str):
 # ENV RESOLUTION
 # ---------------------------------------------------------
 
+
 def resolve_env(user_env: str | None, product_env: dict):
     """
     Determine which environment should be used:
@@ -68,6 +70,7 @@ def resolve_env(user_env: str | None, product_env: dict):
 # ---------------------------------------------------------
 # COMPOSE LOADERS
 # ---------------------------------------------------------
+
 
 def resolve_compose_path(app: str, env: str):
     """
@@ -113,13 +116,13 @@ def find_app_service(app: str, compose: dict):
         if app.lower() in name.lower():
             return name, services[name]
 
-    raise click.ClickException(
-        f"No service for product '{app}' found in compose file."
-    )
+    raise click.ClickException(f"No service for product '{app}' found in compose file.")
+
 
 # ---------------------------------------------------------
 # HOST IP
 # ---------------------------------------------------------
+
 
 def detect_host_ip():
     """
@@ -130,9 +133,11 @@ def detect_host_ip():
         return "10.10.10.10"
     return "localhost"
 
+
 # ---------------------------------------------------------
 # DOCKER RUNTIME
 # ---------------------------------------------------------
+
 
 def get_runtime_ports(container_name: str):
     """
@@ -150,7 +155,7 @@ def get_runtime_ports(container_name: str):
 
     for line in result.stdout.splitlines():
         if line.startswith(container_name):
-            mapping = line[len(container_name):].strip()
+            mapping = line[len(container_name) :].strip()
 
             # Example mapping: "0.0.0.0:5435->5000/tcp"
             match = re.search(r"(\d+)->(\d+)", mapping)
@@ -170,6 +175,7 @@ def get_runtime_ports(container_name: str):
 # ---------------------------------------------------------
 # COMMAND
 # ---------------------------------------------------------
+
 
 @click.command("product:port", short_help="Show the product URL and PORT.")
 @click.option("--env", "env_flag", help="Environment to inspect (dev/prod).")

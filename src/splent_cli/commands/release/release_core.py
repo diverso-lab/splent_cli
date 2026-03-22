@@ -11,6 +11,7 @@ from splent_cli.services import context
 # SHARED HELPERS (same philosophy as feature:release)
 # =====================================================================
 
+
 def validate_env():
     missing = []
     if not os.getenv("GITHUB_TOKEN"):
@@ -41,7 +42,10 @@ def update_version(pyproject_path: str, version: str):
 
 def commit_and_push(package_path: str, version: str):
     r = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=package_path
+        ["git", "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        cwd=package_path,
     )
     if not r.stdout.strip():
         click.echo("✅ Working tree clean — nothing to commit.")
@@ -51,7 +55,11 @@ def commit_and_push(package_path: str, version: str):
     if not click.confirm("Commit and push?", default=True):
         raise SystemExit("🚫 Release cancelled.")
     subprocess.run(["git", "add", "-A"], check=True, cwd=package_path)
-    subprocess.run(["git", "commit", "-m", f"chore: bump version to {version}"], check=True, cwd=package_path)
+    subprocess.run(
+        ["git", "commit", "-m", f"chore: bump version to {version}"],
+        check=True,
+        cwd=package_path,
+    )
     subprocess.run(["git", "push", "origin", "main"], check=True, cwd=package_path)
     click.echo("☁️  Changes committed and pushed.")
 
@@ -63,7 +71,11 @@ def tag_and_push(package_path: str, version: str) -> str:
     ).stdout.splitlines()
     tag = f"v{version}"
     if tag not in tags:
-        subprocess.run(["git", "tag", "-a", tag, "-m", f"Release {tag}"], check=True, cwd=package_path)
+        subprocess.run(
+            ["git", "tag", "-a", tag, "-m", f"Release {tag}"],
+            check=True,
+            cwd=package_path,
+        )
         click.echo(f"🏷️  Tag {tag} created.")
     else:
         click.echo(f"⚠️  Tag {tag} already exists — skipping.")
@@ -75,7 +87,9 @@ def tag_and_push(package_path: str, version: str) -> str:
 def extract_repo(package_path: str) -> str:
     url = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
-        capture_output=True, text=True, cwd=package_path,
+        capture_output=True,
+        text=True,
+        cwd=package_path,
     ).stdout.strip()
     for pattern in [
         r"https://[^@]+@github\.com/(?P<org>[^/]+)/(?P<repo>.+?)(?:\.git)?$",
@@ -113,7 +127,13 @@ def create_github_release(repo: str, tag: str, version: str, token: str):
             "Authorization": f"token {token}",
             "Accept": "application/vnd.github+json",
         },
-        json={"tag_name": tag, "name": f"Release {tag}", "body": body, "draft": False, "prerelease": False},
+        json={
+            "tag_name": tag,
+            "name": f"Release {tag}",
+            "body": body,
+            "draft": False,
+            "prerelease": False,
+        },
     )
     if resp.status_code in (200, 201):
         click.echo(f"✅ GitHub release created: {resp.json().get('html_url')}")
@@ -126,8 +146,40 @@ def create_github_release(repo: str, tag: str, version: str, token: str):
 def build_and_upload(package_path: str):
     click.echo("📦 Building package...")
     subprocess.run(["rm", "-rf", "dist", "build"], check=True, cwd=package_path)
-    subprocess.run(["find", ".", "-maxdepth", "1", "-name", "*.egg-info", "-exec", "rm", "-rf", "{}", "+"], cwd=package_path)
-    subprocess.run(["find", ".", "-maxdepth", "1", "-type", "d", "-name", "*-*.*.*", "-exec", "rm", "-rf", "{}", "+"], cwd=package_path)
+    subprocess.run(
+        [
+            "find",
+            ".",
+            "-maxdepth",
+            "1",
+            "-name",
+            "*.egg-info",
+            "-exec",
+            "rm",
+            "-rf",
+            "{}",
+            "+",
+        ],
+        cwd=package_path,
+    )
+    subprocess.run(
+        [
+            "find",
+            ".",
+            "-maxdepth",
+            "1",
+            "-type",
+            "d",
+            "-name",
+            "*-*.*.*",
+            "-exec",
+            "rm",
+            "-rf",
+            "{}",
+            "+",
+        ],
+        cwd=package_path,
+    )
     subprocess.run([sys.executable, "-m", "build"], check=True, cwd=package_path)
     click.echo("📤 Uploading to PyPI...")
     subprocess.run(
@@ -169,6 +221,7 @@ def run_release(package_name: str, package_path: str, version: str):
 # COMMANDS
 # =====================================================================
 
+
 @click.command(
     "release:cli",
     short_help="Release splent_cli: bump version, tag, publish to GitHub/PyPI.",
@@ -186,4 +239,6 @@ def release_cli(version: str):
 @click.argument("version")
 def release_framework(version: str):
     workspace = str(context.workspace())
-    run_release("splent_framework", os.path.join(workspace, "splent_framework"), version)
+    run_release(
+        "splent_framework", os.path.join(workspace, "splent_framework"), version
+    )

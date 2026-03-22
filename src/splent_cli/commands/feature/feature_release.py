@@ -6,7 +6,7 @@ from splent_cli.commands.feature.feature_attach import feature_attach
 from splent_cli.services import context, release
 
 
-DEFAULT_NAMESPACE = os.getenv('SPLENT_DEFAULT_NAMESPACE', 'splent_io')
+DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 
 # =====================================================================
@@ -63,7 +63,9 @@ def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
             f"   Use: {ns}/{name}"
         )
 
-    cache_base = os.path.join(workspace, ".splent_cache", "features", ns.replace("-", "_"))
+    cache_base = os.path.join(
+        workspace, ".splent_cache", "features", ns.replace("-", "_")
+    )
     base_dir = os.path.join(cache_base, name)
 
     if not os.path.exists(base_dir):
@@ -92,7 +94,7 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
 
     subprocess.run(
         ["git", "clone", "--branch", version, "--depth", "1", clone_url, snapshot_path],
-        check=True
+        check=True,
     )
 
     click.echo("✅ Snapshot created.")
@@ -103,19 +105,18 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
 # =====================================================================
 @click.command(
     "feature:release",
-    short_help="Release a feature: bump version, tag, publish to GitHub/PyPI, and snapshot."
+    short_help="Release a feature: bump version, tag, publish to GitHub/PyPI, and snapshot.",
 )
 @click.argument("feature_ref")
 @click.argument("version")
 @click.option("--attach", is_flag=True)
 def feature_release(feature_ref, version, attach):
-
     validate_environment()
 
     workspace = str(context.workspace())
 
-    feature_path, namespace, feature_name, normalized = (
-        resolve_feature_path(feature_ref, version, workspace)
+    feature_path, namespace, feature_name, normalized = resolve_feature_path(
+        feature_ref, version, workspace
     )
 
     click.echo(f"🚀 Releasing {namespace}/{feature_name}@{version}")
@@ -126,7 +127,9 @@ def feature_release(feature_ref, version, attach):
     release.create_and_push_git_tag(feature_path, version)
     remote_url = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
-        capture_output=True, text=True, cwd=feature_path,
+        capture_output=True,
+        text=True,
+        cwd=feature_path,
     ).stdout.strip()
     repo = release.extract_repo(remote_url)
     release.create_github_release(repo, version, os.getenv("GITHUB_TOKEN"))

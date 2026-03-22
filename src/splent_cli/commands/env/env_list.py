@@ -7,14 +7,14 @@ from splent_cli.services import context
 _SENSITIVE = ("TOKEN", "SECRET", "PASSWORD", "KEY", "PWD", "PASS")
 
 _CATEGORIES = [
-    ("SPLENT_",   "SPLENT"),
-    ("GITHUB_",   "GitHub"),
-    ("PYPI_",     "PyPI"),
-    ("DB_",       "Database"),
-    ("REDIS_",    "Redis"),
-    ("MAIL_",     "Mail"),
-    ("AWS_",      "AWS"),
-    ("CELERY_",   "Celery"),
+    ("SPLENT_", "SPLENT"),
+    ("GITHUB_", "GitHub"),
+    ("PYPI_", "PyPI"),
+    ("DB_", "Database"),
+    ("REDIS_", "Redis"),
+    ("MAIL_", "Mail"),
+    ("AWS_", "AWS"),
+    ("CELERY_", "Celery"),
 ]
 
 
@@ -53,9 +53,15 @@ def _read_env_file(path: Path) -> dict[str, str]:
 
 @click.command("env:list", short_help="List variables in the active .env file.")
 @click.argument("filter", required=False, metavar="FILTER")
-@click.option("--keys-only", is_flag=True, help="Print only variable names, one per line.")
+@click.option(
+    "--keys-only", is_flag=True, help="Print only variable names, one per line."
+)
 @click.option("--no-mask", is_flag=True, help="Show sensitive values in plain text.")
-@click.option("--unset", is_flag=True, help="Show only variables that are NOT currently set in the process environment.")
+@click.option(
+    "--unset",
+    is_flag=True,
+    help="Show only variables that are NOT currently set in the process environment.",
+)
 def env_list(filter, keys_only, no_mask, unset):
     """
     List variables defined in /workspace/.env.
@@ -91,7 +97,9 @@ def env_list(filter, keys_only, no_mask, unset):
     if unset:
         data = {k: v for k, v in data.items() if not os.environ.get(k)}
         if not data:
-            click.secho("✅ All variables are set in the current environment.", fg="green")
+            click.secho(
+                "✅ All variables are set in the current environment.", fg="green"
+            )
             return
 
     # --keys-only: simple list for scripting
@@ -115,7 +123,7 @@ def env_list(filter, keys_only, no_mask, unset):
             if in_env is None:
                 indicator = click.style("·", fg="yellow")  # defined in file, not in env
             elif in_env == v:
-                indicator = click.style("✔", fg="green")   # loaded and matches
+                indicator = click.style("✔", fg="green")  # loaded and matches
             else:
                 indicator = click.style("≠", fg="yellow")  # loaded but differs
             click.echo(f"    {indicator} {k:<{col}} {display}")

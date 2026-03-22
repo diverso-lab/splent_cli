@@ -1,4 +1,3 @@
-import os
 from splent_cli.services import context
 import click
 from pathlib import Path
@@ -25,7 +24,9 @@ def _get_cache_grouped(cache_root: Path) -> dict:
     return grouped
 
 
-@click.command("cache:status", short_help="Show all cached features (versioned vs editable).")
+@click.command(
+    "cache:status", short_help="Show all cached features (versioned vs editable)."
+)
 def cache_status():
     """Lists all features in cache, showing which are editable and which are versioned snapshots."""
     workspace = context.workspace()
@@ -37,7 +38,10 @@ def cache_status():
         return
 
     total = sum(len(v) for v in grouped.values())
-    click.secho(f"Feature cache — {len(grouped)} feature(s), {total} total entries:\n", fg="cyan")
+    click.secho(
+        f"Feature cache — {len(grouped)} feature(s), {total} total entries:\n",
+        fg="cyan",
+    )
 
     for feature, versions in sorted(grouped.items()):
         click.secho(f"  {feature}", bold=True)
@@ -52,5 +56,3 @@ def cache_status():
 
 
 cli_command = cache_status
-
-

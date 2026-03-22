@@ -1,7 +1,6 @@
 # Shim — these utils live in splent_framework.utils.feature_utils.
 # Kept here for backward compatibility with CLI commands that import from this module.
 from splent_framework.utils.feature_utils import get_features_from_pyproject  # noqa: F401
-from splent_framework.utils.path_utils import PathUtils
 
 
 def get_normalize_feature_name_in_splent_format(name: str) -> str:

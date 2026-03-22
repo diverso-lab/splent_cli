@@ -33,7 +33,9 @@ def product_derive(mode):
         raise SystemExit(1)
 
     if mode == "prod":
-        click.echo(click.style("🚧  --prod derivation is not yet available.", fg="yellow"))
+        click.echo(
+            click.style("🚧  --prod derivation is not yet available.", fg="yellow")
+        )
         raise SystemExit(0)
 
     ctx = click.get_current_context()
@@ -43,11 +45,17 @@ def product_derive(mode):
     click.echo(click.style("━━ [1/6] product:sync", fg="bright_black"))
     ctx.invoke(product_sync, force=False)
 
-    click.echo(click.style("\n━━ [2/6] product:env --generate --all --dev", fg="bright_black"))
-    ctx.invoke(product_env, generate=True, merge=False, env_name="dev", process_all=True)
+    click.echo(
+        click.style("\n━━ [2/6] product:env --generate --all --dev", fg="bright_black")
+    )
+    ctx.invoke(
+        product_env, generate=True, merge=False, env_name="dev", process_all=True
+    )
 
     click.echo(click.style("\n━━ [3/6] product:env --merge --dev", fg="bright_black"))
-    ctx.invoke(product_env, generate=False, merge=True, env_name="dev", process_all=False)
+    ctx.invoke(
+        product_env, generate=False, merge=True, env_name="dev", process_all=False
+    )
 
     click.echo(click.style("\n━━ [4/6] product:up --dev", fg="bright_black"))
     ctx.invoke(product_up, dev=True, prod=False)

@@ -22,8 +22,9 @@ def feature_detach(feature_identifier, version):
     ws = context.workspace()
 
     # --- Parse namespace + feature -----------------------------------------
-    namespace, namespace_github, namespace_fs, feature_name = \
+    namespace, namespace_github, namespace_fs, feature_name = (
         compose.parse_feature_identifier(feature_identifier)
+    )
 
     product_path = str(ws / product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")
@@ -54,6 +55,8 @@ def feature_detach(feature_identifier, version):
         os.unlink(link_path)
         click.echo(f"🔗 Removed symlink: {link_path}")
     else:
-        click.echo(f"⚠️ No symlink found for {feature_name}@{version} in {namespace_fs}/")
+        click.echo(
+            f"⚠️ No symlink found for {feature_name}@{version} in {namespace_fs}/"
+        )
 
     click.echo("🎯 Feature successfully detached.")

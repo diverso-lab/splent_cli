@@ -6,6 +6,7 @@ from splent_cli.services import context
 # UTILS
 # -------------------------
 
+
 def _env_path():
     return context.workspace() / ".env"
 
@@ -35,7 +36,7 @@ def set_var(key: str, value: str):
     env[key] = value
     write_env(env)
 
-    
+
 def remind_source():
     click.secho("\n💡 Remember to reload environment variables:", fg="blue")
     click.secho("   source .env\n")
@@ -45,11 +46,12 @@ def remind_source():
 # INTERNAL HANDLERS (reusables)
 # -------------------------
 
+
 def set_mode_interactive():
     click.echo("Select execution mode for SPLENT:")
     mode = click.prompt(
         "Enter 'dev' or 'prod'",
-        type=click.Choice(["dev", "prod"], case_sensitive=False)
+        type=click.Choice(["dev", "prod"], case_sensitive=False),
     )
     set_var("SPLENT_MODE", mode)
     click.secho(f"✔ SPLENT_MODE set to {mode}", fg="green")
@@ -81,10 +83,7 @@ def set_pypi_interactive():
 def set_developer_interactive():
     click.echo("Enable SSH usage for SPLENT feature development?")
 
-    answer = click.prompt(
-        "(y/n)",
-        type=click.Choice(["y", "n"], case_sensitive=False)
-    )
+    answer = click.prompt("(y/n)", type=click.Choice(["y", "n"], case_sensitive=False))
     enabled = "true" if answer == "y" else "false"
 
     set_var("SPLENT_DEVELOPER_SSH", enabled)
@@ -97,8 +96,15 @@ def set_developer_interactive():
 # ROOT COMMAND
 # -------------------------
 
-@click.group("env:set", short_help="Set environment variables interactively", invoke_without_command=True)
-@click.option("--wizard", is_flag=True, help="Run interactive environment setup wizard.")
+
+@click.group(
+    "env:set",
+    short_help="Set environment variables interactively",
+    invoke_without_command=True,
+)
+@click.option(
+    "--wizard", is_flag=True, help="Run interactive environment setup wizard."
+)
 @click.pass_context
 def env_set_group(ctx, wizard):
     """Base command for environment configuration."""
@@ -110,6 +116,7 @@ def env_set_group(ctx, wizard):
 # -------------------------
 # SUBCOMMANDS (simple wrappers)
 # -------------------------
+
 
 @env_set_group.command("mode")
 def env_set_mode():
@@ -134,6 +141,7 @@ def env_set_developer():
 # -------------------------
 # WIZARD
 # -------------------------
+
 
 def run_wizard():
     while True:

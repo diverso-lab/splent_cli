@@ -47,11 +47,19 @@ def check_github():
             rate_limit = resp.headers.get("X-RateLimit-Limit", "?")
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            click.echo(click.style("[✖] ", fg="red") + "Token invalid or expired (401 Unauthorized)")
+            click.echo(
+                click.style("[✖] ", fg="red")
+                + "Token invalid or expired (401 Unauthorized)"
+            )
         elif e.code == 403:
-            click.echo(click.style("[✖] ", fg="red") + "Token lacks required permissions (403 Forbidden)")
+            click.echo(
+                click.style("[✖] ", fg="red")
+                + "Token lacks required permissions (403 Forbidden)"
+            )
         else:
-            click.echo(click.style("[✖] ", fg="red") + f"GitHub API error: HTTP {e.code}")
+            click.echo(
+                click.style("[✖] ", fg="red") + f"GitHub API error: HTTP {e.code}"
+            )
         raise SystemExit(1)
     except urllib.error.URLError as e:
         click.echo(click.style("[✖] ", fg="red") + f"Network error: {e.reason}")
@@ -71,7 +79,10 @@ def check_github():
     plan = (data.get("plan") or {}).get("name", "-")
     click.echo(click.style("[✔] ", fg="green") + f"Name: {name}")
     click.echo(click.style("[✔] ", fg="green") + f"Plan: {plan}")
-    click.echo(click.style("[✔] ", fg="green") + f"Rate limit: {rate_remaining}/{rate_limit} remaining")
+    click.echo(
+        click.style("[✔] ", fg="green")
+        + f"Rate limit: {rate_remaining}/{rate_limit} remaining"
+    )
 
     click.echo()
     click.secho("✅ GitHub credentials OK.", fg="green")

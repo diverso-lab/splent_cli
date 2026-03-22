@@ -1,4 +1,3 @@
-import os
 from splent_cli.services import context
 import click
 from pathlib import Path
@@ -43,7 +42,11 @@ def cache_size():
             size = _dir_size(feat_dir)
             connector = "└──" if i == len(entries) - 1 else "├──"
             name = feat_dir.name
-            label = click.style(f"@{name.split('@')[1]}", fg="green") if "@" in name else click.style("editable", fg="blue")
+            label = (
+                click.style(f"@{name.split('@')[1]}", fg="green")
+                if "@" in name
+                else click.style("editable", fg="blue")
+            )
             base = name.split("@")[0] if "@" in name else name
             click.echo(f"    {connector} {base}  {label}  {_human(size)}")
         click.echo()
@@ -52,5 +55,3 @@ def cache_size():
 
 
 cli_command = cache_size
-
-

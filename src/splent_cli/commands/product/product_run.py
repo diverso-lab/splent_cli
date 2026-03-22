@@ -5,20 +5,13 @@ from splent_cli.services import compose, context
 
 
 @click.command(
-    "product:run",
-    short_help="Run the product entrypoint inside its main container."
+    "product:run", short_help="Run the product entrypoint inside its main container."
 )
 @click.option(
-    "--dev",
-    "env_dev",
-    is_flag=True,
-    help="Run using the development environment."
+    "--dev", "env_dev", is_flag=True, help="Run using the development environment."
 )
 @click.option(
-    "--prod",
-    "env_prod",
-    is_flag=True,
-    help="Run using the production environment."
+    "--prod", "env_prod", is_flag=True, help="Run using the production environment."
 )
 def product_runc(env_dev, env_prod):
     """

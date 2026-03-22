@@ -8,7 +8,7 @@ from splent_cli.commands.feature.feature_clone import feature_clone
 
 @click.command(
     "product:sync",
-    short_help="Sync all versioned features declared in the active product."
+    short_help="Sync all versioned features declared in the active product.",
 )
 @click.pass_context
 @click.option(
@@ -28,7 +28,9 @@ def product_sync(ctx, force):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    features = (
+        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    )
 
     if not features:
         click.secho("ℹ️ No features declared.", fg="yellow")

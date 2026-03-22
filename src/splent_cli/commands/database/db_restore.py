@@ -32,12 +32,16 @@ def db_restore(filename, yes):
     password = os.getenv("MARIADB_PASSWORD")
     database = os.getenv("MARIADB_DATABASE")
 
-    missing = [k for k, v in {
-        "MARIADB_HOSTNAME": host,
-        "MARIADB_USER": user,
-        "MARIADB_PASSWORD": password,
-        "MARIADB_DATABASE": database,
-    }.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "MARIADB_HOSTNAME": host,
+            "MARIADB_USER": user,
+            "MARIADB_PASSWORD": password,
+            "MARIADB_DATABASE": database,
+        }.items()
+        if not v
+    ]
 
     if missing:
         click.secho(f"❌ Missing env vars: {', '.join(missing)}", fg="red")

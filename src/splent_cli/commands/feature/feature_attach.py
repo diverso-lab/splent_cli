@@ -25,8 +25,9 @@ def feature_attach(feature_identifier, version):
     ws = context.workspace()
 
     # --- Parse feature identifier -------------------------------------------
-    namespace, namespace_github, namespace_fs, feature_name = \
+    namespace, namespace_github, namespace_fs, feature_name = (
         compose.parse_feature_identifier(feature_identifier)
+    )
 
     cache_base = str(ws / ".splent_cache" / "features" / namespace_fs)
     product_path = str(ws / product)
@@ -48,7 +49,9 @@ def feature_attach(feature_identifier, version):
         f"https://api.github.com/repos/{namespace_github}/{feature_name}/git/refs/tags/{version}",
         f"https://api.github.com/repos/{namespace_github}/{feature_name}/releases/tags/{version}",
     ]
-    html_url = f"https://github.com/{namespace_github}/{feature_name}/releases/tag/{version}"
+    html_url = (
+        f"https://github.com/{namespace_github}/{feature_name}/releases/tag/{version}"
+    )
 
     exists = False
     for url in tag_api_urls:

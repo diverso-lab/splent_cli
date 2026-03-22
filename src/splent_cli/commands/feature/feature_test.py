@@ -26,8 +26,8 @@ def _pkg_name(ref: str) -> str:
     'splent_feature_auth@v1.1.0'           -> 'splent_feature_auth'
     'splent_feature_auth'                  -> 'splent_feature_auth'
     """
-    name = ref.split("/")[-1]   # strip namespace
-    name = name.split("@")[0]   # strip version
+    name = ref.split("/")[-1]  # strip namespace
+    name = name.split("@")[0]  # strip version
     return name
 
 
@@ -73,14 +73,18 @@ def _get_feature_roots(feature_ref=None) -> list[tuple[str, Path]]:
 
     raw_refs = get_features_from_pyproject()
     if not raw_refs:
-        click.secho(f"⚠️  No features declared in {splent_app}/pyproject.toml.", fg="yellow")
+        click.secho(
+            f"⚠️  No features declared in {splent_app}/pyproject.toml.", fg="yellow"
+        )
         raise SystemExit(1)
 
     if feature_ref:
         normalized = get_normalize_feature_name_in_splent_format(feature_ref)
         raw_refs = [r for r in raw_refs if _pkg_name(r) == normalized]
         if not raw_refs:
-            click.secho(f"❌ Feature '{normalized}' is not declared in this product.", fg="red")
+            click.secho(
+                f"❌ Feature '{normalized}' is not declared in this product.", fg="red"
+            )
             raise SystemExit(1)
 
     result = []
@@ -94,7 +98,9 @@ def _get_feature_roots(feature_ref=None) -> list[tuple[str, Path]]:
     return result
 
 
-def _collect_test_paths(feature_roots: list[tuple[str, Path]]) -> list[tuple[str, Path, Path]]:
+def _collect_test_paths(
+    feature_roots: list[tuple[str, Path]],
+) -> list[tuple[str, Path, Path]]:
     """Returns [(pkg_name, test_dir, src_dir), ...] for features that have a tests/ directory.
 
     Handles both flat and namespace-package layouts:
@@ -130,7 +136,9 @@ def _all_feature_src_dirs(workspace: Path, product: str) -> list[str]:
     return src_dirs
 
 
-def _run_pytest(test_paths: list[tuple[str, Path, Path]], keyword: str | None, verbose: bool):
+def _run_pytest(
+    test_paths: list[tuple[str, Path, Path]], keyword: str | None, verbose: bool
+):
     # Build a combined PYTHONPATH with ALL features in the cache so cross-feature
     # imports resolve correctly even when testing a single feature.
     workspace = context.workspace()
@@ -152,7 +160,8 @@ def _run_pytest(test_paths: list[tuple[str, Path, Path]], keyword: str | None, v
             str(test_dir),
             "--rootdir=.",
             "--ignore-glob=*selenium*",
-            "-W", "ignore::DeprecationWarning",
+            "-W",
+            "ignore::DeprecationWarning",
         ]
         if verbose:
             cmd.append("-v")
@@ -173,9 +182,14 @@ def _run_pytest(test_paths: list[tuple[str, Path, Path]], keyword: str | None, v
         raise SystemExit(1)
 
 
-@click.command("feature:test", short_help="Run pytest on one or all features of the active product.")
+@click.command(
+    "feature:test",
+    short_help="Run pytest on one or all features of the active product.",
+)
 @click.argument("feature_ref", required=False, metavar="FEATURE_REF")
-@click.option("-k", "keyword", help="Only run tests matching this keyword (passed to pytest).")
+@click.option(
+    "-k", "keyword", help="Only run tests matching this keyword (passed to pytest)."
+)
 @click.option("-v", "verbose", is_flag=True, help="Verbose pytest output.")
 def feature_test(feature_ref, keyword, verbose):
     """

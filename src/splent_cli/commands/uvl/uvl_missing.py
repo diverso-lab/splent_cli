@@ -3,6 +3,7 @@ from pathlib import Path
 
 import click
 
+from splent_cli.services import context
 from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
     load_pyproject as _load_pyproject,
@@ -11,6 +12,7 @@ from splent_cli.commands.uvl.uvl_utils import (
     normalize_feature_name as _normalize_feature_name,
     list_all_features_from_uvl as _list_all_features_from_uvl,
     extract_implications_from_uvl_text as _extract_implications_from_uvl_text,
+    print_uvl_header as _print_uvl_header,
 )
 
 
@@ -18,10 +20,12 @@ from splent_cli.commands.uvl.uvl_utils import (
     "uvl:missing",
     short_help="List missing required features according to UVL constraints (based on pyproject selection)",
 )
-@click.option("--workspace", default="/workspace", show_default=True)
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
-@click.option("--fail", is_flag=True, help="Exit with code 2 if missing dependencies are found")
-def uvl_missing(workspace, pyproject, fail):
+@click.option(
+    "--fail", is_flag=True, help="Exit with code 2 if missing dependencies are found"
+)
+def uvl_missing(pyproject, fail):
+    workspace = str(context.workspace())
     app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
 
@@ -35,7 +39,9 @@ def uvl_missing(workspace, pyproject, fail):
 
     local_uvl = os.path.join(product_path, "uvl", file)
     if not os.path.exists(local_uvl):
-        raise click.ClickException(f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)")
+        raise click.ClickException(
+            f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)"
+        )
 
     # universe + root
     universe, root_name = _list_all_features_from_uvl(local_uvl)
@@ -48,7 +54,9 @@ def uvl_missing(workspace, pyproject, fail):
     # sanity: selected must exist
     unknown = sorted([f for f in selected if f not in universe])
     if unknown:
-        raise click.ClickException(f"pyproject contains features not present in UVL: {', '.join(unknown)}")
+        raise click.ClickException(
+            f"pyproject contains features not present in UVL: {', '.join(unknown)}"
+        )
 
     # parse implications from UVL text
     uvl_text = Path(local_uvl).read_text(encoding="utf-8", errors="replace")
@@ -63,10 +71,7 @@ def uvl_missing(workspace, pyproject, fail):
             violations.append((a, b))
             missing_features.add(b)
 
-    click.echo()
-    click.echo("UVL missing")
-    click.echo(f"Product  : {app_name}")
-    click.echo(f"UVL      : {local_uvl}")
+    _print_uvl_header("missing", app_name, local_uvl, len(universe))
     click.echo(f"Selected : {', '.join(sorted(selected))}")
     click.echo()
 

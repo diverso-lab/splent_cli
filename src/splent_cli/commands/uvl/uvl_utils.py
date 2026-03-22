@@ -2,6 +2,7 @@
 Shared helpers for UVL commands.
 Centralises the logic that was previously copied verbatim across every uvl_*.py file.
 """
+
 import os
 import re
 import tempfile
@@ -17,7 +18,9 @@ def read_splent_app(workspace: str) -> str:
     """Read SPLENT_APP from workspace .env and validate the product directory exists."""
     env_path = os.path.join(workspace, ".env")
     if not os.path.exists(env_path):
-        raise click.ClickException(f"Missing {env_path} (run: splent product:select <app>)")
+        raise click.ClickException(
+            f"Missing {env_path} (run: splent product:select <app>)"
+        )
 
     app_name = None
     with open(env_path, "r", encoding="utf-8") as f:
@@ -56,11 +59,7 @@ def get_uvl_cfg(data: dict) -> dict:
 
 def get_feature_deps(data: dict) -> list[str]:
     """Return the features list from [project.optional-dependencies]."""
-    return (
-        data.get("project", {})
-        .get("optional-dependencies", {})
-        .get("features", [])
-    )
+    return data.get("project", {}).get("optional-dependencies", {}).get("features", [])
 
 
 def normalize_feature_name(dep: str) -> str:
@@ -73,7 +72,7 @@ def normalize_feature_name(dep: str) -> str:
         s = s.split("/", 1)[1]
     s = s.split("@", 1)[0]
     if s.startswith("splent_feature_"):
-        s = s[len("splent_feature_"):]
+        s = s[len("splent_feature_") :]
     if not s or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", s):
         raise click.ClickException(f"Cannot normalize feature dependency: {dep}")
     return s
@@ -105,7 +104,9 @@ def get_root_feature(fm):
             return r() if callable(r) else r
     if hasattr(fm, "get_root"):
         return fm.get_root()
-    raise click.ClickException("Cannot access root feature from Flamapy FM model object")
+    raise click.ClickException(
+        "Cannot access root feature from Flamapy FM model object"
+    )
 
 
 def list_all_features_from_uvl(uvl_path: str) -> tuple[list[str], str]:
@@ -152,6 +153,16 @@ def extract_implications_from_uvl_text(uvl_text: str) -> list[tuple[str, str]]:
         if m:
             pairs.append((m.group(1), m.group(2)))
     return pairs
+
+
+def print_uvl_header(command: str, app_name: str, local_uvl: str, n_features: int) -> None:
+    """Print the standard UVL command header."""
+    click.echo()
+    click.echo(f"UVL {command}")
+    click.echo(f"Product  : {app_name}")
+    click.echo(f"UVL      : {local_uvl}")
+    click.echo(f"Features : {n_features}")
+    click.echo()
 
 
 def write_csvconf_full(universe: list[str], selected: set[str]) -> str:

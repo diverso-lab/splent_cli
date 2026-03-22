@@ -23,13 +23,17 @@ def feature_delete(feature_identifier, version, force):
     workspace = str(context.workspace())
 
     # --- Parse namespace + feature -----------------------------------------
-    namespace, namespace_github, namespace_fs, feature_name = \
+    namespace, namespace_github, namespace_fs, feature_name = (
         compose.parse_feature_identifier(feature_identifier)
+    )
 
     # Path to cached version
     cache_dir = os.path.join(
-        workspace, ".splent_cache", "features", namespace_fs,
-        f"{feature_name}@{version}"
+        workspace,
+        ".splent_cache",
+        "features",
+        namespace_fs,
+        f"{feature_name}@{version}",
     )
 
     if not os.path.exists(cache_dir):
@@ -72,8 +76,7 @@ def feature_delete(feature_identifier, version, force):
 
         if not force:
             confirm = click.confirm(
-                "Do you really want to delete it anyway?",
-                default=False
+                "Do you really want to delete it anyway?", default=False
             )
             if not confirm:
                 click.echo("❌ Aborted.")

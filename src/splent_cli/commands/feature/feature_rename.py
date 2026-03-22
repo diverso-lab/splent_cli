@@ -74,7 +74,9 @@ def feature_rename(old_name, new_name, namespace):
     # -----------------------------
     # Context
     # -----------------------------
-    splent_app = os.getenv("SPLENT_APP")  # optional — used to update pyproject.toml if set
+    splent_app = os.getenv(
+        "SPLENT_APP"
+    )  # optional — used to update pyproject.toml if set
     pyproject_path = None
     features_list = []
     feature_is_active = False

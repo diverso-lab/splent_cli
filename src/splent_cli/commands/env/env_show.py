@@ -1,5 +1,4 @@
 import click
-from pathlib import Path
 import subprocess
 from splent_cli.services import context
 
@@ -13,7 +12,7 @@ def _mask(value: str, key: str) -> str:
 
 @click.command(
     "env:show",
-    short_help="Display .env variables and check which ones are currently loaded in the shell."
+    short_help="Display .env variables and check which ones are currently loaded in the shell.",
 )
 def env_show():
     """Check which variables from .env are actually available in the current Bash shell."""

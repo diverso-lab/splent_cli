@@ -21,6 +21,7 @@ def load_commands(cli_group):
                 except Exception as e:
                     if os.getenv("SPLENT_DEBUG"):
                         import sys
+
                         print(f"⚠  Skipping {module_name}: {e}", file=sys.stderr)
                     continue
 

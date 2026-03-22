@@ -1,10 +1,8 @@
-import os
 from splent_cli.services import context, compose
 import re
 import shutil
 import click
 from pathlib import Path
-from collections import defaultdict
 
 
 def _get_cache_entries(cache_root: Path) -> list:
@@ -20,21 +18,25 @@ def _get_cache_entries(cache_root: Path) -> list:
             feat = feat_dir.name
             if "@" in feat:
                 name, version = feat.split("@", 1)
-                entries.append({
-                    "namespace": ns_dir.name,
-                    "name": name,
-                    "version": version,
-                    "is_versioned": True,
-                    "path": feat_dir,
-                })
+                entries.append(
+                    {
+                        "namespace": ns_dir.name,
+                        "name": name,
+                        "version": version,
+                        "is_versioned": True,
+                        "path": feat_dir,
+                    }
+                )
             else:
-                entries.append({
-                    "namespace": ns_dir.name,
-                    "name": feat,
-                    "version": None,
-                    "is_versioned": False,
-                    "path": feat_dir,
-                })
+                entries.append(
+                    {
+                        "namespace": ns_dir.name,
+                        "name": feat,
+                        "version": None,
+                        "is_versioned": False,
+                        "path": feat_dir,
+                    }
+                )
     return entries
 
 
@@ -48,7 +50,7 @@ def _get_all_product_refs(workspace: Path) -> set:
             continue
         content = pyproject.read_text()
         m = re.search(
-            r'\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]',
+            r"\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]",
             content,
             re.DOTALL,
         )
@@ -62,7 +64,9 @@ def _get_all_product_refs(workspace: Path) -> set:
     return refs
 
 
-@click.command("cache:prune", short_help="Remove orphaned cache entries not used by any product.")
+@click.command(
+    "cache:prune", short_help="Remove orphaned cache entries not used by any product."
+)
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
 def cache_prune(yes):
     """
@@ -80,8 +84,10 @@ def cache_prune(yes):
     refs = _get_all_product_refs(workspace)
 
     orphans = [
-        e for e in entries
-        if (f"{e['name']}@{e['version']}" if e["is_versioned"] else e["name"]) not in refs
+        e
+        for e in entries
+        if (f"{e['name']}@{e['version']}" if e["is_versioned"] else e["name"])
+        not in refs
     ]
 
     if not orphans:
@@ -90,7 +96,11 @@ def cache_prune(yes):
 
     click.secho(f"Orphaned entries to remove ({len(orphans)}):", fg="yellow")
     for e in orphans:
-        label = f"{e['name']}@{e['version']}" if e["is_versioned"] else f"{e['name']}  (editable)"
+        label = (
+            f"{e['name']}@{e['version']}"
+            if e["is_versioned"]
+            else f"{e['name']}  (editable)"
+        )
         click.echo(f"  - {e['namespace']}/{label}")
 
     click.echo()
@@ -111,5 +121,3 @@ def cache_prune(yes):
 
 
 cli_command = cache_prune
-
-

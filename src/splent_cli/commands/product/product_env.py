@@ -7,8 +7,7 @@ from splent_cli.services import context
 
 
 @click.command(
-    "product:env",
-    short_help="Generate or merge .env files for the active product."
+    "product:env", short_help="Generate or merge .env files for the active product."
 )
 @click.option(
     "--generate",
@@ -121,7 +120,7 @@ def product_env(generate, merge, env_name, process_all):
             cmd = ["splent", "feature:env", base_name, "--generate", f"--{env_name}"]
             result = subprocess.run(cmd, capture_output=True, text=True)
             output = result.stdout.strip()
-            lines = [l.strip() for l in output.splitlines() if l.strip()]
+            lines = [line.strip() for line in output.splitlines() if line.strip()]
             cleaned = "\n".join(lines)
             if cleaned:
                 click.echo(cleaned)

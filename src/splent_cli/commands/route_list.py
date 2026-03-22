@@ -89,4 +89,3 @@ def print_route_table(rules):
             f"{click.style(methods, fg='magenta')}  "
             f"{route}"
         )
-

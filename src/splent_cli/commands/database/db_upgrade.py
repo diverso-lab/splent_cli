@@ -19,20 +19,28 @@ def db_upgrade(feature):
         dirs = {}
         mdir = MigrationManager.get_feature_migration_dir(feature)
         if not mdir:
-            click.echo(click.style(f"❌ No migrations directory found for '{feature}'.", fg="red"))
+            click.echo(
+                click.style(
+                    f"❌ No migrations directory found for '{feature}'.", fg="red"
+                )
+            )
             raise SystemExit(1)
         dirs[feature] = mdir
     else:
         dirs = MigrationManager.get_all_feature_migration_dirs()
         if not dirs:
-            click.echo(click.style("⚠️  No feature migrations directories found.", fg="yellow"))
+            click.echo(
+                click.style("⚠️  No feature migrations directories found.", fg="yellow")
+            )
             return
 
     for feat, mdir in dirs.items():
         click.echo(click.style(f"  ⬆️  Applying migrations for {feat}...", fg="cyan"))
         try:
             alembic_upgrade(directory=mdir)
-            revision = MigrationManager.get_current_feature_revision(feat, app.extensions["migrate"].db.engine)
+            revision = MigrationManager.get_current_feature_revision(
+                feat, app.extensions["migrate"].db.engine
+            )
             MigrationManager.update_feature_status(app, feat, revision)
             click.echo(click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green"))
         except Exception as e:

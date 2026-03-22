@@ -38,7 +38,9 @@ def _git_pull(path: Path) -> tuple:
         return False, "git not found"
 
 
-@click.command("feature:pull", short_help="Git pull on one or all editable features in cache.")
+@click.command(
+    "feature:pull", short_help="Git pull on one or all editable features in cache."
+)
 @click.argument("feature_ref", required=False)
 def feature_pull(feature_ref):
     """
@@ -65,11 +67,14 @@ def feature_pull(feature_ref):
             ns_filter = ns_filter.replace("-", "_")
 
         targets = [
-            f for f in all_features
+            f
+            for f in all_features
             if f[1] == name_filter and (ns_filter is None or f[0] == ns_filter)
         ]
         if not targets:
-            click.secho(f"⚠️  No editable cache entry found for '{feature_ref}'.", fg="yellow")
+            click.secho(
+                f"⚠️  No editable cache entry found for '{feature_ref}'.", fg="yellow"
+            )
             return
     else:
         targets = all_features
@@ -88,7 +93,10 @@ def feature_pull(feature_ref):
         click.echo(f"  {status}  {label}  {msg}")
 
     click.echo()
-    click.secho(f"{ok}/{len(targets)} pulled successfully.", fg="green" if ok == len(targets) else "yellow")
+    click.secho(
+        f"{ok}/{len(targets)} pulled successfully.",
+        fg="green" if ok == len(targets) else "yellow",
+    )
 
 
 cli_command = feature_pull

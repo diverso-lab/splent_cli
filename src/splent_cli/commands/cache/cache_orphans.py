@@ -1,9 +1,7 @@
-import os
 from splent_cli.services import context
 import re
 import click
 from pathlib import Path
-
 
 
 def _get_cache_entries(cache_root: Path) -> list:
@@ -20,19 +18,23 @@ def _get_cache_entries(cache_root: Path) -> list:
             feat = feat_dir.name
             if "@" in feat:
                 name, version = feat.split("@", 1)
-                entries.append({
-                    "namespace": ns_dir.name,
-                    "name": name,
-                    "version": version,
-                    "is_versioned": True,
-                })
+                entries.append(
+                    {
+                        "namespace": ns_dir.name,
+                        "name": name,
+                        "version": version,
+                        "is_versioned": True,
+                    }
+                )
             else:
-                entries.append({
-                    "namespace": ns_dir.name,
-                    "name": feat,
-                    "version": None,
-                    "is_versioned": False,
-                })
+                entries.append(
+                    {
+                        "namespace": ns_dir.name,
+                        "name": feat,
+                        "version": None,
+                        "is_versioned": False,
+                    }
+                )
     return entries
 
 
@@ -47,7 +49,7 @@ def _get_all_product_refs(workspace: Path) -> set:
             continue
         content = pyproject.read_text()
         m = re.search(
-            r'\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]',
+            r"\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]",
             content,
             re.DOTALL,
         )
@@ -62,7 +64,9 @@ def _get_all_product_refs(workspace: Path) -> set:
     return refs
 
 
-@click.command("cache:orphans", short_help="Show cached features not referenced by any product.")
+@click.command(
+    "cache:orphans", short_help="Show cached features not referenced by any product."
+)
 def cache_orphans():
     """Lists features in the cache that no product references in its pyproject.toml."""
     workspace = context.workspace()
@@ -93,5 +97,3 @@ def cache_orphans():
 
 
 cli_command = cache_orphans
-
-

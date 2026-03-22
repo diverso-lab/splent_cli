@@ -4,7 +4,9 @@ from dotenv import load_dotenv
 import os
 
 
-@click.command("db:console", short_help="Opens a MariaDB console with credentials from .env.")
+@click.command(
+    "db:console", short_help="Opens a MariaDB console with credentials from .env."
+)
 def db_console():
     load_dotenv()
 
@@ -15,7 +17,13 @@ def db_console():
 
     try:
         subprocess.run(
-            ["mysql", f"-h{mariadb_hostname}", f"-u{mariadb_user}", f"-p{mariadb_password}", mariadb_database],
+            [
+                "mysql",
+                f"-h{mariadb_hostname}",
+                f"-u{mariadb_user}",
+                f"-p{mariadb_password}",
+                mariadb_database,
+            ],
             check=True,
         )
     except subprocess.CalledProcessError as e:

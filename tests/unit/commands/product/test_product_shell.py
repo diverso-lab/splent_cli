@@ -5,7 +5,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
-from splent_cli.commands.product.product_shell import product_shell, _find_main_container
+from splent_cli.commands.product.product_shell import product_shell
+from splent_cli.services.compose import find_main_container as _find_main_container
 
 
 @pytest.fixture

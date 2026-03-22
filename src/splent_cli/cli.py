@@ -39,9 +39,7 @@ class SPLENTCLI(click.Group):
                 cmd for cmd in self.commands if cmd.startswith("uvl:")
             ],
             "🧱 Database": [cmd for cmd in self.commands if cmd.startswith("db:")],
-            "💾 Cache": [
-                cmd for cmd in self.commands if cmd.startswith("cache:")
-            ],
+            "💾 Cache": [cmd for cmd in self.commands if cmd.startswith("cache:")],
             "🧰 Utilities": [
                 cmd
                 for cmd in self.commands
@@ -53,9 +51,6 @@ class SPLENTCLI(click.Group):
                 cmd
                 for cmd in self.commands
                 if cmd.startswith(("linter", "test", "coverage", "locust"))
-            ],
-            "⚙️ Build & Assets": [
-                cmd for cmd in self.commands if cmd.startswith("webpack:")
             ],
         }
         for title, cmds in groups.items():

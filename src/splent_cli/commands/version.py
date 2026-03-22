@@ -59,7 +59,9 @@ def _declared_features(app_path: str) -> list:
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        return data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        return (
+            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        )
     except Exception:
         return []
 
@@ -72,7 +74,9 @@ def _in_cache(workspace: str, ref: str) -> bool:
     ns_fs = ns.replace("-", "_")
     if "@" in rest:
         name, version = rest.split("@", 1)
-        path = os.path.join(workspace, ".splent_cache", "features", ns_fs, f"{name}@{version}")
+        path = os.path.join(
+            workspace, ".splent_cache", "features", ns_fs, f"{name}@{version}"
+        )
     else:
         path = os.path.join(workspace, ".splent_cache", "features", ns_fs, rest)
     return os.path.isdir(path)
@@ -120,12 +124,14 @@ def version(as_json: bool) -> None:
         for ref in features:
             name, ver = _parse_feature_ref(ref)
             cached = _in_cache(workspace, ref)
-            feature_status.append({
-                "name": name,
-                "version": ver,
-                "in_cache": cached,
-                "ref": ref,
-            })
+            feature_status.append(
+                {
+                    "name": name,
+                    "version": ver,
+                    "in_cache": cached,
+                    "ref": ref,
+                }
+            )
 
     cli_compat = (
         cli_v != "unknown"
@@ -155,7 +161,11 @@ def version(as_json: bool) -> None:
     click.secho("\nSPLENT workspace snapshot", bold=True)
     click.echo("─" * w)
 
-    compat_label = click.style("✔ compatible", fg="green") if cli_compat else click.style("✖ mismatch", fg="red")
+    compat_label = (
+        click.style("✔ compatible", fg="green")
+        if cli_compat
+        else click.style("✖ mismatch", fg="red")
+    )
     click.echo(f"  {'CLI':<14} {cli_v}")
     click.echo(f"  {'Framework':<14} {fw_v:<10}  {compat_label}")
     click.echo(f"  {'Python':<14} {py_v}")
@@ -171,8 +181,16 @@ def version(as_json: bool) -> None:
         click.echo("  Features declared in pyproject:")
         for i, f in enumerate(feature_status):
             connector = "└──" if i == len(feature_status) - 1 else "├──"
-            ver_label = click.style(f"@{f['version']}", fg="cyan") if f["version"] else click.style("editable", fg="blue")
-            cache_label = click.style("✔ in cache", fg="green") if f["in_cache"] else click.style("✖ missing from cache", fg="red")
+            ver_label = (
+                click.style(f"@{f['version']}", fg="cyan")
+                if f["version"]
+                else click.style("editable", fg="blue")
+            )
+            cache_label = (
+                click.style("✔ in cache", fg="green")
+                if f["in_cache"]
+                else click.style("✖ missing from cache", fg="red")
+            )
             click.echo(f"  {connector} {f['name']:<32} {ver_label:<18}  {cache_label}")
     elif app_name:
         click.echo()

@@ -4,33 +4,17 @@ import click
 from splent_cli.services import compose, context
 
 
-def _find_main_container(project_name: str, compose_file: str, docker_dir: str) -> str | None:
-    """Find the main container — the one with /workspace mounted."""
-    result = subprocess.run(
-        ["docker", "compose", "-p", project_name, "-f", compose_file, "ps", "-q"],
-        cwd=docker_dir,
-        capture_output=True,
-        text=True,
-    )
-    container_ids = [c.strip() for c in result.stdout.splitlines() if c.strip()]
-
-    for cid in container_ids:
-        mounts = subprocess.run(
-            ["docker", "inspect", "-f", "{{ range .Mounts }}{{ .Destination }} {{ end }}", cid],
-            capture_output=True,
-            text=True,
-        ).stdout.strip().split()
-        if "/workspace" in mounts:
-            return cid
-
-    return container_ids[0] if container_ids else None
-
-
-@click.command("product:shell", short_help="Open a shell inside the active product's container.")
+@click.command(
+    "product:shell", short_help="Open a shell inside the active product's container."
+)
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")
 @click.option("--service", default=None, help="Target a specific service by name.")
-@click.option("--cmd", default=None, help="Run a specific command instead of an interactive shell.")
+@click.option(
+    "--cmd",
+    default=None,
+    help="Run a specific command instead of an interactive shell.",
+)
 def product_shell(env_dev, env_prod, service, cmd):
     """
     Open an interactive shell (bash/sh) inside the active product's main container.
@@ -57,7 +41,16 @@ def product_shell(env_dev, env_prod, service, cmd):
 
     if service:
         # Use docker compose exec directly by service name
-        exec_cmd = ["docker", "compose", "-p", project_name, "-f", compose_file, "exec", service]
+        exec_cmd = [
+            "docker",
+            "compose",
+            "-p",
+            project_name,
+            "-f",
+            compose_file,
+            "exec",
+            service,
+        ]
         if cmd:
             exec_cmd += ["sh", "-c", cmd]
         else:
@@ -69,14 +62,16 @@ def product_shell(env_dev, env_prod, service, cmd):
             subprocess.run(exec_cmd, check=False)
         return
 
-    container_id = _find_main_container(project_name, compose_file, docker_dir)
+    container_id = compose.find_main_container(project_name, compose_file, docker_dir)
 
     if not container_id:
         click.secho(f"❌ No running containers found for {product} ({env}).", fg="red")
         click.secho("   Run: splent product:up --" + env, fg="yellow")
         raise SystemExit(1)
 
-    click.secho(f"🐚 Opening shell in container {container_id[:12]} ({env})...", fg="cyan")
+    click.secho(
+        f"🐚 Opening shell in container {container_id[:12]} ({env})...", fg="cyan"
+    )
 
     shell_cmd = ["docker", "exec", "-it", container_id]
     if cmd:

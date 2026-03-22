@@ -66,7 +66,7 @@ def make_feature(full_name):
 
     # --- Jinja setup ---
     env = setup_jinja_env()
-    context = {
+    template_ctx = {
         "feature_name": feature_name,
         "org_safe": org_safe,
         "feature_import": f"{org_safe}.{feature_name}",
@@ -97,9 +97,7 @@ def make_feature(full_name):
             "tests", "test_selenium.py"
         ): "feature/feature_tests_test_selenium.py.j2",
         # Migrations scaffold
-        os.path.join(
-            "migrations", "env.py"
-        ): "feature/feature_migrations_env.py.j2",
+        os.path.join("migrations", "env.py"): "feature/feature_migrations_env.py.j2",
         os.path.join(
             "migrations", "alembic.ini"
         ): "feature/feature_migrations_alembic.ini.j2",
@@ -119,7 +117,7 @@ def make_feature(full_name):
     for filename, template in src_files_and_templates.items():
         full_path = os.path.join(src_path, filename)
         if template:
-            render_and_write_file(env, template, full_path, context)
+            render_and_write_file(env, template, full_path, template_ctx)
         else:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             Path(full_path).touch()
@@ -128,7 +126,7 @@ def make_feature(full_name):
     for filename, template in base_files_and_templates.items():
         full_path = os.path.join(cache_dir, filename)
         if template:
-            render_and_write_file(env, template, full_path, context)
+            render_and_write_file(env, template, full_path, template_ctx)
         else:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             Path(full_path).touch()

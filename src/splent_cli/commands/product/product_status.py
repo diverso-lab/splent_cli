@@ -19,7 +19,9 @@ def _status_color(state: str) -> str:
     return state
 
 
-@click.command("product:status", short_help="Show Docker container status for the active product.")
+@click.command(
+    "product:status", short_help="Show Docker container status for the active product."
+)
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")
 def product_status(env_dev, env_prod):
@@ -41,11 +43,15 @@ def product_status(env_dev, env_prod):
 
     result = subprocess.run(
         [
-            "docker", "compose",
-            "-p", project_name,
-            "-f", compose_file,
+            "docker",
+            "compose",
+            "-p",
+            project_name,
+            "-f",
+            compose_file,
             "ps",
-            "--format", "json",
+            "--format",
+            "json",
         ],
         capture_output=True,
         text=True,
@@ -57,7 +63,9 @@ def product_status(env_dev, env_prod):
 
     raw = result.stdout.strip()
     if not raw:
-        click.secho(f"ℹ️  No containers found for {product} ({env}). Is it up?", fg="yellow")
+        click.secho(
+            f"ℹ️  No containers found for {product} ({env}). Is it up?", fg="yellow"
+        )
         return
 
     # docker compose ps --format json outputs one JSON object per line
@@ -79,7 +87,6 @@ def product_status(env_dev, env_prod):
     click.secho(f"\n{product}  [{env}]\n", bold=True)
     col_name = 36
     col_state = 24
-    col_ports = 0
 
     header = f"  {'SERVICE':<{col_name}} {'STATUS':<{col_state}} PORTS"
     click.secho(header, fg="cyan")
@@ -92,9 +99,12 @@ def product_status(env_dev, env_prod):
         if isinstance(ports, list):
             ports = ", ".join(
                 f"{p.get('PublishedPort', '')}→{p.get('TargetPort', '')}"
-                for p in ports if p.get("PublishedPort")
+                for p in ports
+                if p.get("PublishedPort")
             )
-        click.echo(f"  {name:<{col_name}} {_status_color(state):<{col_state}} {ports or '—'}")
+        click.echo(
+            f"  {name:<{col_name}} {_status_color(state):<{col_state}} {ports or '—'}"
+        )
 
     click.echo()
 

@@ -33,9 +33,7 @@ def _latest_tag(org: str, repo: str, token: str | None) -> str | None:
     if data and data.get("tag_name"):
         return data["tag_name"]
     # fall back to tags
-    tags = _github_request(
-        f"https://api.github.com/repos/{org}/{repo}/tags", token
-    )
+    tags = _github_request(f"https://api.github.com/repos/{org}/{repo}/tags", token)
     if tags and isinstance(tags, list) and tags:
         return tags[0].get("name")
     return None
@@ -43,8 +41,18 @@ def _latest_tag(org: str, repo: str, token: str | None) -> str | None:
 
 @click.command("feature:search", short_help="Search for available features on GitHub.")
 @click.argument("query", required=False)
-@click.option("--org", default="splent-io", show_default=True, help="GitHub organisation to search in.")
-@click.option("--all", "show_all", is_flag=True, help="Show all repos, not just splent_feature_* ones.")
+@click.option(
+    "--org",
+    default="splent-io",
+    show_default=True,
+    help="GitHub organisation to search in.",
+)
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Show all repos, not just splent_feature_* ones.",
+)
 def feature_search(query, org, show_all):
     """
     List available features from a GitHub organisation.
@@ -100,12 +108,19 @@ def feature_search(query, org, show_all):
         name = repo["name"]
         desc = repo.get("description") or ""
         latest = _latest_tag(org, name, token)
-        version_label = click.style(latest, fg="green") if latest else click.style("no releases", fg="yellow")
+        version_label = (
+            click.style(latest, fg="green")
+            if latest
+            else click.style("no releases", fg="yellow")
+        )
         click.echo(f"  {name:<{col}} {version_label:<20}  {desc}")
 
     click.echo()
     if not token:
-        click.secho("💡 Set GITHUB_TOKEN to avoid rate limits and access private repos.", fg="yellow")
+        click.secho(
+            "💡 Set GITHUB_TOKEN to avoid rate limits and access private repos.",
+            fg="yellow",
+        )
 
 
 cli_command = feature_search

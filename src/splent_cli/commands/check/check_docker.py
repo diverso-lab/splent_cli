@@ -13,12 +13,22 @@ def _run(cmd: list) -> tuple:
         return 1, "", "timed out"
 
 
-def _ok(msg): return click.style("[✔] ", fg="green") + msg
-def _fail(msg): return click.style("[✖] ", fg="red") + msg
-def _warn(msg): return click.style("[⚠] ", fg="yellow") + msg
+def _ok(msg):
+    return click.style("[✔] ", fg="green") + msg
 
 
-@click.command("check:docker", short_help="Verify Docker and Docker Compose are available and running.")
+def _fail(msg):
+    return click.style("[✖] ", fg="red") + msg
+
+
+def _warn(msg):
+    return click.style("[⚠] ", fg="yellow") + msg
+
+
+@click.command(
+    "check:docker",
+    short_help="Verify Docker and Docker Compose are available and running.",
+)
 def check_docker():
     """
     Checks that Docker and Docker Compose are installed and the Docker daemon is responding.
@@ -44,7 +54,11 @@ def check_docker():
         # try legacy docker-compose
         rc2, out2, _ = _run(["docker-compose", "--version"])
         if rc2 == 0:
-            click.echo(_warn(f"Legacy docker-compose found  —  {out2}  (upgrade to Compose V2)"))
+            click.echo(
+                _warn(
+                    f"Legacy docker-compose found  —  {out2}  (upgrade to Compose V2)"
+                )
+            )
             ok_count += 1
         else:
             click.echo(_fail("Docker Compose not found"))
@@ -63,7 +77,7 @@ def check_docker():
     # 4. can list containers (basic permissions check)
     rc, out, err = _run(["docker", "ps", "--format", "{{.Names}}"])
     if rc == 0:
-        n = len([l for l in out.splitlines() if l.strip()])
+        n = len([line for line in out.splitlines() if line.strip()])
         click.echo(_ok(f"Docker socket accessible  —  {n} container(s) running"))
         ok_count += 1
     else:

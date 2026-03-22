@@ -6,7 +6,10 @@ from sqlalchemy import text, MetaData
 
 from splent_cli.utils.decorators import requires_app
 from splent_framework.db import db
-from splent_framework.managers.migration_manager import MigrationManager, SPLENT_MIGRATIONS_TABLE
+from splent_framework.managers.migration_manager import (
+    MigrationManager,
+    SPLENT_MIGRATIONS_TABLE,
+)
 from splent_cli.commands.clear_uploads import clear_uploads
 
 
@@ -37,7 +40,10 @@ def db_reset(clear_migrations, yes):
         with db.engine.connect() as conn:
             trans = conn.begin()
             for table in reversed(meta.sorted_tables):
-                skip = table.name.startswith("alembic_") or table.name == SPLENT_MIGRATIONS_TABLE
+                skip = (
+                    table.name.startswith("alembic_")
+                    or table.name == SPLENT_MIGRATIONS_TABLE
+                )
                 if not skip:
                     conn.execute(table.delete())
             trans.commit()
@@ -84,9 +90,13 @@ def db_reset(clear_migrations, yes):
             try:
                 alembic_migrate(directory=mdir, message=feat)
                 alembic_upgrade(directory=mdir)
-                revision = MigrationManager.get_current_feature_revision(feat, db.engine)
+                revision = MigrationManager.get_current_feature_revision(
+                    feat, db.engine
+                )
                 MigrationManager.update_feature_status(app, feat, revision)
-                click.echo(click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green"))
+                click.echo(
+                    click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green")
+                )
             except Exception as e:
                 click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
     else:
@@ -95,9 +105,13 @@ def db_reset(clear_migrations, yes):
             click.echo(click.style(f"  ⬆️  Re-applying {feat}...", fg="cyan"))
             try:
                 alembic_upgrade(directory=mdir)
-                revision = MigrationManager.get_current_feature_revision(feat, db.engine)
+                revision = MigrationManager.get_current_feature_revision(
+                    feat, db.engine
+                )
                 MigrationManager.update_feature_status(app, feat, revision)
-                click.echo(click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green"))
+                click.echo(
+                    click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green")
+                )
             except Exception as e:
                 click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
 

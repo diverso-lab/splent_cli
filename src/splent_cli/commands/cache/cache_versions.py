@@ -1,7 +1,5 @@
-import os
 from splent_cli.services import context
 import click
-from pathlib import Path
 
 
 @click.command("cache:versions", short_help="List all cached versions of a feature.")
@@ -30,8 +28,7 @@ def cache_versions(feature_ref: str):
 
     editable = ns_dir / name
     versioned = sorted(
-        d for d in ns_dir.iterdir()
-        if d.is_dir() and d.name.startswith(f"{name}@")
+        d for d in ns_dir.iterdir() if d.is_dir() and d.name.startswith(f"{name}@")
     )
 
     if not editable.exists() and not versioned:
@@ -47,5 +44,3 @@ def cache_versions(feature_ref: str):
 
 
 cli_command = cache_versions
-
-

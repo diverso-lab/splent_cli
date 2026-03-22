@@ -29,12 +29,15 @@ def _latest_cached_version(ns_dir: Path, name: str) -> str | None:
 def _get_product_feature_versions(pyproject_path: Path) -> dict:
     """Returns {name: current_version_or_None} from the product's pyproject."""
     import tomllib
+
     if not pyproject_path.exists():
         return {}
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        refs = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        refs = (
+            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        )
         result = {}
         for ref in refs:
             base = ref.split("/", 1)[1] if "/" in ref else ref
@@ -56,13 +59,20 @@ def _update_pyproject(pyproject_path: Path, name: str, old_ver: str, new_ver: st
         # editable → add version
         new_content = re.sub(
             rf'(["\'](?:[^/\"\']+/)?){re.escape(name)}(["\'])',
-            rf'\g<1>{name}@{new_ver}\g<2>',
+            rf"\g<1>{name}@{new_ver}\g<2>",
             content,
         )
     pyproject_path.write_text(new_content)
 
 
-def _update_symlink(product_path: Path, ns_fs: str, name: str, old_ver: str | None, new_ver: str, cache_root: Path):
+def _update_symlink(
+    product_path: Path,
+    ns_fs: str,
+    name: str,
+    old_ver: str | None,
+    new_ver: str,
+    cache_root: Path,
+):
     features_dir = product_path / "features" / ns_fs
     features_dir.mkdir(parents=True, exist_ok=True)
 
@@ -92,11 +102,16 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
     click.echo(f"  ⬇️  Cloning {ns_fs}/{name}@{version}...")
     subprocess.run(
         ["git", "clone", "--branch", version, "--depth", "1", url, str(target)],
-        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
 
 
-@click.command("feature:upgrade", short_help="Upgrade declared features to the latest cached version.")
+@click.command(
+    "feature:upgrade",
+    short_help="Upgrade declared features to the latest cached version.",
+)
 @click.argument("feature_ref", required=False)
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
 def feature_upgrade(feature_ref, yes):
@@ -139,7 +154,9 @@ def feature_upgrade(feature_ref, yes):
         for ns in cache_root.iterdir():
             if ns.is_dir() and (
                 (ns / name).exists()
-                or any(d.name.startswith(f"{name}@") for d in ns.iterdir() if d.is_dir())
+                or any(
+                    d.name.startswith(f"{name}@") for d in ns.iterdir() if d.is_dir()
+                )
             ):
                 ns_dir = ns
                 ns_fs = ns.name
@@ -165,7 +182,9 @@ def feature_upgrade(feature_ref, yes):
             upgrades.append((ns_fs, name, current_ver, latest))
 
     if not upgrades:
-        click.secho("✅ All features are already at the latest cached version.", fg="green")
+        click.secho(
+            "✅ All features are already at the latest cached version.", fg="green"
+        )
         return
 
     click.secho(f"Features to upgrade ({len(upgrades)}):\n", fg="cyan")
@@ -189,7 +208,10 @@ def feature_upgrade(feature_ref, yes):
             click.secho(f"  ✖ {ns_fs}/{name}: {e}", fg="red")
 
     click.echo()
-    click.secho("Done. Run 'splent product:sync' if any feature was missing from cache.", fg="cyan")
+    click.secho(
+        "Done. Run 'splent product:sync' if any feature was missing from cache.",
+        fg="cyan",
+    )
 
 
 cli_command = feature_upgrade

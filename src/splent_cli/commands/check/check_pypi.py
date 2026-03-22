@@ -9,7 +9,9 @@ import click
     "check:pypi",
     short_help="Verify PyPI credentials from .env (TWINE_USERNAME / TWINE_PASSWORD)",
 )
-@click.option("--test", is_flag=True, default=False, help="Check against TestPyPI instead of PyPI")
+@click.option(
+    "--test", is_flag=True, default=False, help="Check against TestPyPI instead of PyPI"
+)
 def check_pypi(test: bool):
     click.echo(click.style("\n📦 PyPI Credentials Check\n", fg="cyan", bold=True))
 
@@ -17,7 +19,9 @@ def check_pypi(test: bool):
     password = os.getenv("TWINE_PASSWORD", os.getenv("PYPI_PASSWORD", "")).strip()
 
     registry = "TestPyPI" if test else "PyPI"
-    upload_url = "https://test.pypi.org/legacy/" if test else "https://upload.pypi.org/legacy/"
+    upload_url = (
+        "https://test.pypi.org/legacy/" if test else "https://upload.pypi.org/legacy/"
+    )
 
     # --- presence checks ---
     if not username:
@@ -26,16 +30,28 @@ def check_pypi(test: bool):
     click.echo(click.style("[✔] ", fg="green") + f"TWINE_USERNAME = {username}")
 
     if not password:
-        click.echo(click.style("[✖] ", fg="red") + "TWINE_PASSWORD (or PYPI_PASSWORD) not set in .env")
+        click.echo(
+            click.style("[✖] ", fg="red")
+            + "TWINE_PASSWORD (or PYPI_PASSWORD) not set in .env"
+        )
         raise SystemExit(1)
 
-    masked = password[:4] + "*" * (len(password) - 8) + password[-4:] if len(password) > 8 else "****"
+    masked = (
+        password[:4] + "*" * (len(password) - 8) + password[-4:]
+        if len(password) > 8
+        else "****"
+    )
     click.echo(click.style("[✔] ", fg="green") + f"TWINE_PASSWORD = {masked}")
 
     if username == "__token__" and not password.startswith("pypi-"):
-        click.echo(click.style("[⚠] ", fg="yellow") + "TWINE_USERNAME is '__token__' but password doesn't start with 'pypi-' — may be invalid")
+        click.echo(
+            click.style("[⚠] ", fg="yellow")
+            + "TWINE_USERNAME is '__token__' but password doesn't start with 'pypi-' — may be invalid"
+        )
     elif username == "__token__":
-        click.echo(click.style("[✔] ", fg="green") + "Token format looks correct (pypi-...)")
+        click.echo(
+            click.style("[✔] ", fg="green") + "Token format looks correct (pypi-...)"
+        )
 
     # --- verify via upload endpoint (valid token → 400, invalid → 403/401) ---
     click.echo(f"\nContacting {registry} API...")
@@ -61,15 +77,26 @@ def check_pypi(test: bool):
 
     try:
         urllib.request.urlopen(req, timeout=10)
-        click.echo(click.style("[✔] ", fg="green") + f"Credentials accepted by {registry}")
+        click.echo(
+            click.style("[✔] ", fg="green") + f"Credentials accepted by {registry}"
+        )
     except urllib.error.HTTPError as e:
         if e.code == 400:
-            click.echo(click.style("[✔] ", fg="green") + f"Credentials valid ({registry} returned 400 — expected for empty upload)")
+            click.echo(
+                click.style("[✔] ", fg="green")
+                + f"Credentials valid ({registry} returned 400 — expected for empty upload)"
+            )
         elif e.code in (401, 403):
-            click.echo(click.style("[✖] ", fg="red") + f"Credentials rejected by {registry} (HTTP {e.code}) — token invalid or expired")
+            click.echo(
+                click.style("[✖] ", fg="red")
+                + f"Credentials rejected by {registry} (HTTP {e.code}) — token invalid or expired"
+            )
             raise SystemExit(1)
         else:
-            click.echo(click.style("[⚠] ", fg="yellow") + f"{registry} returned HTTP {e.code} — credentials may be OK but could not confirm")
+            click.echo(
+                click.style("[⚠] ", fg="yellow")
+                + f"{registry} returned HTTP {e.code} — credentials may be OK but could not confirm"
+            )
     except urllib.error.URLError as e:
         click.echo(click.style("[✖] ", fg="red") + f"Network error: {e.reason}")
         raise SystemExit(1)

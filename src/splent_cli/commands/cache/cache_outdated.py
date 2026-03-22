@@ -1,4 +1,3 @@
-import os
 from splent_cli.services import context
 import re
 import click
@@ -25,6 +24,7 @@ def _get_cache_versions(cache_root: Path) -> dict:
 
 def _latest(versions: list) -> str:
     """Returns the latest version string, using semver if possible."""
+
     def sort_key(v):
         try:
             return Version(v.lstrip("v"))
@@ -45,7 +45,7 @@ def _get_product_features(workspace: Path) -> dict:
             continue
         content = pyproject.read_text()
         m = re.search(
-            r'\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]',
+            r"\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]",
             content,
             re.DOTALL,
         )
@@ -66,7 +66,10 @@ def _get_product_features(workspace: Path) -> dict:
     return products
 
 
-@click.command("cache:outdated", short_help="Show products using older versions than what's in cache.")
+@click.command(
+    "cache:outdated",
+    short_help="Show products using older versions than what's in cache.",
+)
 def cache_outdated():
     """
     Compares the version each product uses against all versions available in cache.
@@ -93,7 +96,9 @@ def cache_outdated():
                 continue
             if current_ver is None:
                 # Editable — show available versions as informational
-                outdated.append((product, name, "(editable)", _latest(available), available))
+                outdated.append(
+                    (product, name, "(editable)", _latest(available), available)
+                )
                 continue
             latest = _latest(available)
             try:
@@ -120,5 +125,3 @@ def cache_outdated():
 
 
 cli_command = cache_outdated
-
-

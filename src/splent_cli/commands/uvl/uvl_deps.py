@@ -4,16 +4,19 @@ from pathlib import Path
 
 import click
 
+from splent_cli.services import context
 from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
     load_pyproject as _load_pyproject,
     get_uvl_cfg as _get_uvl_cfg,
+    list_all_features_from_uvl as _list_all_features_from_uvl,
     extract_implications_from_uvl_text as _extract_implications_from_uvl_text,
+    print_uvl_header as _print_uvl_header,
 )
 
 
 def _build_graph(pairs: list[tuple[str, str]]):
-    req = defaultdict(set)   # A -> {B}
+    req = defaultdict(set)  # A -> {B}
     rreq = defaultdict(set)  # B -> {A}
     for a, b in pairs:
         req[a].add(b)
@@ -38,10 +41,14 @@ def _closure(start: str, graph: dict[str, set[str]]) -> list[str]:
     short_help="Show dependencies implied by UVL constraints (A => B) for a feature",
 )
 @click.argument("feature", required=True)
-@click.option("--reverse", is_flag=True, help="Show reverse dependencies (who requires this feature)")
-@click.option("--workspace", default="/workspace", show_default=True)
+@click.option(
+    "--reverse",
+    is_flag=True,
+    help="Show reverse dependencies (who requires this feature)",
+)
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
-def uvl_deps(feature, reverse, workspace, pyproject):
+def uvl_deps(feature, reverse, pyproject):
+    workspace = str(context.workspace())
     app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
 
@@ -55,7 +62,11 @@ def uvl_deps(feature, reverse, workspace, pyproject):
 
     local_uvl = os.path.join(product_path, "uvl", file)
     if not os.path.exists(local_uvl):
-        raise click.ClickException(f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)")
+        raise click.ClickException(
+            f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)"
+        )
+
+    universe, _ = _list_all_features_from_uvl(local_uvl)
 
     uvl_text = Path(local_uvl).read_text(encoding="utf-8", errors="replace")
     pairs = _extract_implications_from_uvl_text(uvl_text)
@@ -64,11 +75,7 @@ def uvl_deps(feature, reverse, workspace, pyproject):
     graph = rreq if reverse else req
     deps = _closure(feature, graph)
 
-    click.echo()
-    click.echo("UVL deps")
-    click.echo(f"Product : {app_name}")
-    click.echo(f"UVL     : {local_uvl}")
-    click.echo()
+    _print_uvl_header("deps", app_name, local_uvl, len(universe))
 
     if reverse:
         click.echo(f"Reverse dependencies of '{feature}' (features that require it):")

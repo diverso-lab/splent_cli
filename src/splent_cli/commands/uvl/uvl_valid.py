@@ -5,12 +5,14 @@ import click
 
 from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
 
+from splent_cli.services import context
 from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
     load_pyproject as _load_pyproject,
     get_uvl_cfg as _get_uvl_cfg,
     list_all_features_from_uvl as _list_all_features_from_uvl,
     write_csvconf_full as _write_csvconf_full,
+    print_uvl_header as _print_uvl_header,
 )
 
 
@@ -19,10 +21,10 @@ from splent_cli.commands.uvl.uvl_utils import (
     short_help="Validate an exact feature selection (args) against the product UVL",
 )
 @click.argument("features", nargs=-1)
-@click.option("--workspace", default="/workspace", show_default=True)
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option("--print-config", is_flag=True, help="Print generated 0/1 assignment")
-def uvl_valid(features, workspace, pyproject, print_config):
+def uvl_valid(features, pyproject, print_config):
+    workspace = str(context.workspace())
     app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
 
@@ -36,7 +38,9 @@ def uvl_valid(features, workspace, pyproject, print_config):
 
     local_uvl = os.path.join(product_path, "uvl", file)
     if not os.path.exists(local_uvl):
-        raise click.ClickException(f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)")
+        raise click.ClickException(
+            f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)"
+        )
 
     universe, root_name = _list_all_features_from_uvl(local_uvl)
 
@@ -45,7 +49,9 @@ def uvl_valid(features, workspace, pyproject, print_config):
 
     unknown = sorted([f for f in selected if f not in universe])
     if unknown:
-        raise click.ClickException(f"Unknown feature(s) (not in UVL): {', '.join(unknown)}")
+        raise click.ClickException(
+            f"Unknown feature(s) (not in UVL): {', '.join(unknown)}"
+        )
 
     conf_path = _write_csvconf_full(universe, selected)
 
@@ -58,10 +64,7 @@ def uvl_valid(features, workspace, pyproject, print_config):
         except OSError:
             pass
 
-    click.echo()
-    click.echo("UVL valid")
-    click.echo(f"Product  : {app_name}")
-    click.echo(f"UVL      : {local_uvl}")
+    _print_uvl_header("valid", app_name, local_uvl, len(universe))
     click.echo(f"Selected : {', '.join(sorted(selected))}")
     click.echo()
 

@@ -74,12 +74,16 @@ def doctor():
     if os.getenv("GITHUB_TOKEN"):
         results.append(_ok("GITHUB_TOKEN set"))
     else:
-        results.append(_warn("GITHUB_TOKEN not set — GitHub releases and private repos will fail"))
+        results.append(
+            _warn("GITHUB_TOKEN not set — GitHub releases and private repos will fail")
+        )
 
     if os.getenv("PYPI_TOKEN") or os.getenv("TWINE_PASSWORD"):
         results.append(_ok("PyPI token set"))
     else:
-        results.append(_warn("PYPI_TOKEN / TWINE_PASSWORD not set — PyPI publishing will fail"))
+        results.append(
+            _warn("PYPI_TOKEN / TWINE_PASSWORD not set — PyPI publishing will fail")
+        )
 
     _print_phase(results)
     all_results += results
@@ -170,7 +174,9 @@ def doctor():
         # -------------------------
         # 🌿 PHASE 7: Git dirty
         # -------------------------
-        click.echo(click.style("\n🌿 Editable feature git status", fg="cyan", bold=True))
+        click.echo(
+            click.style("\n🌿 Editable feature git status", fg="cyan", bold=True)
+        )
         results = []
         _check_feature_git_dirty(workspace, features, results)
         _print_phase(results)
@@ -209,9 +215,7 @@ def doctor():
 # =====================================================
 
 
-def _check_features_with_cache(
-    workspace: str, features_declared: list, results: list
-):
+def _check_features_with_cache(workspace: str, features_declared: list, results: list):
     cache_root = os.path.join(workspace, ".splent_cache", "features")
     if not os.path.isdir(cache_root):
         results.append(_fail(".splent_cache/features not found"))
@@ -273,10 +277,14 @@ def _check_feature_symlinks(
 
         if not os.path.exists(link_path):
             results.append(
-                _fail(f"Missing symlink: {app_name}/features/{namespace_safe}/{feat_pkg}@{ver}")
+                _fail(
+                    f"Missing symlink: {app_name}/features/{namespace_safe}/{feat_pkg}@{ver}"
+                )
             )
         elif not os.path.islink(link_path):
-            results.append(_fail(f"Expected symlink but found directory/file: {link_path}"))
+            results.append(
+                _fail(f"Expected symlink but found directory/file: {link_path}")
+            )
         elif not os.path.exists(target_path):
             results.append(_fail(f"Broken symlink → target missing: {target_path}"))
         else:
@@ -299,7 +307,11 @@ def _check_feature_pip_install(features: list, results: list):
         if _pkg_version(pkg):
             results.append(_ok(f"{pkg} installed"))
         else:
-            results.append(_fail(f"{pkg} not installed — run: pip install -e .splent_cache/features/.../{pkg}"))
+            results.append(
+                _fail(
+                    f"{pkg} not installed — run: pip install -e .splent_cache/features/.../{pkg}"
+                )
+            )
 
 
 def _check_feature_git_dirty(workspace: str, features: list, results: list):

@@ -79,7 +79,9 @@ def feature_env(feature_name, generate, env_name):
         raise SystemExit(1)
 
     # 4️⃣ Ruta del symlink del producto (con versión incluida)
-    symlink_path = os.path.join(workspace, product, "features", org_safe, entry_basename)
+    symlink_path = os.path.join(
+        workspace, product, "features", org_safe, entry_basename
+    )
     if not os.path.islink(symlink_path):
         click.echo(
             f"❌ Feature symlink not found for {feature_entry} in {symlink_path}"

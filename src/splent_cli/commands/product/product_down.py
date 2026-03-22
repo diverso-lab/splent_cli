@@ -7,7 +7,7 @@ from splent_cli.services import compose, context
 
 @click.command(
     "product:down",
-    short_help="Stop the product and its features (optionally removing volumes)."
+    short_help="Stop the product and its features (optionally removing volumes).",
 )
 @click.option("--env", default="dev", help="Environment name (dev or prod)")
 @click.option("--v", is_flag=True, help="Remove all volumes (requires confirmation)")
@@ -20,7 +20,10 @@ def product_down(env, v):
 
     remove_volumes = False
     if v:
-        if not click.confirm("⚠️  This will remove ALL Docker volumes for the product and its features. Continue?", default=False):
+        if not click.confirm(
+            "⚠️  This will remove ALL Docker volumes for the product and its features. Continue?",
+            default=False,
+        ):
             click.echo("❎ Operation cancelled.")
             return
         remove_volumes = True
