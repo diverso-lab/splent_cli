@@ -134,7 +134,7 @@ class TestVariableComparison:
         """If bash fails (e.g. not found), variable treated as not loaded."""
         (workspace / ".env").write_text("MY_VAR=value\n")
 
-        with patch("subprocess.run", side_effect=Exception("bash not found")):
+        with patch("subprocess.run", side_effect=FileNotFoundError("bash not found")):
             result = runner.invoke(env_show, [])
 
         assert result.exit_code == 0

@@ -2,7 +2,7 @@ import os
 from flask import Flask
 
 from splent_framework.managers.config_manager import ConfigManager
-from splent_framework.managers.db_manager import MigrateManager
+from splent_framework.managers.migration_manager import MigrationManager
 from splent_framework.managers.session_manager import SessionManager
 from splent_framework.managers.logging_manager import LoggingManager
 from splent_framework.managers.error_handler_manager import ErrorHandlerManager
@@ -35,7 +35,7 @@ def _load_config(app, config_name):
 
 
 def _init_db(app):
-    MigrateManager(app)
+    MigrationManager(app)
 
 
 def _init_sessions(app):

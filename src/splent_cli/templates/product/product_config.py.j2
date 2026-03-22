@@ -6,8 +6,7 @@ SPLENT will always use this file, falling back to the framework
 only if you remove a config class.
 """
 
-import os
-from splent_framework.configuration.default_config import Config as BaseConfig
+from splent_framework.configuration.default_config import Config as BaseConfig, _build_db_uri
 
 
 class DevelopmentConfig(BaseConfig):
@@ -16,12 +15,8 @@ class DevelopmentConfig(BaseConfig):
 
     def __init__(self):
         super().__init__()
-        self.SQLALCHEMY_DATABASE_URI = (
-            f"mysql+pymysql://{os.getenv('MARIADB_USER', 'default_user')}:"
-            f"{os.getenv('MARIADB_PASSWORD', 'default_password')}@"
-            f"{os.getenv('MARIADB_HOSTNAME', 'localhost')}:3306/"
-            f"{os.getenv('MARIADB_DATABASE', 'default_test_db')}"
-        )
+        self.SQLALCHEMY_DATABASE_URI = _build_db_uri("MARIADB_DATABASE", "default_db")
+
 
 class TestingConfig(BaseConfig):
     TESTING = True
@@ -31,16 +26,12 @@ class TestingConfig(BaseConfig):
 
     def __init__(self):
         super().__init__()
-        self.SQLALCHEMY_DATABASE_URI = (
-            f"mysql+pymysql://{os.getenv('MARIADB_USER', 'default_user')}:"
-            f"{os.getenv('MARIADB_PASSWORD', 'default_password')}@"
-            f"{os.getenv('MARIADB_HOSTNAME', 'localhost')}:3306/"
-            f"{os.getenv('MARIADB_TEST_DATABASE', 'default_test_db')}"
-        )
+        self.SQLALCHEMY_DATABASE_URI = _build_db_uri("MARIADB_TEST_DATABASE", "default_test_db")
 
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
-    
+
     def __init__(self):
-        super().__init__() 
+        super().__init__()
+        self.SQLALCHEMY_DATABASE_URI = _build_db_uri("MARIADB_DATABASE", "default_db")

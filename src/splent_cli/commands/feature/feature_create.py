@@ -20,7 +20,7 @@ def setup_jinja_env():
 
 
 def render_and_write_file(env, template_name, filename, context):
-    """Renderiza una plantilla Jinja y la escribe en disco."""
+    """Render a Jinja template and write the result to disk."""
     content = env.get_template(template_name).render(context) + "\n"
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, "w") as f:

@@ -10,7 +10,7 @@ def load_commands(cli_group):
     for root, _, files in os.walk(commands_path):
         for file in files:
             if file.endswith(".py") and not file.startswith("__"):
-                # Construimos el nombre completo del módulo dinámicamente
+                # Build the fully-qualified module name from the relative path
                 rel_path = os.path.relpath(os.path.join(root, file), commands_path)
                 module_name = (
                     "splent_cli.commands." + rel_path.replace(os.sep, ".")[:-3]
@@ -20,19 +20,17 @@ def load_commands(cli_group):
                     module = importlib.import_module(module_name)
                 except Exception as e:
                     if os.getenv("SPLENT_DEBUG"):
-                        import sys
-
-                        print(f"⚠  Skipping {module_name}: {e}", file=sys.stderr)
+                        click.secho(f"⚠  Skipping {module_name}: {e}", fg="yellow", err=True)
                     continue
 
-                # Preferencia por cli_command explícito
+                # Prefer an explicit cli_command attribute when present
                 if hasattr(module, "cli_command"):
                     command = getattr(module, "cli_command")
                     if isinstance(command, click.Command):
                         cli_group.add_command(command)
                         continue
 
-                # Si no hay cli_command, inspeccionamos todo
+                # Fall back to scanning all module attributes
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
                     if isinstance(attr, click.Command):
