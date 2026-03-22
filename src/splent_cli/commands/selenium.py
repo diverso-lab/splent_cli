@@ -3,13 +3,14 @@ import subprocess
 import click
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command("selenium", help="Executes Selenium tests based on the environment.")
 @click.argument("module", required=False)
 def selenium(module):
     # Absolute paths
-    working_dir = PathUtils.get_working_dir()
+    working_dir = str(context.workspace())
     modules_dir = PathUtils.get_modules_dir()
 
     def validate_module(module):

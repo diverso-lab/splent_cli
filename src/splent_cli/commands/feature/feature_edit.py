@@ -2,9 +2,10 @@ import os
 import subprocess
 import tomllib
 import click
+from splent_cli.services import context
 
 
-WORKSPACE = "/workspace"
+WORKSPACE = str(context.workspace())
 DEFAULT_ORG = "splent-io"         # GitHub org (con guión)
 DEFAULT_NAMESPACE = "splent_io"   # Filesystem namespace (con guión → guión bajo)
 
@@ -119,10 +120,7 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
 )
 @click.argument("feature_name")
 def feature_edit(feature_name):
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
+    product = context.require_app()
 
     product_path = os.path.join(WORKSPACE, product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")

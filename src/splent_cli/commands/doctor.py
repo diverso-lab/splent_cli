@@ -4,6 +4,7 @@ import subprocess
 import click
 import tomllib
 import importlib.metadata
+from splent_cli.services import context
 
 
 @click.command(
@@ -22,7 +23,7 @@ def doctor():
     - UVL file presence
     """
 
-    workspace = os.getenv("WORKING_DIR", "/workspace")
+    workspace = str(context.workspace())
     app_name = os.getenv("SPLENT_APP")
 
     click.echo(click.style("\n🩺 SPLENT Doctor\n", fg="cyan", bold=True))

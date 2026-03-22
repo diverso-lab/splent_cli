@@ -1,6 +1,7 @@
 import os
 import shutil
 import click
+from splent_cli.services import context
 
 
 def parse_feature_identifier(identifier: str):
@@ -32,7 +33,7 @@ def feature_delete(feature_identifier, version, force):
     - Warns clearly if the deletion will break products
     - Asks for confirmation unless --force is provided
     """
-    workspace = "/workspace"
+    workspace = str(context.workspace())
 
     # --- Parse namespace + feature -----------------------------------------
     namespace, namespace_github, namespace_fs, feature_name = \

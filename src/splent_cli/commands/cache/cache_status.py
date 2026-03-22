@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import click
 from pathlib import Path
 from collections import defaultdict
@@ -27,7 +28,7 @@ def _get_cache_grouped(cache_root: Path) -> dict:
 @click.command("cache:status", short_help="Show all cached features (versioned vs editable).")
 def cache_status():
     """Lists all features in cache, showing which are editable and which are versioned snapshots."""
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     grouped = _get_cache_grouped(cache_root)
@@ -51,3 +52,5 @@ def cache_status():
 
 
 cli_command = cache_status
+
+

@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 import requests
 import tomllib
+from splent_cli.services import context
 
 
 @click.command(
@@ -14,11 +15,11 @@ import tomllib
 @click.option("--force", is_flag=True, help="Redownload even if cached")
 def fetch_uvl(force):
 
-    workspace = "/workspace"
+    workspace = str(context.workspace())
     env_path = os.path.join(workspace, ".env")
 
     if not os.path.exists(env_path):
-        click.echo("Error: /workspace/.env not found", err=True)
+        click.echo(f"Error: {workspace}/.env not found", err=True)
         sys.exit(1)
 
     # -------------------------

@@ -1,8 +1,8 @@
-import os
 import subprocess
 from pathlib import Path
 import click
 from splent_cli.utils.feature_utils import get_normalize_feature_name_in_splent_format
+from splent_cli.services import context
 
 
 def _find_feature_root(pkg: str, workspace: Path, product: str) -> Path | None:
@@ -56,12 +56,8 @@ def feature_git(feature_ref, git_args):
         splent feature:git auth log --oneline -5
         splent feature:git auth diff HEAD~1
     """
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.secho("❌ SPLENT_APP is not set.", fg="red")
-        raise SystemExit(1)
+    workspace = context.workspace()
+    product = context.require_app()
 
     if not git_args:
         click.secho("❌ No git command provided.", fg="red")

@@ -2,6 +2,7 @@ import os
 import subprocess
 import tomllib
 import click
+from splent_cli.services import context
 
 
 @click.command(
@@ -31,13 +32,9 @@ def feature_env(feature_name, generate, env_name):
     Example:
         splent feature:env splent_feature_auth --generate --dev
     """
-    workspace = "/workspace"
+    workspace = str(context.workspace())
     org_safe = "splent_io"
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.echo("❌ SPLENT_APP not defined. Please select a product first.")
-        raise SystemExit(1)
+    product = context.require_app()
 
     # 1️⃣ Leer el pyproject.toml del producto
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")

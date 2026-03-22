@@ -7,6 +7,7 @@ from splent_cli.utils.feature_utils import (
     get_features_from_pyproject,
     get_normalize_feature_name_in_splent_format,
 )
+from splent_cli.services import context
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +33,7 @@ def compile_feature(feature, watch, production):
     Compiles a feature's webpack assets located under:
     /workspace/<product>/features/<org_safe>/<feature>@<version>/src/<org_safe>/<feature>/assets/js/webpack.config.js
     """
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo(
-            click.style("❌ Environment variable SPLENT_APP is not set!", fg="red")
-        )
-        return
+    product = context.require_app()
 
     # Parse parts like: splent_io/splent_feature_public@v1.0.0
     parts = feature.split("/")

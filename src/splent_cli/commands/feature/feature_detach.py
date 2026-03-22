@@ -1,6 +1,7 @@
 import os
 import re
 import click
+from splent_cli.services import context
 
 
 def parse_feature_identifier(identifier: str):
@@ -30,17 +31,14 @@ def feature_detach(feature_identifier, version):
     - Removes symlink in features/<namespace>/
     - Leaves .splent_cache intact
     """
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
+    product = context.require_app()
+    ws = context.workspace()
 
     # --- Parse namespace + feature -----------------------------------------
     namespace, namespace_github, namespace_fs, feature_name = \
         parse_feature_identifier(feature_identifier)
 
-    product_path = os.path.join(workspace, product)
+    product_path = str(ws / product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(pyproject_path):

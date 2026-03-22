@@ -1,6 +1,7 @@
 import click
 from pathlib import Path
 import subprocess
+from splent_cli.services import context
 
 
 def _mask(value: str, key: str) -> str:
@@ -16,8 +17,7 @@ def _mask(value: str, key: str) -> str:
 )
 def env_show():
     """Check which variables from .env are actually available in the current Bash shell."""
-    workspace = "/workspace"
-    env_file = Path(workspace) / ".env"
+    env_file = context.workspace() / ".env"
 
     if not env_file.exists():
         click.secho("⚠️  No .env file found.", fg="red")

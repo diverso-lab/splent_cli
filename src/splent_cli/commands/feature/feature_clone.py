@@ -2,10 +2,11 @@ import os
 import subprocess
 import requests
 import click
+from splent_cli.services import context
 
 
 DEFAULT_NAMESPACE = os.getenv('SPLENT_DEFAULT_NAMESPACE', 'splent_io')
-WORKSPACE = os.getenv("WORKING_DIR", "/workspace")
+WORKSPACE = str(context.workspace())
 
 
 # =====================================================================

@@ -3,6 +3,7 @@ import re
 import subprocess
 import click
 import requests
+from splent_cli.services import context
 
 
 def parse_feature_identifier(identifier: str):
@@ -33,18 +34,15 @@ def feature_attach(feature_identifier, version):
     - Updates pyproject.toml referencing feature@version.
     - Creates/updates the versioned symlink in features/<namespace>/.
     """
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
+    product = context.require_app()
+    ws = context.workspace()
 
     # --- Parse feature identifier -------------------------------------------
     namespace, namespace_github, namespace_fs, feature_name = \
         parse_feature_identifier(feature_identifier)
 
-    cache_base = os.path.join(workspace, ".splent_cache", "features", namespace_fs)
-    product_path = os.path.join(workspace, product)
+    cache_base = str(ws / ".splent_cache" / "features" / namespace_fs)
+    product_path = str(ws / product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(pyproject_path):

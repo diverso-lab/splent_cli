@@ -7,6 +7,7 @@ from splent_cli.utils.feature_utils import (
     get_features_from_pyproject,
     get_normalize_feature_name_in_splent_format,
 )
+from splent_cli.services import context
 
 
 def _validate_testing_environment():
@@ -67,11 +68,8 @@ def _find_feature_root(pkg: str, workspace: Path, product: str) -> Path | None:
 
 
 def _get_feature_roots(feature_ref=None) -> list[tuple[str, Path]]:
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
-    splent_app = os.getenv("SPLENT_APP")
-    if not splent_app:
-        click.secho("❌ SPLENT_APP is not set.", fg="red")
-        raise SystemExit(1)
+    workspace = context.workspace()
+    splent_app = context.require_app()
 
     raw_refs = get_features_from_pyproject()
     if not raw_refs:
@@ -135,7 +133,7 @@ def _all_feature_src_dirs(workspace: Path, product: str) -> list[str]:
 def _run_pytest(test_paths: list[tuple[str, Path, Path]], keyword: str | None, verbose: bool):
     # Build a combined PYTHONPATH with ALL features in the cache so cross-feature
     # imports resolve correctly even when testing a single feature.
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     product = os.getenv("SPLENT_APP", "")
     all_src_dirs = os.pathsep.join(_all_feature_src_dirs(workspace, product))
 

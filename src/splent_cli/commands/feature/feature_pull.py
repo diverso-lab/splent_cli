@@ -1,7 +1,7 @@
-import os
 import subprocess
 import click
 from pathlib import Path
+from splent_cli.services import context
 
 
 def _editable_features(cache_root: Path) -> list:
@@ -48,7 +48,7 @@ def feature_pull(feature_ref):
     With no arguments, pulls all editable features.
     With FEATURE_REF (e.g. splent_io/splent_feature_auth), pulls only that one.
     """
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     all_features = _editable_features(cache_root)

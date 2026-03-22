@@ -6,6 +6,7 @@ import zlib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 def pascalcase(s):
@@ -53,7 +54,7 @@ def make_product(name, features_file):
         "redis_port": redis_port,
     }
 
-    base_path = os.path.join(PathUtils.get_working_dir(), name)
+    base_path = str(context.workspace() / name)
 
     if os.path.exists(base_path):
         click.echo(click.style(f"The product '{name}' already exists.", fg="red"))

@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import re
 import click
 from pathlib import Path
@@ -64,7 +65,7 @@ def _get_all_product_refs(workspace: Path) -> set:
 @click.command("cache:orphans", short_help="Show cached features not referenced by any product.")
 def cache_orphans():
     """Lists features in the cache that no product references in its pyproject.toml."""
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     entries = _get_cache_entries(cache_root)
@@ -92,3 +93,5 @@ def cache_orphans():
 
 
 cli_command = cache_orphans
+
+

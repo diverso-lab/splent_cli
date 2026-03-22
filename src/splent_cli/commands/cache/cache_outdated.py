@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import re
 import click
 from pathlib import Path
@@ -71,7 +72,7 @@ def cache_outdated():
     Compares the version each product uses against all versions available in cache.
     Reports features where a newer version exists locally.
     """
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     cache_versions = _get_cache_versions(cache_root)
@@ -119,3 +120,5 @@ def cache_outdated():
 
 
 cli_command = cache_outdated
+
+

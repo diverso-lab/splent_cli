@@ -2,7 +2,7 @@ import os
 import tomllib
 import tomli_w
 import click
-from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command(
@@ -29,11 +29,8 @@ def feature_add(full_name):
     namespace, feature_name = full_name.split("/", 1)
     org_safe = namespace.replace("-", "_")
 
-    workspace = PathUtils.get_working_dir()
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
+    workspace = str(context.workspace())
+    product = context.require_app()
 
     cache_dir = os.path.join(
         workspace, ".splent_cache", "features", org_safe, feature_name

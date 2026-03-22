@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import click
 from pathlib import Path
 
@@ -18,7 +19,7 @@ def _human(size: int) -> str:
 @click.command("cache:size", short_help="Show disk usage of the feature cache.")
 def cache_size():
     """Shows disk usage per namespace and feature entry in the cache."""
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     if not cache_root.exists():
@@ -51,3 +52,5 @@ def cache_size():
 
 
 cli_command = cache_size
+
+

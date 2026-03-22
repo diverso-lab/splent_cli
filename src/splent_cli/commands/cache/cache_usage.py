@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import re
 import click
 from pathlib import Path
@@ -34,7 +35,7 @@ def _get_feature_usage(workspace: Path) -> dict:
 @click.option("--feature", default=None, help="Filter by feature name (partial match).")
 def cache_usage(feature):
     """Shows each feature and which product(s) declare it in their pyproject.toml."""
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
 
     usage = _get_feature_usage(workspace)
     if not usage:
@@ -57,3 +58,5 @@ def cache_usage(feature):
 
 
 cli_command = cache_usage
+
+

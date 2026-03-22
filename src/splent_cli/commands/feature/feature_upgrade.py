@@ -4,6 +4,7 @@ import subprocess
 import click
 from pathlib import Path
 from packaging.version import Version, InvalidVersion
+from splent_cli.services import context
 
 
 def _latest_cached_version(ns_dir: Path, name: str) -> str | None:
@@ -109,12 +110,8 @@ def feature_upgrade(feature_ref, yes):
 
     Pairs naturally with: splent cache:outdated
     """
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.secho("❌ SPLENT_APP not set.", fg="red")
-        raise SystemExit(1)
+    workspace = context.workspace()
+    product = context.require_app()
 
     product_path = workspace / product
     pyproject_path = product_path / "pyproject.toml"

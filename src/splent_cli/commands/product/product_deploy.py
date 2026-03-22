@@ -1,6 +1,7 @@
 import os
 import click
 import subprocess
+from splent_cli.services import context
 
 
 @click.command(
@@ -16,13 +17,8 @@ def product_deploy():
     - Writes final .env.
     - Executes `docker compose up -d` with docker-compose.deploy.yml.
     """
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
-
-    workspace = "/workspace"
-    product_path = os.path.join(workspace, product)
+    product = context.require_app()
+    product_path = str(context.workspace() / product)
     docker_dir = os.path.join(product_path, "docker")
 
     env_example_path = os.path.join(docker_dir, ".env.deploy.example")

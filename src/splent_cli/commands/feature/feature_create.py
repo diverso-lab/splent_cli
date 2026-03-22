@@ -2,6 +2,7 @@ import os
 import click
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 def pascalcase(s):
@@ -49,7 +50,7 @@ def make_feature(full_name):
     org_safe = namespace.replace("-", "_")
 
     # --- Target directory (local cache) ---
-    workspace = PathUtils.get_working_dir()
+    workspace = str(context.workspace())
     cache_dir = os.path.join(
         workspace, ".splent_cache", "features", org_safe, feature_name
     )

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 import tomllib
+from splent_cli.services import context
 
 
 @click.command(
@@ -12,11 +13,11 @@ import tomllib
 )
 def uvl_info():
 
-    workspace = "/workspace"
+    workspace = str(context.workspace())
     env_path = os.path.join(workspace, ".env")
 
     if not os.path.exists(env_path):
-        click.echo("Error: /workspace/.env not found", err=True)
+        click.echo(f"Error: {workspace}/.env not found", err=True)
         sys.exit(1)
 
     # -------------------------

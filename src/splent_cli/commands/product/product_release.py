@@ -4,6 +4,7 @@ import sys
 import subprocess
 import requests
 import click
+from splent_cli.services import context
 
 
 # =====================================================================
@@ -211,14 +212,13 @@ def release_docker_image(product, version, docker_dir):
 def product_release(version, product):
     validate_product_release_env()
 
-    workspace = "/workspace"
     product = product or os.getenv("SPLENT_APP")
 
     if not product:
         click.echo("❌ No product specified and SPLENT_APP not set.")
         raise SystemExit(1)
 
-    product_path = os.path.join(workspace, product)
+    product_path = str(context.workspace() / product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")
     docker_dir = os.path.join(product_path, "docker")
 

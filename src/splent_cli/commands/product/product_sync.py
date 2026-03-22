@@ -3,6 +3,7 @@ import tomllib
 import subprocess
 import shutil
 import click
+from splent_cli.services import context
 
 
 @click.command(
@@ -15,12 +16,8 @@ import click
     help="Force reclone each feature (delete its cache folder first).",
 )
 def product_sync(force):
-    workspace = os.getenv("WORKING_DIR", "/workspace")
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.secho("❌ SPLENT_APP not defined.", fg="red")
-        raise SystemExit(1)
+    workspace = str(context.workspace())
+    product = context.require_app()
 
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")
     if not os.path.exists(pyproject_path):

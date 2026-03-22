@@ -3,6 +3,7 @@ import tomllib
 import subprocess
 import shutil
 import click
+from splent_cli.services import context
 
 
 @click.command(
@@ -45,12 +46,8 @@ def product_env(generate, merge, env_name, process_all):
         splent product:env --generate --all --dev
         splent product:env --merge --dev
     """
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.echo("❌ SPLENT_APP not defined. Please select a product first.")
-        raise SystemExit(1)
+    workspace = str(context.workspace())
+    product = context.require_app()
 
     if not env_name:
         click.echo("❌ You must specify --dev or --prod.")

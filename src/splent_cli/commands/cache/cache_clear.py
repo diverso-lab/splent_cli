@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import shutil
 import click
 from pathlib import Path
@@ -34,7 +35,7 @@ def cache_clear(namespace, feature, yes):
       --namespace splent_io           → removes the entire namespace folder
       (no options)                    → clears the entire feature cache
     """
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     if not cache_root.exists():
@@ -88,3 +89,5 @@ def cache_clear(namespace, feature, yes):
 
 
 cli_command = cache_clear
+
+

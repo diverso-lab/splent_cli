@@ -2,6 +2,7 @@ import os
 import tomllib
 import click
 from pathlib import Path
+from splent_cli.services import context
 
 
 def _product_info(product_dir: Path) -> dict | None:
@@ -24,7 +25,7 @@ def _product_info(product_dir: Path) -> dict | None:
 @click.command("product:list", short_help="List all products in the workspace.")
 def product_list():
     """Lists all products found in the workspace, with their version and feature count."""
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     active = os.getenv("SPLENT_APP")
 
     if not workspace.exists():

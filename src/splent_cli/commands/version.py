@@ -5,6 +5,7 @@ import click
 import importlib.metadata
 
 import tomllib
+from splent_cli.services import context
 
 
 def _pkg_version(name: str) -> str | None:
@@ -101,7 +102,7 @@ def version(as_json: bool) -> None:
     A short fingerprint is computed from all versions combined — identical fingerprints
     mean identical workspace states.
     """
-    workspace = os.getenv("WORKING_DIR", "/workspace")
+    workspace = str(context.workspace())
     app_name = os.getenv("SPLENT_APP")
 
     cli_v = _workspace_pkg_version(workspace, "splent_cli") or "unknown"

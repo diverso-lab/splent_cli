@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import click
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def cache_versions(feature_ref: str):
     ns, name = feature_ref.split("/", 1)
     ns_fs = ns.replace("-", "_")
 
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     ns_dir = workspace / ".splent_cache" / "features" / ns_fs
 
     if not ns_dir.exists():
@@ -46,3 +47,5 @@ def cache_versions(feature_ref: str):
 
 
 cli_command = cache_versions
+
+

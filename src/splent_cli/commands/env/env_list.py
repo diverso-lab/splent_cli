@@ -1,6 +1,7 @@
 import os
 import click
 from pathlib import Path
+from splent_cli.services import context
 
 
 _SENSITIVE = ("TOKEN", "SECRET", "PASSWORD", "KEY", "PWD", "PASS")
@@ -67,10 +68,10 @@ def env_list(filter, keys_only, no_mask, unset):
     Sensitive keys (TOKEN, SECRET, PASSWORD, KEY…) are masked by default.
     Use --no-mask to reveal plain values.
     """
-    env_file = Path("/workspace/.env")
+    env_file = context.workspace() / ".env"
 
     if not env_file.exists():
-        click.secho("❌ No .env file found at /workspace/.env.", fg="red")
+        click.secho(f"❌ No .env file found at {env_file}.", fg="red")
         raise SystemExit(1)
 
     data = _read_env_file(env_file)
@@ -120,7 +121,7 @@ def env_list(filter, keys_only, no_mask, unset):
             click.echo(f"    {indicator} {k:<{col}} {display}")
         click.echo()
 
-    note = f"  {total} variable(s) in /workspace/.env"
+    note = f"  {total} variable(s) in {env_file}"
     if not no_mask:
         note += "  (sensitive values masked)"
     click.secho(note, fg="bright_black")

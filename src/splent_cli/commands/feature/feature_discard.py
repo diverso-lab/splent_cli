@@ -2,6 +2,7 @@ import os
 import click
 import shutil
 import tomllib
+from splent_cli.services import context
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
@@ -58,7 +59,7 @@ def feature_discard(feature_name, namespace):
     This is a safe operation: versioned snapshots remain untouched.
     """
 
-    workspace = "/workspace"
+    workspace = str(context.workspace())
     ns_safe = _get_namespace_safe(namespace)
 
     editable_path = os.path.join(

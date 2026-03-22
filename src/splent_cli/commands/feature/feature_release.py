@@ -5,6 +5,7 @@ import subprocess
 import requests
 import click
 from splent_cli.commands.feature.feature_attach import feature_attach
+from splent_cli.services import context
 
 
 DEFAULT_NAMESPACE = os.getenv('SPLENT_DEFAULT_NAMESPACE', 'splent_io')
@@ -279,7 +280,7 @@ def feature_release(feature_ref, version, attach):
 
     validate_environment()
 
-    workspace = "/workspace"
+    workspace = str(context.workspace())
 
     feature_path, namespace, feature_name, normalized = (
         resolve_feature_path(feature_ref, version, workspace)

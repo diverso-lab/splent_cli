@@ -1,4 +1,5 @@
 import os
+from splent_cli.services import context
 import re
 import shutil
 import click
@@ -84,7 +85,7 @@ def cache_prune(yes):
     Removes cache entries that no product references in its pyproject.toml,
     then cleans up broken symlinks in products.
     """
-    workspace = Path(os.getenv("WORKING_DIR", "/workspace"))
+    workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     entries = _get_cache_entries(cache_root)
@@ -126,3 +127,5 @@ def cache_prune(yes):
 
 
 cli_command = cache_prune
+
+

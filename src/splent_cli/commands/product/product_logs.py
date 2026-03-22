@@ -1,21 +1,6 @@
-import os
 import subprocess
 import click
-
-
-def _compose_project_name(name: str, env: str) -> str:
-    return f"{name}_{env}".replace("/", "_").replace("@", "_").replace(".", "_")
-
-
-def _resolve_compose_file(product_path: str, env: str) -> str | None:
-    docker_dir = os.path.join(product_path, "docker")
-    preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
-    fallback = os.path.join(docker_dir, "docker-compose.yml")
-    if os.path.exists(preferred):
-        return preferred
-    if os.path.exists(fallback):
-        return fallback
-    return None
+from splent_cli.services import compose, context
 
 
 @click.command("product:logs", short_help="Tail logs of the active product's containers.")
@@ -35,22 +20,16 @@ def product_logs(env_dev, env_prod, tail, no_follow, service):
         click.secho("❌ Cannot specify both --dev and --prod.", fg="red")
         raise SystemExit(1)
 
-    env = "prod" if env_prod else "dev" if env_dev else os.getenv("SPLENT_ENV", "dev")
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.secho("❌ SPLENT_APP not set.", fg="red")
-        raise SystemExit(1)
-
-    product_path = os.path.join(workspace, product)
-    compose_file = _resolve_compose_file(product_path, env)
+    env = context.resolve_env(env_dev, env_prod)
+    product = context.require_app()
+    product_path = str(context.workspace() / product)
+    compose_file = compose.resolve_file(product_path, env)
 
     if not compose_file:
         click.secho(f"❌ No docker-compose file found for {product} ({env}).", fg="red")
         raise SystemExit(1)
 
-    project_name = _compose_project_name(product, env)
+    project_name = compose.project_name(product, env)
     cmd = [
         "docker", "compose",
         "-p", project_name,

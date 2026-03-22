@@ -2,27 +2,7 @@ import os
 import subprocess
 import click
 import tomllib
-
-
-def _compose_project_name(name: str, env: str) -> str:
-    return f"{name}_{env}".replace("/", "_").replace("@", "_").replace(".", "_")
-
-
-def _feature_cache_docker_dir(workspace: str, feature: str) -> str:
-    return os.path.join(workspace, ".splent_cache", "features", feature, "docker")
-
-
-def _get_product_path(product, workspace="/workspace"):
-    return os.path.join(workspace, product)
-
-
-def _normalize_feature_ref(feat: str) -> str:
-    """Ensure the feature ref follows org_safe/feature@version format."""
-    if "features/" in feat:
-        feat = feat.split("features/")[-1]
-    if "/" not in feat:
-        feat = f"splent_io/{feat}"
-    return feat
+from splent_cli.services import compose, context
 
 
 @click.command(
@@ -35,13 +15,8 @@ def product_down(env, v):
     """Stops the product and its features using Docker Compose.
     Use --v to also remove all volumes.
     """
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
-
-    product_path = _get_product_path(product, workspace)
+    product = context.require_app()
+    product_path = compose.product_path(product, str(context.workspace()))
 
     remove_volumes = False
     if v:
@@ -63,7 +38,7 @@ def product_down(env, v):
         )
         if not os.path.exists(compose_file):
             return
-        project_name = _compose_project_name(name, env)
+        project_name = compose.project_name(name, env)
 
         args = ["docker", "compose", "-p", project_name, "-f", compose_file, "down"]
         if remove_volumes:
@@ -86,6 +61,7 @@ def product_down(env, v):
         data.get("project", {}).get("optional-dependencies", {}).get("features", [])
     )
 
+    ws = str(context.workspace())
     for feat in features:
-        clean = _normalize_feature_ref(feat)
-        shutdown(clean, _feature_cache_docker_dir(workspace, clean))
+        clean = compose.normalize_feature_ref(feat)
+        shutdown(clean, compose.feature_docker_dir(ws, clean))

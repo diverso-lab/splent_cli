@@ -2,7 +2,7 @@ import os
 import tomllib
 import tomli_w
 import click
-from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command(
@@ -20,11 +20,8 @@ def feature_remove(feature_name, namespace):
     - Removes symlink under /workspace/<product>/features/<namespace>/<feature_name>
     """
 
-    workspace = PathUtils.get_working_dir()
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
+    product = context.require_app()
+    workspace = str(context.workspace())
 
     github_user = os.getenv("GITHUB_USER")
     org = namespace or github_user or "splent-io"

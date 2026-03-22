@@ -1,25 +1,8 @@
 import os
-import shutil
 import subprocess
 import click
 import tomllib
-from pathlib import Path
-
-
-def _compose_project_name(name: str, env: str) -> str:
-    return f"{name}_{env}".replace("/", "_").replace("@", "_").replace(".", "_")
-
-
-def _normalize_feature_ref(feat: str) -> str:
-    if "features/" in feat:
-        feat = feat.split("features/")[-1]
-    if "/" not in feat:
-        feat = f"splent_io/{feat}"
-    return feat
-
-
-def _feature_cache_docker_dir(workspace: str, feature: str) -> str:
-    return os.path.join(workspace, ".splent_cache", "features", feature, "docker")
+from splent_cli.services import compose, context
 
 
 def _docker_down(name: str, docker_dir: str, env: str):
@@ -28,7 +11,7 @@ def _docker_down(name: str, docker_dir: str, env: str):
     compose_file = compose_preferred if os.path.exists(compose_preferred) else compose_fallback
     if not os.path.exists(compose_file):
         return
-    project_name = _compose_project_name(name, env)
+    project_name = compose.project_name(name, env)
     subprocess.run(
         ["docker", "compose", "-p", project_name, "-f", compose_file, "down", "-v"],
         check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -56,13 +39,9 @@ def product_clean(env_dev, env_prod, yes):
         click.secho("❌ Cannot specify both --dev and --prod.", fg="red")
         raise SystemExit(1)
 
-    env = "prod" if env_prod else "dev" if env_dev else os.getenv("SPLENT_ENV", "dev")
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.secho("❌ SPLENT_APP not set.", fg="red")
-        raise SystemExit(1)
+    env = context.resolve_env(env_dev, env_prod)
+    workspace = str(context.workspace())
+    product = context.require_app()
 
     click.secho(f"\n⚠️  This will completely wipe {product} ({env}):", fg="yellow")
     click.echo("  - Stop all Docker containers and remove volumes")
@@ -88,8 +67,8 @@ def product_clean(env_dev, env_prod, yes):
 
     _docker_down(product, os.path.join(product_path, "docker"), env)
     for feat in features:
-        clean = _normalize_feature_ref(feat)
-        _docker_down(clean, _feature_cache_docker_dir(workspace, clean), env)
+        clean = compose.normalize_feature_ref(feat)
+        _docker_down(clean, compose.feature_docker_dir(workspace, clean), env)
 
     # ── 2. DB reset ──────────────────────────────────────────────────
     click.secho("\n🗄️  Resetting database...", fg="cyan")

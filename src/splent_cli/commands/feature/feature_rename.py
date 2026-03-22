@@ -3,7 +3,7 @@ import shutil
 import tomllib
 import tomli_w
 import click
-from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command(
@@ -31,7 +31,7 @@ def feature_rename(old_name, new_name, namespace):
     org = namespace or github_user or "splent-io"
     org_safe = org.replace("-", "_")
 
-    workspace = PathUtils.get_working_dir()
+    workspace = str(context.workspace())
     cache_root = os.path.join(workspace, ".splent_cache", "features", org_safe)
     old_dir = os.path.join(cache_root, old_name)
     new_dir = os.path.join(cache_root, new_name)
@@ -74,7 +74,7 @@ def feature_rename(old_name, new_name, namespace):
     # -----------------------------
     # Context
     # -----------------------------
-    splent_app = os.getenv("SPLENT_APP")
+    splent_app = os.getenv("SPLENT_APP")  # optional — used to update pyproject.toml if set
     pyproject_path = None
     features_list = []
     feature_is_active = False

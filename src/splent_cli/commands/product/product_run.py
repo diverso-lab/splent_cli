@@ -1,14 +1,7 @@
 import os
 import subprocess
 import click
-
-
-def _compose_project_name(name: str, env: str) -> str:
-    return f"{name}_{env}".replace("/", "_").replace("@", "_").replace(".", "_")
-
-
-def _get_product_path(product, workspace="/workspace"):
-    return os.path.join(workspace, product)
+from splent_cli.services import compose, context
 
 
 @click.command(
@@ -44,19 +37,9 @@ def product_runc(env_dev, env_prod):
     # -------------------------------------------------------------
     # 2. DETERMINE ENVIRONMENT
     # -------------------------------------------------------------
-    if env_prod:
-        env = "prod"
-    else:
-        env = "dev"
-
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.secho("❌ SPLENT_APP not defined.", fg="red")
-        raise SystemExit(1)
-
-    product_path = _get_product_path(product, workspace)
+    env = context.resolve_env(env_dev, env_prod)
+    product = context.require_app()
+    product_path = compose.product_path(product, str(context.workspace()))
     docker_dir = os.path.join(product_path, "docker")
 
     entrypoint = os.path.join(product_path, "entrypoints", f"entrypoint.{env}.sh")
@@ -64,7 +47,7 @@ def product_runc(env_dev, env_prod):
     fallback_file = os.path.join(docker_dir, "docker-compose.yml")
 
     compose_used = compose_file if os.path.exists(compose_file) else fallback_file
-    project_name = _compose_project_name(product, env)
+    project_name = compose.project_name(product, env)
 
     # -------------------------------------------------------------
     # 3. FIND CONTAINER
