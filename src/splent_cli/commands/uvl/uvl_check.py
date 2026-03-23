@@ -19,6 +19,48 @@ from splent_cli.commands.uvl.uvl_utils import (
 )
 
 
+def run_uvl_check(workspace: str) -> tuple[bool, str]:
+    """
+    Programmatic UVL validation. Returns (ok, message).
+    Does not print anything and does not call sys.exit.
+    """
+    try:
+        app_name = _read_splent_app(workspace=workspace)
+        product_path = os.path.join(workspace, app_name)
+        pyproject_path = os.path.join(product_path, "pyproject.toml")
+        data = _load_pyproject(pyproject_path)
+        uvl_cfg = _get_uvl_cfg(data)
+        mirror = uvl_cfg.get("mirror")
+        doi    = uvl_cfg.get("doi")
+        file   = uvl_cfg.get("file")
+        if not mirror or not doi or not file:
+            return False, "Missing mirror, doi, or file in [tool.splent.uvl]."
+        local_uvl = os.path.join(product_path, "uvl", file)
+        if not os.path.exists(local_uvl):
+            return False, f"UVL not downloaded: {local_uvl}\n           Run: splent uvl:fetch"
+        universe, root_name = _list_all_features_from_uvl(local_uvl)
+        deps = _get_feature_deps(data)
+        selected = {_normalize_feature_name(d) for d in deps}
+        selected.add(root_name)
+        unknown = sorted(f for f in selected if f not in universe)
+        if unknown:
+            return False, f"pyproject contains features not in UVL: {', '.join(unknown)}"
+        conf_path = _write_csvconf_full(universe, selected)
+        try:
+            fm = FLAMAFeatureModel(local_uvl)
+            ok = fm.satisfiable_configuration(conf_path, full_configuration=False)
+        finally:
+            try:
+                os.remove(conf_path)
+            except OSError:
+                pass
+        if not ok:
+            return False, "Configuration is NOT satisfiable under the UVL constraints."
+        return True, "OK"
+    except Exception as exc:
+        return False, str(exc)
+
+
 @click.command(
     "uvl:check",
     short_help="Validate pyproject feature selection against the downloaded UVL",

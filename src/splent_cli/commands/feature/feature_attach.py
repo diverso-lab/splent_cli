@@ -4,6 +4,7 @@ import subprocess
 import click
 import requests
 from splent_cli.services import context, compose
+from splent_cli.utils.manifest import feature_key, set_feature_state
 
 
 @click.command(
@@ -136,4 +137,12 @@ def feature_attach(feature_identifier, version):
     os.symlink(versioned_dir, new_link)
 
     click.echo(f"🔗 Linked {new_link} → {versioned_dir}")
+
+    # --- 5️⃣ Update manifest ------------------------------------------------
+    key = feature_key(namespace_fs, feature_name, version)
+    set_feature_state(
+        product_path, product, key, "declared",
+        namespace=namespace_fs, name=feature_name, version=version, mode="pinned",
+    )
+
     click.echo("🎯 Feature successfully attached.")

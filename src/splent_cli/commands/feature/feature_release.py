@@ -109,6 +109,34 @@ def _extract_models(models_path: Path) -> list[str]:
     return sorted(set(re.findall(r"""class\s+(\w+)\s*\([^)]*db\.Model[^)]*\)""", text)))
 
 
+def _extract_hooks(hooks_path: Path) -> list[str]:
+    """Extract hook slot names from hooks.py via regex."""
+    if not hooks_path.exists():
+        return []
+    text = hooks_path.read_text()
+    return sorted(set(re.findall(
+        r"""register_template_hook\s*\(\s*['"]([^'"]+)['"]""", text
+    )))
+
+
+def _extract_services(services_path: Path) -> list[str]:
+    """Extract service class names from services.py via regex."""
+    if not services_path.exists():
+        return []
+    text = services_path.read_text()
+    return sorted(set(re.findall(
+        r"""class\s+(\w+)\s*\([^)]*(?:BaseService|Service)[^)]*\)""", text
+    )))
+
+
+def _extract_docker(feature_root: Path) -> list[str]:
+    """Find docker-compose files at the feature root."""
+    found = []
+    for pattern in ("docker-compose*.yml", "docker-compose*.yaml"):
+        found.extend(p.name for p in feature_root.glob(pattern))
+    return sorted(found)
+
+
 def _scan_dependencies(src_dir: Path, own_feature_name: str) -> tuple[list[str], list[str]]:
     """
     Scan all .py files under src_dir for:
@@ -138,15 +166,18 @@ def _scan_dependencies(src_dir: Path, own_feature_name: str) -> tuple[list[str],
 def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict:
     """
     Introspect feature source code and return a contract dict with:
-      provides: routes, blueprints, models, commands
+      provides: routes, blueprints, models, commands, hooks, services, docker
       requires: features, env_vars
     """
-    src_dir = (
-        Path(feature_path) / "src" / namespace.replace("-", "_") / feature_name
-    )
+    feature_root = Path(feature_path)
+    src_dir = feature_root / "src" / namespace.replace("-", "_") / feature_name
+
     routes = _extract_routes(src_dir / "routes.py")
     blueprints = _extract_blueprints(src_dir / "__init__.py")
     models = _extract_models(src_dir / "models.py")
+    hooks = _extract_hooks(src_dir / "hooks.py")
+    services = _extract_services(src_dir / "services.py")
+    docker = _extract_docker(feature_root)
     req_features, env_vars = _scan_dependencies(src_dir, feature_name)
 
     return {
@@ -154,6 +185,9 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
         "blueprints": blueprints,
         "models": models,
         "commands": [],
+        "hooks": hooks,
+        "services": services,
+        "docker": docker,
         "requires_features": req_features,
         "env_vars": env_vars,
     }
@@ -204,6 +238,9 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         f"blueprints = {_toml_list(contract['blueprints'])}\n"
         f"models     = {_toml_list(contract['models'])}\n"
         f"commands   = {_toml_list(contract['commands'])}\n"
+        f"hooks      = {_toml_list(contract['hooks'])}\n"
+        f"services   = {_toml_list(contract['services'])}\n"
+        f"docker     = {_toml_list(contract['docker'])}\n"
         "\n"
         "[tool.splent.contract.requires]\n"
         f"features = {_toml_list(contract['requires_features'])}\n"

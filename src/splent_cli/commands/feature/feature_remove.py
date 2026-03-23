@@ -3,6 +3,12 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
+from splent_cli.utils.manifest import (
+    feature_key,
+    remove_feature,
+    get_dependents,
+    get_feature_state,
+)
 
 
 @click.command(
@@ -13,7 +19,11 @@ from splent_cli.services import context
 @click.option(
     "--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io')."
 )
-def feature_remove(feature_name, namespace):
+@click.option(
+    "--force", is_flag=True,
+    help="Skip dependency and migration-state checks (use with care).",
+)
+def feature_remove(feature_name, namespace, force):
     """
     Removes a local feature (no version, no repo) from the current SPLENT product:
     - Removes entry from [features] in pyproject.toml
@@ -27,10 +37,41 @@ def feature_remove(feature_name, namespace):
     org = namespace or github_user or "splent-io"
     org_safe = org.replace("-", "_")
 
+    product_path = os.path.join(workspace, product)
+
+    if not force:
+        # --------------------------
+        # Guard: dependency check
+        # --------------------------
+        dependents = get_dependents(product_path, feature_name)
+        if dependents:
+            click.secho(
+                f"❌ Cannot remove '{feature_name}': the following installed features depend on it:\n"
+                + "".join(f"   • {d}\n" for d in dependents)
+                + "   Remove those features first, or use --force to bypass.",
+                fg="red",
+            )
+            raise SystemExit(1)
+
+        # --------------------------
+        # Guard: migration state
+        # --------------------------
+        key = feature_key(org_safe, feature_name)
+        state = get_feature_state(product_path, key)
+        if state in ("migrated", "active"):
+            click.secho(
+                f"❌ Feature '{feature_name}' has migrations applied (state: {state}).\n"
+                f"   Roll them back first:\n"
+                f"   splent db:rollback {feature_name} --steps 999\n"
+                f"   Or use --force to skip this check.",
+                fg="red",
+            )
+            raise SystemExit(1)
+
     # --------------------------
     # 1️⃣ Update pyproject.toml
     # --------------------------
-    pyproject_path = os.path.join(workspace, product, "pyproject.toml")
+    pyproject_path = os.path.join(product_path, "pyproject.toml")
     if not os.path.exists(pyproject_path):
         click.echo("❌ pyproject.toml not found in product directory.")
         raise SystemExit(1)
@@ -57,12 +98,18 @@ def feature_remove(feature_name, namespace):
     # --------------------------
     # 2️⃣ Remove symlink
     # --------------------------
-    link_path = os.path.join(workspace, product, "features", org_safe, feature_name)
+    link_path = os.path.join(product_path, "features", org_safe, feature_name)
     if os.path.islink(link_path) or os.path.exists(link_path):
         os.unlink(link_path)
         click.echo(f"🗑️  Removed symlink: {link_path}")
     else:
         click.echo(f"ℹ️ Symlink not found: {link_path}")
+
+    # --------------------------
+    # 3️⃣ Update manifest
+    # --------------------------
+    key = feature_key(org_safe, feature_name)
+    remove_feature(product_path, product, key)
 
     click.echo(
         f"✅ Feature '{entry_name}' removed successfully from product '{product}'."

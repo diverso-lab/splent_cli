@@ -1,22 +1,48 @@
 import inspect
 import importlib
+import os
 import click
 
 from splent_cli.commands.database.db_reset import db_reset
 from splent_cli.utils.decorators import requires_app
 from splent_cli.utils.feature_utils import get_features_from_pyproject
 from splent_framework.seeders.BaseSeeder import BaseSeeder
+from splent_framework.managers.feature_order import FeatureLoadOrderResolver
+from splent_framework.utils.pyproject_reader import PyprojectReader
+
+
+def _resolve_feature_order(features_raw: list[str]) -> list[str]:
+    """Return features in topological order using the product's UVL constraints.
+
+    Falls back to the declared order in pyproject.toml if no UVL is available.
+    """
+    splent_app = os.getenv("SPLENT_APP", "")
+    working_dir = os.getenv("WORKING_DIR", "/workspace")
+    product_dir = os.path.join(working_dir, splent_app) if splent_app else ""
+
+    uvl_path = None
+    if product_dir:
+        try:
+            uvl_cfg = PyprojectReader.for_product(product_dir).uvl_config
+            uvl_file = uvl_cfg.get("file")
+            if uvl_file:
+                uvl_path = os.path.join(product_dir, "uvl", uvl_file)
+        except Exception:
+            pass
+
+    return FeatureLoadOrderResolver().resolve(features_raw, uvl_path)
 
 
 def get_installed_seeders(specific_module=None):
-    seeders = []
-
-    features = get_features_from_pyproject()
-    if not features:
+    features_raw = get_features_from_pyproject()
+    if not features_raw:
         click.echo(click.style("⚠️  No features found in pyproject.toml", fg="yellow"))
-        return seeders
+        return []
 
-    for feature in features:
+    ordered = _resolve_feature_order(features_raw)
+
+    seeders = []
+    for feature in ordered:
         # Handle versioned feature names like "splent_feature_auth@v1.0.0"
         base_name = feature.split("@")[0]
         module_name = f"splent_io.{base_name}.seeders"
@@ -48,7 +74,7 @@ def get_installed_seeders(specific_module=None):
                 err=True,
             )
 
-    seeders.sort(key=lambda s: s.priority)
+    # Order is already topological — no sort needed
     return seeders
 
 

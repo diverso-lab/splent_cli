@@ -3,6 +3,7 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
+from splent_cli.utils.manifest import feature_key, set_feature_state
 
 
 @click.command(
@@ -74,5 +75,15 @@ def feature_add(full_name):
 
     os.symlink(cache_dir, link_path)
     click.echo(f"🔗 Linked {link_path} → {cache_dir}")
+
+    # --------------------------
+    # 3️⃣ Update manifest
+    # --------------------------
+    product_path = os.path.join(workspace, product)
+    key = feature_key(namespace, feature_name)
+    set_feature_state(
+        product_path, product, key, "declared",
+        namespace=namespace, name=feature_name, version=None, mode="editable",
+    )
 
     click.echo(f"✅ Feature '{full_name}' added successfully to product '{product}'.")
