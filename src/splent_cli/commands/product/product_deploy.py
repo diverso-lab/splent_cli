@@ -1,6 +1,7 @@
 import os
 import click
 import subprocess
+from splent_cli.services import context
 
 
 @click.command(
@@ -16,13 +17,8 @@ def product_deploy():
     - Writes final .env.
     - Executes `docker compose up -d` with docker-compose.deploy.yml.
     """
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
-
-    workspace = "/workspace"
-    product_path = os.path.join(workspace, product)
+    product = context.require_app()
+    product_path = str(context.workspace() / product)
     docker_dir = os.path.join(product_path, "docker")
 
     env_example_path = os.path.join(docker_dir, ".env.deploy.example")
@@ -33,11 +29,15 @@ def product_deploy():
     # Validate required build artifacts
     # ---------------------------------------------------------
     if not os.path.isfile(env_example_path):
-        click.echo("❌ .env.deploy.example not found. Run `splent product:build` first.")
+        click.echo(
+            "❌ .env.deploy.example not found. Run `splent product:build` first."
+        )
         raise SystemExit(1)
 
     if not os.path.isfile(compose_path):
-        click.echo("❌ docker-compose.deploy.yml not found. Run `splent product:build` first.")
+        click.echo(
+            "❌ docker-compose.deploy.yml not found. Run `splent product:build` first."
+        )
         raise SystemExit(1)
 
     # ---------------------------------------------------------
@@ -99,6 +99,7 @@ def product_deploy():
         )
         click.echo("🎯 Deployment successful!")
     except subprocess.CalledProcessError as e:
-        click.echo("❌ Deployment failed.")
-        click.echo(e)
+        click.secho("❌ Deployment failed.", fg="red")
+        if e.stderr:
+            click.echo(e.stderr)
         raise SystemExit(1)

@@ -1,13 +1,15 @@
 import os
 import re
-import sys
 import subprocess
-import requests
+import tomllib
 import click
+from pathlib import Path
+
 from splent_cli.commands.feature.feature_attach import feature_attach
+from splent_cli.services import context, release
 
 
-DEFAULT_NAMESPACE = os.getenv('SPLENT_DEFAULT_NAMESPACE', 'splent_io')
+DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 
 # =====================================================================
@@ -25,30 +27,7 @@ def parse_feature_ref(ref: str, default_ns: str = DEFAULT_NAMESPACE):
 
 
 # =====================================================================
-# EXTRACT REPO NAME (org/repo)
-# =====================================================================
-def extract_repo(remote_url: str) -> str:
-
-    # HTTPS with token
-    m = re.match(r"https://[^@]+@github\.com/(?P<org>[^/]+)/(?P<repo>.+?)\.git$", remote_url)
-    if m:
-        return f"{m.group('org')}/{m.group('repo')}"
-
-    # HTTPS normal
-    m = re.match(r"https://github\.com/(?P<org>[^/]+)/(?P<repo>.+?)\.git$", remote_url)
-    if m:
-        return f"{m.group('org')}/{m.group('repo')}"
-
-    # SSH
-    m = re.match(r"git@github\.com:(?P<org>[^/]+)/(?P<repo>.+?)\.git$", remote_url)
-    if m:
-        return f"{m.group('org')}/{m.group('repo')}"
-
-    raise SystemExit(f"❌ Cannot extract GitHub repo from: {remote_url}")
-
-
-# =====================================================================
-# VALIDACIÓN ENV
+# ENVIRONMENT VALIDATION
 # =====================================================================
 def validate_environment():
     missing = []
@@ -76,7 +55,7 @@ def validate_environment():
 
 
 # =====================================================================
-# LOCALIZAR CARPETA EDITABLE (base sin versión)
+# LOCATE EDITABLE DIRECTORY (base name without version suffix)
 # =====================================================================
 def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
     ns, name, ver_in_ref = parse_feature_ref(feature_ref)
@@ -87,7 +66,9 @@ def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
             f"   Use: {ns}/{name}"
         )
 
-    cache_base = os.path.join(workspace, ".splent_cache", "features", ns.replace("-", "_"))
+    cache_base = os.path.join(
+        workspace, ".splent_cache", "features", ns.replace("-", "_")
+    )
     base_dir = os.path.join(cache_base, name)
 
     if not os.path.exists(base_dir):
@@ -101,151 +82,178 @@ def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
 
 
 # =====================================================================
-# UPDATE VERSION
+# CONTRACT AUTO-INFERENCE
 # =====================================================================
-def update_version(py_path, normalized):
-    import re
-    with open(py_path, "r", encoding="utf-8") as f:
-        content = f.read()
 
-    new_content = re.sub(
-        r'(?m)^version\s*=\s*["\'].*?["\']',
-        f'version = "{normalized}"',
-        content,
-    )
-    with open(py_path, "w", encoding="utf-8") as f:
-        f.write(new_content)
+def _extract_routes(routes_path: Path) -> list[str]:
+    """Extract route paths from routes.py via regex."""
+    if not routes_path.exists():
+        return []
+    text = routes_path.read_text()
+    return sorted(set(re.findall(r"""@\w+\.route\s*\(\s*['"]([^'"]+)['"]""", text)))
 
 
-# =====================================================================
-# COMMIT
-# =====================================================================
-def commit_local_changes(version):
-    r = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-
-    if not r.stdout.strip():
-        click.echo("✅ Working tree clean.")
-        return
-
-    click.echo("⚠️ Local changes detected:")
-    click.echo(r.stdout.strip())
-
-    if not click.confirm("Commit and push?", default=True):
-        raise SystemExit("🚫 Release cancelled.")
-
-    subprocess.run(["git", "add", "-A"])
-    subprocess.run(["git", "commit", "-m", f"chore: bump version to {version}"])
-    subprocess.run(["git", "push", "origin", "main"])
-
-    click.echo("☁️ Changes committed and pushed.")
+def _extract_blueprints(init_path: Path) -> list[str]:
+    """Extract blueprint variable names from __init__.py via regex."""
+    if not init_path.exists():
+        return []
+    text = init_path.read_text()
+    return sorted(set(re.findall(r"""(\w+)\s*=\s*(?:BaseBlueprint|Blueprint)\s*\(""", text)))
 
 
-# =====================================================================
-# TAG
-# =====================================================================
-def create_and_push_git_tag(version):
-    subprocess.run(["git", "fetch", "origin", "--tags"])
-
-    tags = subprocess.run(["git", "tag"], capture_output=True, text=True).stdout.splitlines()
-
-    if version not in tags:
-        subprocess.run(["git", "tag", "-a", version, "-m", f"Release {version}"])
-        click.echo(f"🏷️ Tag {version} created.")
-    else:
-        click.echo("⚠️ Tag already exists locally.")
-
-    subprocess.run(["git", "push", "origin", version])
-    click.echo("☁️ Tag pushed.")
+def _extract_models(models_path: Path) -> list[str]:
+    """Extract SQLAlchemy model class names from models.py via regex."""
+    if not models_path.exists():
+        return []
+    text = models_path.read_text()
+    return sorted(set(re.findall(r"""class\s+(\w+)\s*\([^)]*db\.Model[^)]*\)""", text)))
 
 
-# =====================================================================
-# GITHUB RELEASE
-# =====================================================================
-def create_github_release(repo, version, token):
+def _extract_hooks(hooks_path: Path) -> list[str]:
+    """Extract hook slot names from hooks.py via regex."""
+    if not hooks_path.exists():
+        return []
+    text = hooks_path.read_text()
+    return sorted(set(re.findall(
+        r"""register_template_hook\s*\(\s*['"]([^'"]+)['"]""", text
+    )))
+
+
+def _extract_services(services_path: Path) -> list[str]:
+    """Extract service class names from services.py via regex."""
+    if not services_path.exists():
+        return []
+    text = services_path.read_text()
+    return sorted(set(re.findall(
+        r"""class\s+(\w+)\s*\([^)]*(?:BaseService|Service)[^)]*\)""", text
+    )))
+
+
+def _extract_docker(feature_root: Path) -> list[str]:
+    """Find docker-compose files at the feature root."""
+    found = []
+    for pattern in ("docker-compose*.yml", "docker-compose*.yaml"):
+        found.extend(p.name for p in feature_root.glob(pattern))
+    return sorted(found)
+
+
+def _scan_dependencies(src_dir: Path, own_feature_name: str) -> tuple[list[str], list[str]]:
     """
-    Create a polished GitHub Release with rich Markdown formatting.
+    Scan all .py files under src_dir for:
+    - imports of other splent features  → requires.features
+    - os.getenv / os.environ references → requires.env_vars
     """
-    if not token:
-        click.echo("⚠️ No GITHUB_TOKEN → skipping release.")
-        return
+    required_features: set[str] = set()
+    env_vars: set[str] = set()
 
-    api_url = f"https://api.github.com/repos/{repo}/releases"
+    for py_file in src_dir.rglob("*.py"):
+        text = py_file.read_text()
 
-    version_number = version.lstrip("v")
-    package = repo.split("/")[-1]
+        for short_name in re.findall(r"splent_feature_(\w+)", text):
+            if f"splent_feature_{short_name}" != own_feature_name:
+                required_features.add(short_name)
 
-    # BLOQUE SEGURO → triple comillas, pero sin usar backticks ``` dentro del f-string
-    body = (
-        f"## 🎉 {version}\n\n"
-        f"Automated release generated by **SPLENT**.\n\n"
-        f"### 📦 Details\n"
-        f"- **Tag:** `{version}`\n"
-        f"- **Repository:** `{repo}`\n"
-        f"- **Version:** `{version_number}`\n\n"
-        f"### 📥 Installation (PyPI)\n"
-        f"```\n"
-        f"pip install {package}=={version_number}\n"
-        f"```\n\n"
-        f"### 🧩 Notes\n"
-        f"This release was automatically tagged, packaged and published by the **SPLENT pipeline**.\n\n"
-        f"---\n"
-    )
+        for var in re.findall(
+            r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z][A-Z0-9_]+)['"]""", text
+        ):
+            env_vars.add(var)
+        for var in re.findall(r"""os\.environ\s*\[\s*['"]([A-Z][A-Z0-9_]+)['"]""", text):
+            env_vars.add(var)
 
-    payload = {
-        "tag_name": version,
-        "name": f"Release {version}",
-        "body": body,
-        "draft": False,
-        "prerelease": False,
+    return sorted(required_features), sorted(env_vars)
+
+
+def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict:
+    """
+    Introspect feature source code and return a contract dict with:
+      provides: routes, blueprints, models, commands, hooks, services, docker
+      requires: features, env_vars
+    """
+    feature_root = Path(feature_path)
+    src_dir = feature_root / "src" / namespace.replace("-", "_") / feature_name
+
+    routes = _extract_routes(src_dir / "routes.py")
+    blueprints = _extract_blueprints(src_dir / "__init__.py")
+    models = _extract_models(src_dir / "models.py")
+    hooks = _extract_hooks(src_dir / "hooks.py")
+    services = _extract_services(src_dir / "services.py")
+    docker = _extract_docker(feature_root)
+    req_features, env_vars = _scan_dependencies(src_dir, feature_name)
+
+    return {
+        "routes": routes,
+        "blueprints": blueprints,
+        "models": models,
+        "commands": [],
+        "hooks": hooks,
+        "services": services,
+        "docker": docker,
+        "requires_features": req_features,
+        "env_vars": env_vars,
     }
 
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github+json",
-    }
 
-    resp = requests.post(api_url, headers=headers, json=payload)
+def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> None:
+    """
+    Rewrite [tool.splent.contract] in pyproject.toml.
+    The developer's description is preserved; all other fields are auto-generated.
+    """
+    path = Path(pyproject_path)
+    text = path.read_text()
 
-    if resp.status_code in (200, 201):
-        click.echo(f"✅ GitHub release created: {resp.json().get('html_url')}")
-        return
+    # Preserve any existing description the developer may have written
+    existing_description = f"{feature_name} feature"
+    try:
+        data = tomllib.loads(text)
+        desc = (
+            data.get("tool", {})
+            .get("splent", {})
+            .get("contract", {})
+            .get("description")
+        )
+        if desc:
+            existing_description = desc
+    except Exception:
+        pass
 
-    if resp.status_code == 422 and "already_exists" in resp.text:
-        click.echo("⚠️ Release already exists. Skipping.")
-        return
+    # Strip old contract block (from [tool.splent.contract] to EOF)
+    match = re.search(r"^\[tool\.splent\.contract\b", text, re.MULTILINE)
+    if match:
+        text = text[: match.start()].rstrip()
 
-    click.echo(f"⚠️ Release failed: {resp.status_code} {resp.text}")
+    def _toml_list(items: list[str]) -> str:
+        if not items:
+            return "[]"
+        return "[" + ", ".join(f'"{i}"' for i in items) + "]"
 
-
-
-# =====================================================================
-# PYPI
-# =====================================================================
-def build_and_upload_pypi(feature_path):
-    os.chdir(feature_path)
-
-    click.echo("📦 Building package...")
-    subprocess.run(["rm", "-rf", "dist"])
-    subprocess.run([sys.executable, "-m", "build"], check=True)
-
-    env = os.environ.copy()
-
-    click.echo("📤 Uploading to PyPI...")
-    subprocess.run(
-        [sys.executable, "-m", "twine", "upload", "dist/*"],
-        env=env,
-        check=True
+    contract_block = (
+        "\n\n"
+        "# ── Feature Contract (auto-generated by splent feature:release) ───────────────\n"
+        "# Do not edit manually — re-run `splent feature:release` to refresh.\n"
+        "[tool.splent.contract]\n"
+        f'description = "{existing_description}"\n'
+        "\n"
+        "[tool.splent.contract.provides]\n"
+        f"routes     = {_toml_list(contract['routes'])}\n"
+        f"blueprints = {_toml_list(contract['blueprints'])}\n"
+        f"models     = {_toml_list(contract['models'])}\n"
+        f"commands   = {_toml_list(contract['commands'])}\n"
+        f"hooks      = {_toml_list(contract['hooks'])}\n"
+        f"services   = {_toml_list(contract['services'])}\n"
+        f"docker     = {_toml_list(contract['docker'])}\n"
+        "\n"
+        "[tool.splent.contract.requires]\n"
+        f"features = {_toml_list(contract['requires_features'])}\n"
+        f"env_vars = {_toml_list(contract['env_vars'])}\n"
     )
-    click.echo("✅ PyPI upload complete.")
+
+    path.write_text(text + contract_block)
 
 
 # =====================================================================
-# SNAPSHOT VERSIONADO EN CACHÉ
+# VERSIONED SNAPSHOT
 # =====================================================================
 def create_versioned_snapshot(namespace, feature_name, version, workspace):
-
-    # Namespace filesystem: splent_io
-    # Namespace GitHub: splent-io
     org_github = namespace.replace("_", "-")
 
     cache_root = os.path.join(workspace, ".splent_cache", "features", namespace)
@@ -258,11 +266,10 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
 
     subprocess.run(
         ["git", "clone", "--branch", version, "--depth", "1", clone_url, snapshot_path],
-        check=True
+        check=True,
     )
 
     click.echo("✅ Snapshot created.")
-
 
 
 # =====================================================================
@@ -270,47 +277,47 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
 # =====================================================================
 @click.command(
     "feature:release",
-    short_help="Release a feature: bump version, tag, publish to GitHub/PyPI, and snapshot."
+    short_help="Release a feature: bump version, tag, publish to GitHub/PyPI, and snapshot.",
 )
 @click.argument("feature_ref")
 @click.argument("version")
 @click.option("--attach", is_flag=True)
 def feature_release(feature_ref, version, attach):
-
     validate_environment()
 
-    workspace = "/workspace"
+    workspace = str(context.workspace())
 
-    feature_path, namespace, feature_name, normalized = (
-        resolve_feature_path(feature_ref, version, workspace)
+    feature_path, namespace, feature_name, normalized = resolve_feature_path(
+        feature_ref, version, workspace
     )
-
-    os.chdir(feature_path)
 
     click.echo(f"🚀 Releasing {namespace}/{feature_name}@{version}")
 
-    # Update pyproject + commit
-    update_version(os.path.join(feature_path, "pyproject.toml"), normalized)
-    commit_local_changes(version)
+    click.echo("🔍 Inferring feature contract from source code...")
+    contract = infer_contract(feature_path, namespace, feature_name)
+    write_contract(os.path.join(feature_path, "pyproject.toml"), contract, feature_name)
+    click.echo("✅ Contract written to pyproject.toml.")
 
-    # Tag + GitHub release
-    create_and_push_git_tag(version)
-    repo = extract_repo(subprocess.run(
+    release.update_version(os.path.join(feature_path, "pyproject.toml"), normalized)
+    release.commit_local_changes(feature_path, version)
+
+    release.create_and_push_git_tag(feature_path, version)
+    remote_url = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
-        capture_output=True, text=True
-    ).stdout.strip())
-    create_github_release(repo, version, os.getenv("GITHUB_TOKEN"))
+        capture_output=True,
+        text=True,
+        cwd=feature_path,
+    ).stdout.strip()
+    repo = release.extract_repo(remote_url)
+    release.create_github_release(repo, version, os.getenv("GITHUB_TOKEN"))
 
-    # PyPI
-    build_and_upload_pypi(feature_path)
+    release.build_and_upload_pypi(feature_path)
 
-    # Versioned snapshot
     create_versioned_snapshot(namespace, feature_name, version, workspace)
 
-    # Optional attach
     if attach:
         click.echo("🔗 Attaching to product...")
         ctx = click.get_current_context()
-        ctx.invoke(feature_attach, feature_name=feature_ref, version=version)
+        ctx.invoke(feature_attach, feature_identifier=feature_ref, version=version)
 
     click.echo("🎉 Release completed!")

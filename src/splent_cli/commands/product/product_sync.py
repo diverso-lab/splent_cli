@@ -1,26 +1,24 @@
 import os
 import tomllib
-import subprocess
 import shutil
 import click
+from splent_cli.services import context
+from splent_cli.commands.feature.feature_clone import feature_clone
 
 
 @click.command(
     "product:sync",
-    short_help="Sync all versioned features declared in the active product."
+    short_help="Sync all versioned features declared in the active product.",
 )
+@click.pass_context
 @click.option(
     "--force",
     is_flag=True,
     help="Force reclone each feature (delete its cache folder first).",
 )
-def product_sync(force):
-    workspace = os.getenv("WORKING_DIR", "/workspace")
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.secho("❌ SPLENT_APP not defined.", fg="red")
-        raise SystemExit(1)
+def product_sync(ctx, force):
+    workspace = str(context.workspace())
+    product = context.require_app()
 
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")
     if not os.path.exists(pyproject_path):
@@ -30,7 +28,9 @@ def product_sync(force):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    features = (
+        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    )
 
     if not features:
         click.secho("ℹ️ No features declared.", fg="yellow")
@@ -57,7 +57,9 @@ def product_sync(force):
             rest = entry
 
         repo, _, version = rest.partition("@")
-        version = version or "main"
+        if not version:
+            click.secho(f"⚠️  Skipping '{entry}': no version specified.", fg="yellow")
+            continue
 
         namespace_safe = namespace.replace("-", "_").replace(".", "_")
 
@@ -76,17 +78,12 @@ def product_sync(force):
 
         # 2️⃣ Clone if missing
         if not os.path.exists(cache_dir):
-            cmd = ["splent", "feature:clone", f"{namespace}/{repo}@{version}"]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                env=os.environ.copy()
-            )
-
-            if result.returncode != 0:
-                click.secho(f"❌ Failed to clone {entry}:\n{result.stderr}", fg="red")
-                continue
+            try:
+                ctx.invoke(feature_clone, full_name=f"{namespace}/{repo}@{version}")
+            except SystemExit as e:
+                if e.code != 0:
+                    click.secho(f"❌ Failed to clone {entry}", fg="red")
+                    continue
 
         else:
             click.secho(f"✅ Using cached {namespace}/{repo}@{version}", fg="cyan")

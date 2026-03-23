@@ -1,9 +1,15 @@
 import os
-import sys
-from pathlib import Path
 
 import click
-import tomllib
+
+from splent_cli.commands.uvl.uvl_utils import (
+    read_splent_app as _read_splent_app,
+    load_pyproject as _load_pyproject,
+    get_uvl_cfg as _get_uvl_cfg,
+    resolve_uvlhub_raw_url as _resolve_uvlhub_raw_url,
+    list_all_features_from_uvl as _list_all_features_from_uvl,
+)
+from splent_cli.services import context
 
 
 @click.command(
@@ -11,88 +17,45 @@ import tomllib
     short_help="Show UVL configuration and resolved location for the active product",
 )
 def uvl_info():
-
-    workspace = "/workspace"
-    env_path = os.path.join(workspace, ".env")
-
-    if not os.path.exists(env_path):
-        click.echo("Error: /workspace/.env not found", err=True)
-        sys.exit(1)
-
-    # -------------------------
-    # Read SPLENT_APP
-    # -------------------------
-
-    app_name = None
-    with open(env_path) as f:
-        for line in f:
-            if line.startswith("SPLENT_APP="):
-                app_name = line.strip().split("=", 1)[1]
-
-    if not app_name:
-        click.echo("Error: SPLENT_APP not set", err=True)
-        sys.exit(1)
-
+    workspace = str(context.workspace())
+    app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
+
     pyproject_path = os.path.join(product_path, "pyproject.toml")
+    data = _load_pyproject(pyproject_path)
 
-    if not os.path.exists(pyproject_path):
-        click.echo("Error: pyproject.toml not found", err=True)
-        sys.exit(1)
-
-    # -------------------------
-    # Load pyproject
-    # -------------------------
-
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
-
-    try:
-        uvl_cfg = data["tool"]["splent"]["uvl"]
-    except KeyError:
-        click.echo("Error: [tool.splent.uvl] not defined", err=True)
-        sys.exit(1)
-
+    uvl_cfg = _get_uvl_cfg(data)
     mirror = uvl_cfg.get("mirror")
     doi = uvl_cfg.get("doi")
     file = uvl_cfg.get("file")
 
-    # -------------------------
-    # Resolve URL
-    # -------------------------
-
-    if mirror == "uvlhub.io":
-        url = f"https://www.uvlhub.io/doi/{doi}/files/raw/{file}/"
-    else:
+    try:
+        url = _resolve_uvlhub_raw_url(mirror, doi, file)
+    except click.ClickException:
         url = "(unsupported mirror)"
-
-    # -------------------------
-    # Local path
-    # -------------------------
 
     local_path = os.path.join(product_path, "uvl", file)
     exists = os.path.exists(local_path)
 
-    # -------------------------
-    # Output
-    # -------------------------
+    n_features = len(_list_all_features_from_uvl(local_path)[0]) if exists else None
 
     click.echo()
-    click.echo(click.style("🧬 UVL Information", fg="cyan", bold=True))
+    click.echo("UVL info")
+    click.echo(f"Product  : {app_name}")
+    click.echo(f"UVL      : {local_path}")
+    if n_features is not None:
+        click.echo(f"Features : {n_features}")
     click.echo()
 
-    click.echo(f"Product       : {app_name}")
-    click.echo(f"Mirror        : {mirror}")
-    click.echo(f"DOI           : {doi}")
-    click.echo(f"File          : {file}")
+    click.echo(f"Mirror   : {mirror}")
+    click.echo(f"DOI      : {doi}")
+    click.echo(f"File     : {file}")
+    click.echo(f"URL      : {url}")
     click.echo()
-
-    click.echo(f"Resolved URL  : {url}")
-    click.echo(f"Local path    : {local_path}")
 
     if exists:
-        click.echo(click.style("Status        : downloaded", fg="green"))
+        click.echo(click.style("Status   : downloaded", fg="green"))
     else:
-        click.echo(click.style("Status        : not downloaded", fg="yellow"))
+        click.echo(click.style("Status   : not downloaded", fg="yellow"))
 
     click.echo()

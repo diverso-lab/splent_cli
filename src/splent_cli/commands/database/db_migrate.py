@@ -1,35 +1,56 @@
-import subprocess
 import click
-from flask.cli import with_appcontext
+from flask import current_app
+from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
+
+from splent_cli.utils.decorators import requires_app
+from splent_framework.managers.migration_manager import MigrationManager
 
 
-@click.command("db:migrate", help="Generates and applies database migrations.")
-@with_appcontext
-def db_migrate():
-    # Generates migrations
-    click.echo("Generating database migrations...")
-    result_migrate = subprocess.run(["flask", "db", "migrate"])
-    if result_migrate.returncode == 0:
-        click.echo(click.style("Migrations generated successfully.", fg="green"))
-    else:
-        click.echo(
-            click.style(
-                "Note: No new migrations needed or an error occurred "
-                "while generating migrations.",
-                fg="yellow",
+@requires_app
+@click.command(
+    "db:migrate",
+    short_help="Generate and apply migrations (all features or a single one).",
+)
+@click.argument("feature", required=False, default=None)
+def db_migrate(feature):
+    app = current_app
+
+    if feature:
+        dirs = {}
+        mdir = MigrationManager.get_feature_migration_dir(feature)
+        if not mdir:
+            click.echo(
+                click.style(
+                    f"❌ No migrations directory found for '{feature}'.", fg="red"
+                )
             )
-        )
-
-    # Applies to migrations
-    click.echo("Applying database migrations...")
-    result_upgrade = subprocess.run(["flask", "db", "upgrade"])
-    if result_upgrade.returncode == 0:
-        click.echo(click.style("Migrations applied successfully.", fg="green"))
+            raise SystemExit(1)
+        dirs[feature] = mdir
     else:
-        click.echo(
-            click.style(
-                "Error applying migrations. This may be due to the database "
-                "being already up-to-date.",
-                fg="yellow",
+        dirs = MigrationManager.get_all_feature_migration_dirs()
+        if not dirs:
+            click.echo(
+                click.style("⚠️  No feature migrations directories found.", fg="yellow")
             )
-        )
+            return
+
+    for feat, mdir in dirs.items():
+        click.echo(click.style(f"  ⚙️  Generating migrations for {feat}...", fg="cyan"))
+        try:
+            alembic_migrate(directory=mdir, message=feat)
+        except Exception as e:
+            click.echo(click.style(f"  ℹ️  {e}", fg="yellow"))
+
+        click.echo(click.style(f"  ⬆️  Applying migrations for {feat}...", fg="cyan"))
+        try:
+            alembic_upgrade(directory=mdir)
+            revision = MigrationManager.get_current_feature_revision(
+                feat, app.extensions["migrate"].db.engine
+            )
+            MigrationManager.update_feature_status(app, feat, revision)
+            click.echo(click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green"))
+        except Exception as e:
+            click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
+
+
+cli_command = db_migrate

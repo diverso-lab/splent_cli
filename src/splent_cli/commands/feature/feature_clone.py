@@ -2,28 +2,27 @@ import os
 import subprocess
 import requests
 import click
+from splent_cli.services import context
 
 
-DEFAULT_NAMESPACE = os.getenv('SPLENT_DEFAULT_NAMESPACE', 'splent_io')
-WORKSPACE = os.getenv("WORKING_DIR", "/workspace")
+DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 
 # =====================================================================
 # UTILS
 # =====================================================================
 
-def _get_latest_tag(namespace, repo):
-    """Fetch the latest tag from GitHub (or 'main' if none)."""
+
+def _get_latest_tag(namespace, repo) -> str | None:
+    """Fetch the latest tag from GitHub. Returns None if unreachable or no tags exist."""
     api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags"
     try:
         r = requests.get(api_url, timeout=5)
         r.raise_for_status()
         tags = r.json()
-        if tags:
-            return tags[0]["name"]
-        return "main"
+        return tags[0]["name"] if tags else None
     except Exception:
-        return "main"
+        return None
 
 
 def _build_repo_url(namespace, repo):
@@ -71,10 +70,11 @@ def _parse_full_name(full_name: str):
 # MAIN
 # =====================================================================
 
+
 @click.command(
     "feature:clone",
     short_help="Clone a feature into the local cache.",
-    help="Clone a feature into the local cache namespace."
+    help="Clone a feature into the local cache namespace.",
 )
 @click.argument("full_name", required=True)
 def feature_clone(full_name):
@@ -88,15 +88,24 @@ def feature_clone(full_name):
     namespace, repo, version = _parse_full_name(full_name)
 
     if not version:
-        click.echo(f"🔍 No version provided → fetching latest tag for {namespace}/{repo}...")
+        click.echo(
+            f"🔍 No version provided → fetching latest tag for {namespace}/{repo}..."
+        )
         version = _get_latest_tag(namespace, repo)
+        if not version:
+            click.secho(
+                f"❌ Could not fetch tags for {namespace}/{repo}. Is the repo reachable and does it have tags?",
+                fg="red",
+            )
+            raise SystemExit(1)
 
     # Build Git URL based on your ownership
     fork_url = _build_repo_url(namespace, repo)
 
     # Local destination
     namespace_safe = namespace.replace("-", "_").replace(".", "_")
-    cache_dir = os.path.join(WORKSPACE, ".splent_cache", "features", namespace_safe)
+    workspace = str(context.workspace())
+    cache_dir = os.path.join(workspace, ".splent_cache", "features", namespace_safe)
     os.makedirs(cache_dir, exist_ok=True)
 
     local_path = os.path.join(cache_dir, f"{repo}@{version}")
@@ -114,8 +123,14 @@ def feature_clone(full_name):
             check=True,
         )
     except subprocess.CalledProcessError:
-        click.secho(f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow")
-        subprocess.run(["git", "clone", "--depth", "1", fork_url, local_path], check=True)
+        click.secho(
+            f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow"
+        )
+        subprocess.run(
+            ["git", "clone", "--depth", "1", fork_url, local_path], check=True
+        )
 
-    click.secho(f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green")
+    click.secho(
+        f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green"
+    )
     click.secho(f"📦 Cached at: {local_path}", fg="blue")

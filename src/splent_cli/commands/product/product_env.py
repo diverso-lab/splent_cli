@@ -3,11 +3,11 @@ import tomllib
 import subprocess
 import shutil
 import click
+from splent_cli.services import context
 
 
 @click.command(
-    "product:env",
-    short_help="Generate or merge .env files for the active product."
+    "product:env", short_help="Generate or merge .env files for the active product."
 )
 @click.option(
     "--generate",
@@ -45,12 +45,8 @@ def product_env(generate, merge, env_name, process_all):
         splent product:env --generate --all --dev
         splent product:env --merge --dev
     """
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-
-    if not product:
-        click.echo("❌ SPLENT_APP not defined. Please select a product first.")
-        raise SystemExit(1)
+    workspace = str(context.workspace())
+    product = context.require_app()
 
     if not env_name:
         click.echo("❌ You must specify --dev or --prod.")
@@ -124,24 +120,21 @@ def product_env(generate, merge, env_name, process_all):
             cmd = ["splent", "feature:env", base_name, "--generate", f"--{env_name}"]
             result = subprocess.run(cmd, capture_output=True, text=True)
             output = result.stdout.strip()
-            lines = [l.strip() for l in output.splitlines() if l.strip()]
+            lines = [line.strip() for line in output.splitlines() if line.strip()]
             cleaned = "\n".join(lines)
             if cleaned:
                 click.echo(cleaned)
 
-            if "docker directory not found" in cleaned:
-                no_template += 1
-                continue
-            if "No .env template" in cleaned or "⚠️" in cleaned:
-                no_template += 1
-                continue
             if result.returncode != 0:
-                failed += 1
+                if "docker directory not found" in cleaned:
+                    no_template += 1
+                else:
+                    failed += 1
                 continue
-            if "Created" in cleaned:
+            if "No .env template" in cleaned:
+                no_template += 1
+            elif "Created" in cleaned:
                 created += 1
-            elif "Existing" in cleaned:
-                skipped += 1
             else:
                 skipped += 1
 

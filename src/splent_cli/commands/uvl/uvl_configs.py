@@ -1,60 +1,31 @@
 import os
-from pathlib import Path
 
 import click
-import tomllib
 
 from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
 
-
-def _read_splent_app(workspace: str = "/workspace") -> str:
-    env_path = os.path.join(workspace, ".env")
-    if not os.path.exists(env_path):
-        raise click.ClickException("Missing /workspace/.env (run: splent product:select <app>)")
-
-    app_name = None
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.startswith("SPLENT_APP="):
-                app_name = line.strip().split("=", 1)[1]
-
-    if not app_name:
-        raise click.ClickException("SPLENT_APP not set in /workspace/.env (run: splent product:select <app>)")
-
-    product_path = os.path.join(workspace, app_name)
-    if not os.path.isdir(product_path):
-        raise click.ClickException(f"Active product not found: {product_path}")
-
-    return app_name
-
-
-def _load_pyproject(pyproject_path: str) -> dict:
-    p = Path(pyproject_path)
-    if not p.exists():
-        raise click.ClickException(f"Missing {pyproject_path}")
-    with open(p, "rb") as f:
-        return tomllib.load(f)
-
-
-def _get_uvl_cfg(data: dict) -> dict:
-    try:
-        return data["tool"]["splent"]["uvl"]
-    except KeyError:
-        raise click.ClickException("Missing [tool.splent.uvl] in pyproject.toml")
+from splent_cli.services import context
+from splent_cli.commands.uvl.uvl_utils import (
+    read_splent_app as _read_splent_app,
+    load_pyproject as _load_pyproject,
+    get_uvl_cfg as _get_uvl_cfg,
+    list_all_features_from_uvl as _list_all_features_from_uvl,
+    print_uvl_header as _print_uvl_header,
+)
 
 
 @click.command(
     "uvl:configs",
     short_help="Print the number of valid configurations represented by the UVL model",
 )
-@click.option("--workspace", default="/workspace", show_default=True)
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option(
     "--with-sat",
     is_flag=True,
     help="Force PySAT backend (useful in some environments; slower sometimes)",
 )
-def uvl_configs(workspace, pyproject, with_sat):
+def uvl_configs(pyproject, with_sat):
+    workspace = str(context.workspace())
     app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
 
@@ -68,7 +39,11 @@ def uvl_configs(workspace, pyproject, with_sat):
 
     local_uvl = os.path.join(product_path, "uvl", file)
     if not os.path.exists(local_uvl):
-        raise click.ClickException(f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)")
+        raise click.ClickException(
+            f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)"
+        )
+
+    universe, _ = _list_all_features_from_uvl(local_uvl)
 
     fm = FLAMAFeatureModel(local_uvl)
 
@@ -78,9 +53,6 @@ def uvl_configs(workspace, pyproject, with_sat):
         # Backward compatibility with versions where the param might not exist
         n = fm.configurations_number()
 
-    click.echo()
-    click.echo("UVL configs")
-    click.echo(f"Product : {app_name}")
-    click.echo(f"UVL     : {local_uvl}")
-    click.echo(f"Count   : {n}")
+    _print_uvl_header("configs", app_name, local_uvl, len(universe))
+    click.echo(f"Configurations : {n}")
     click.echo()

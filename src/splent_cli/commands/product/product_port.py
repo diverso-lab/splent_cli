@@ -3,21 +3,21 @@ import subprocess
 import yaml
 import re
 from pathlib import Path
-
-WORKSPACE = Path("/workspace")
+from splent_cli.services import context
 
 
 # ---------------------------------------------------------
 # ENV LOADERS
 # ---------------------------------------------------------
 
+
 def load_global_env():
     """
-    Load /workspace/.env (global). Only needed for SPLENT_APP and global settings.
+    Load <workspace>/.env (global). Only needed for SPLENT_APP and global settings.
     """
-    env_file = WORKSPACE / ".env"
+    env_file = context.workspace() / ".env"
     if not env_file.exists():
-        raise click.ClickException("Missing /workspace/.env")
+        raise click.ClickException(f"Missing {env_file}")
 
     env = {}
     for line in env_file.read_text().splitlines():
@@ -30,9 +30,9 @@ def load_global_env():
 def load_product_env(app_name: str):
     """
     Load product-specific .env:
-    /workspace/<app>/docker/.env
+    <workspace>/<app>/docker/.env
     """
-    product_env_file = WORKSPACE / app_name / "docker" / ".env"
+    product_env_file = context.workspace() / app_name / "docker" / ".env"
 
     if not product_env_file.exists():
         raise click.ClickException(f"Missing {product_env_file}")
@@ -48,6 +48,7 @@ def load_product_env(app_name: str):
 # ---------------------------------------------------------
 # ENV RESOLUTION
 # ---------------------------------------------------------
+
 
 def resolve_env(user_env: str | None, product_env: dict):
     """
@@ -70,15 +71,16 @@ def resolve_env(user_env: str | None, product_env: dict):
 # COMPOSE LOADERS
 # ---------------------------------------------------------
 
+
 def resolve_compose_path(app: str, env: str):
     """
     Compose files in a product:
 
-    /workspace/<app>/docker/docker-compose.<env>.yml
-    /workspace/<app>/docker/docker-compose.yml  (fallback)
+    <workspace>/<app>/docker/docker-compose.<env>.yml
+    <workspace>/<app>/docker/docker-compose.yml  (fallback)
     """
 
-    base = WORKSPACE / app / "docker"
+    base = context.workspace() / app / "docker"
 
     candidate = base / f"docker-compose.{env}.yml"
     fallback = base / "docker-compose.yml"
@@ -114,26 +116,28 @@ def find_app_service(app: str, compose: dict):
         if app.lower() in name.lower():
             return name, services[name]
 
-    raise click.ClickException(
-        f"No service for product '{app}' found in compose file."
-    )
+    raise click.ClickException(f"No service for product '{app}' found in compose file.")
+
 
 # ---------------------------------------------------------
 # HOST IP
 # ---------------------------------------------------------
 
+
 def detect_host_ip():
     """
     Detect whether we are running inside a Vagrant environment.
-    In Vagrant → /workspace/.vagrant exists.
+    In Vagrant → <workspace>/.vagrant exists.
     """
-    if Path("/workspace/.vagrant").exists():
+    if (context.workspace() / ".vagrant").exists():
         return "10.10.10.10"
     return "localhost"
+
 
 # ---------------------------------------------------------
 # DOCKER RUNTIME
 # ---------------------------------------------------------
+
 
 def get_runtime_ports(container_name: str):
     """
@@ -151,7 +155,7 @@ def get_runtime_ports(container_name: str):
 
     for line in result.stdout.splitlines():
         if line.startswith(container_name):
-            mapping = line[len(container_name):].strip()
+            mapping = line[len(container_name) :].strip()
 
             # Example mapping: "0.0.0.0:5435->5000/tcp"
             match = re.search(r"(\d+)->(\d+)", mapping)
@@ -171,6 +175,7 @@ def get_runtime_ports(container_name: str):
 # ---------------------------------------------------------
 # COMMAND
 # ---------------------------------------------------------
+
 
 @click.command("product:port", short_help="Show the product URL and PORT.")
 @click.option("--env", "env_flag", help="Environment to inspect (dev/prod).")

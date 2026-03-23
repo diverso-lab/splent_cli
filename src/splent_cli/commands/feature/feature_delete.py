@@ -1,19 +1,7 @@
 import os
 import shutil
 import click
-
-
-def parse_feature_identifier(identifier: str):
-    if "/" in identifier:
-        namespace, fname = identifier.split("/", 1)
-    else:
-        namespace = "splent-io"
-        fname = identifier
-
-    namespace_github = namespace.replace("_", "-")
-    namespace_fs = namespace.replace("-", "_")
-
-    return namespace, namespace_github, namespace_fs, fname
+from splent_cli.services import context, compose
 
 
 @click.command(
@@ -32,16 +20,20 @@ def feature_delete(feature_identifier, version, force):
     - Warns clearly if the deletion will break products
     - Asks for confirmation unless --force is provided
     """
-    workspace = "/workspace"
+    workspace = str(context.workspace())
 
     # --- Parse namespace + feature -----------------------------------------
-    namespace, namespace_github, namespace_fs, feature_name = \
-        parse_feature_identifier(feature_identifier)
+    namespace, namespace_github, namespace_fs, feature_name = (
+        compose.parse_feature_identifier(feature_identifier)
+    )
 
     # Path to cached version
     cache_dir = os.path.join(
-        workspace, ".splent_cache", "features", namespace_fs,
-        f"{feature_name}@{version}"
+        workspace,
+        ".splent_cache",
+        "features",
+        namespace_fs,
+        f"{feature_name}@{version}",
     )
 
     if not os.path.exists(cache_dir):
@@ -84,8 +76,7 @@ def feature_delete(feature_identifier, version, force):
 
         if not force:
             confirm = click.confirm(
-                "Do you really want to delete it anyway?",
-                default=False
+                "Do you really want to delete it anyway?", default=False
             )
             if not confirm:
                 click.echo("❌ Aborted.")

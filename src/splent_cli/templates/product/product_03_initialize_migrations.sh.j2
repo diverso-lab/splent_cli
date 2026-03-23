@@ -16,9 +16,6 @@ set -e
 
 echo "🚀 [Initialize migrations] entrypoint starting..."
 
-if [ ! -d "/workspace/{{ product_name }}/src/{{ product_name }}/migrations/versions" ]; then
-    flask db init
-    flask db migrate
-fi
+splent db:migrate
 
 echo "✅ [Initialize migrations] entrypoint finished."

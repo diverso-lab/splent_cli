@@ -17,15 +17,15 @@ set -e
 echo "🚀 [Handle migrations] entrypoint starting..."
 
 TABLE_COUNT=$(mariadb -u "$MARIADB_USER" -p"$MARIADB_PASSWORD" -h "$MARIADB_HOSTNAME" -P 3306 -D "$MARIADB_DATABASE" -sse \
-    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$MARIADB_DATABASE' AND table_name != 'alembic_version';")
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = '$MARIADB_DATABASE'
+     AND table_name NOT IN ('splent_migrations');")
 
 echo "Found $TABLE_COUNT user-defined tables in database."
 
 if [ "$TABLE_COUNT" -eq 0 ]; then
-    echo "Empty database, migrating..."
-    LATEST_REVISION=$(ls -1 /workspace/{{ product_name }}/src/{{ product_name }}/migrations/versions/*.py | grep -v "__pycache__" | sort -r | head -n 1 | sed 's/.*\/\(.*\)\.py/\1/')
-    echo "Latest revision: $LATEST_REVISION"
-    flask db upgrade
+    echo "Empty database, applying all feature migrations..."
+    splent db:upgrade
     if [ "$RUN_DB_SEED" = "true" ]; then
         echo "Seeding database..."
         splent db:seed -y
@@ -33,15 +33,8 @@ if [ "$TABLE_COUNT" -eq 0 ]; then
         echo "Skipping DB seeding (RUN_DB_SEED != true)"
     fi
 else
-    echo "Database already initialized, updating migrations..."
-    CURRENT_REVISION=$(mariadb -u "$MARIADB_USER" -p"$MARIADB_PASSWORD" -h "$MARIADB_HOSTNAME" -P 3306 -D "$MARIADB_DATABASE" -sse \
-        "SELECT version_num FROM alembic_version LIMIT 1;")
-
-    if [ -z "$CURRENT_REVISION" ]; then
-        flask db stamp head
-    fi
-
-    flask db upgrade
+    echo "Database already initialized, applying pending feature migrations..."
+    splent db:upgrade
 fi
 
 echo "✅ [Handle migrations] entrypoint finished."

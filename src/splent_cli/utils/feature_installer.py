@@ -2,6 +2,8 @@ import subprocess
 from pathlib import Path
 import tomllib
 
+import click
+
 from splent_cli.utils.feature_utils import get_features_from_pyproject
 
 
@@ -27,7 +29,7 @@ def get_package_name(feature_path: Path) -> str | None:
         with pyproject_path.open("rb") as f:
             data = tomllib.load(f)
         return data.get("project", {}).get("name")
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return None
 
 
@@ -40,11 +42,11 @@ def ensure_editable_features_installed():
         package_name = get_package_name(feature_path)
 
         if not package_name:
-            print(f"⚠️  Skipping {feature}: no valid pyproject.toml or name.")
+            click.secho(f"⚠️  Skipping {feature}: no valid pyproject.toml or name.", fg="yellow")
             continue
 
         if package_name in installed:
             continue
 
-        print(f"➡️ Installing {package_name} in editable mode...")
+        click.echo(f"➡️  Installing {package_name} in editable mode...")
         subprocess.run(["pip", "install", "-e", str(feature_path)], check=True)

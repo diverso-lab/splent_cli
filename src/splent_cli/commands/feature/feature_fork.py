@@ -2,6 +2,7 @@ import os
 import time
 import click
 import requests
+from splent_cli.commands.feature.feature_clone import feature_clone
 
 
 @click.command(
@@ -55,4 +56,4 @@ def feature_fork(feature_name, version):
     # Llamar a clone automáticamente
     click.secho("\n🚀 Cloning fork into local namespace...\n", fg="cyan")
     ctx = click.get_current_context()
-    ctx.invoke(feature_clone, feature_name=feature_name, version=version)
+    ctx.invoke(feature_clone, full_name=f"{github_user}/{feature_name}@{version}")

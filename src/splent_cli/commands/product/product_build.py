@@ -2,6 +2,7 @@ import os
 import glob
 import yaml
 import click
+from splent_cli.services import context
 
 
 def load_env_file(path):
@@ -63,12 +64,8 @@ def merge_compose(base, override):
     short_help="Build .env.deploy.example and docker-compose.deploy.yml from product + features.",
 )
 def product_build():
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
-
-    workspace = "/workspace"
+    product = context.require_app()
+    workspace = str(context.workspace())
     product_path = os.path.join(workspace, product)
     docker_path = os.path.join(product_path, "docker")
     features_path = os.path.join(product_path, "features")
@@ -117,7 +114,6 @@ def product_build():
             f.write(f"{k}={v}\n")
 
     click.echo(f"✅ Created: {env_deploy_path}")
-
 
     # ---------------------------------------------------------
     # 2) BUILD docker-compose.deploy.yml

@@ -1,6 +1,7 @@
 import os
 import sys
 import click
+from splent_cli.services import context
 
 
 @click.command(
@@ -12,12 +13,13 @@ import click
     "--shell", is_flag=True, help="Output shell commands instead of applying directly"
 )
 def select_app(app_name, shell):
-    workspace_env_path = "/workspace/.env"
-    product_path = os.path.join("/workspace", app_name)
+    workspace = context.workspace()
+    workspace_env_path = str(workspace / ".env")
+    product_path = str(workspace / app_name)
 
     # Check product exists
     if not os.path.isdir(product_path):
-        click.echo(f"Error: product '{app_name}' not found in /workspace", err=True)
+        click.echo(f"Error: product '{app_name}' not found in {workspace}", err=True)
         sys.exit(1)
 
     # Ensure .env exists
@@ -47,5 +49,5 @@ def select_app(app_name, shell):
     # If --shell, print commands for eval
     if shell:
         print(f"export SPLENT_APP={app_name}")
-        print("source /workspace/.env")
+        print(f"source {workspace_env_path}")
         print("type set_prompt >/dev/null 2>&1 && set_prompt || true")

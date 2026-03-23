@@ -18,3 +18,25 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# ── Feature Contract ──────────────────────────────────────────────────────────
+# Declares what this feature provides to and requires from the product.
+# Used by `splent feature:check` and `splent product:derive` for validation.
+[tool.splent.contract]
+description = "{{ feature_name }} feature"
+
+[tool.splent.contract.provides]
+# Routes exposed by this feature
+routes = ["/{{ feature_name }}"]
+# Blueprint names registered into Flask
+blueprints = ["{{ feature_name }}_bp"]
+# SQLAlchemy models introduced by this feature
+models = []
+# CLI commands added by this feature
+commands = []
+
+[tool.splent.contract.requires]
+# Other SPLENT features this feature depends on (e.g. ["auth", "mail"])
+features = []
+# Environment variables this feature expects to be set
+env_vars = []

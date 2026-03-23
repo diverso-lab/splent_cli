@@ -19,24 +19,16 @@ dev = [
 ]
 
 core = [
-    "splent_framework",
-    "splent_cli"
+    "splent_framework"
 ]
 
 features = [
-    "splent_feature_redis@v1.0.0",
-    "splent_feature_public@v1.0.0",
-    "splent_feature_mail@v1.0.0",
-    "splent_feature_confirmemail@v1.0.0",
-    "splent_feature_auth@v1.0.0",
-    "splent_feature_profile@v1.0.0",
-    "splent_feature_reset@v1.0.0"
 ]
 
 [tool.splent.uvl]
 mirror = "uvlhub.io"
-doi = "10.5281/zenodo.18873372"
-file = "sample_splent_app.uvl"
+doi = ""
+file = "{{ product_name }}.uvl"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

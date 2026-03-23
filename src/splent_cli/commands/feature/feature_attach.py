@@ -3,19 +3,8 @@ import re
 import subprocess
 import click
 import requests
-
-
-def parse_feature_identifier(identifier: str):
-    if "/" in identifier:
-        namespace, fname = identifier.split("/", 1)
-    else:
-        namespace = "splent-io"
-        fname = identifier
-
-    namespace_github = namespace.replace("_", "-")
-    namespace_fs = namespace.replace("-", "_")
-
-    return namespace, namespace_github, namespace_fs, fname
+from splent_cli.services import context, compose
+from splent_cli.utils.manifest import feature_key, set_feature_state
 
 
 @click.command(
@@ -33,18 +22,16 @@ def feature_attach(feature_identifier, version):
     - Updates pyproject.toml referencing feature@version.
     - Creates/updates the versioned symlink in features/<namespace>/.
     """
-    workspace = "/workspace"
-    product = os.getenv("SPLENT_APP")
-    if not product:
-        click.echo("❌ SPLENT_APP not set.")
-        raise SystemExit(1)
+    product = context.require_app()
+    ws = context.workspace()
 
     # --- Parse feature identifier -------------------------------------------
-    namespace, namespace_github, namespace_fs, feature_name = \
-        parse_feature_identifier(feature_identifier)
+    namespace, namespace_github, namespace_fs, feature_name = (
+        compose.parse_feature_identifier(feature_identifier)
+    )
 
-    cache_base = os.path.join(workspace, ".splent_cache", "features", namespace_fs)
-    product_path = os.path.join(workspace, product)
+    cache_base = str(ws / ".splent_cache" / "features" / namespace_fs)
+    product_path = str(ws / product)
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(pyproject_path):
@@ -63,7 +50,9 @@ def feature_attach(feature_identifier, version):
         f"https://api.github.com/repos/{namespace_github}/{feature_name}/git/refs/tags/{version}",
         f"https://api.github.com/repos/{namespace_github}/{feature_name}/releases/tags/{version}",
     ]
-    html_url = f"https://github.com/{namespace_github}/{feature_name}/releases/tag/{version}"
+    html_url = (
+        f"https://github.com/{namespace_github}/{feature_name}/releases/tag/{version}"
+    )
 
     exists = False
     for url in tag_api_urls:
@@ -148,4 +137,12 @@ def feature_attach(feature_identifier, version):
     os.symlink(versioned_dir, new_link)
 
     click.echo(f"🔗 Linked {new_link} → {versioned_dir}")
+
+    # --- 5️⃣ Update manifest ------------------------------------------------
+    key = feature_key(namespace_fs, feature_name, version)
+    set_feature_state(
+        product_path, product, key, "declared",
+        namespace=namespace_fs, name=feature_name, version=version, mode="pinned",
+    )
+
     click.echo("🎯 Feature successfully attached.")

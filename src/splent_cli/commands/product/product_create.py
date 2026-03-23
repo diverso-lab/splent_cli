@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 import stat
 import click
@@ -6,6 +7,7 @@ import zlib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 def pascalcase(s):
@@ -45,7 +47,7 @@ def make_product(name, features_file):
     web_port = 5000 + offset
     db_port = 33060 + offset
     redis_port = 6379 + offset
-    context = {
+    template_ctx = {
         "product_name": name,
         "pascal_name": pascalcase(name),
         "web_port": web_port,
@@ -53,7 +55,7 @@ def make_product(name, features_file):
         "redis_port": redis_port,
     }
 
-    base_path = os.path.join(PathUtils.get_working_dir(), name)
+    base_path = str(context.workspace() / name)
 
     if os.path.exists(base_path):
         click.echo(click.style(f"The product '{name}' already exists.", fg="red"))
@@ -63,6 +65,7 @@ def make_product(name, features_file):
         "docker",
         "entrypoints",
         "scripts",
+        "uvl",
         f"src/{name}",
         f"src/{name}/static",
         f"src/{name}/static/css",
@@ -72,7 +75,7 @@ def make_product(name, features_file):
     ]:
         os.makedirs(os.path.join(base_path, subdir), exist_ok=True)
 
-    open(os.path.join(base_path, "src", "__init__.py"), "a").close()
+    Path(os.path.join(base_path, "src", "__init__.py")).touch()
 
     jinja_templates = {
         "docker/.env.dev.example": "product/product_.env.dev.example.j2",
@@ -88,6 +91,7 @@ def make_product(name, features_file):
         "scripts/01_compile_assets.sh": "product/product_01_compile_assets.sh.j2",
         "scripts/02_0_db_wait_connection.sh": "product/product_02_0_db_wait_connection.sh.j2",
         "scripts/02_1_db_create_db_test.sh": "product/product_02_1_db_create_db_test.sh.j2",
+        "scripts/02_2_db_create_splent_migrations.sh": "product/product_02_2_db_create_splent_migrations.sh.j2",
         "scripts/03_initialize_migrations.sh": "product/product_03_initialize_migrations.sh.j2",
         "scripts/04_handle_migrations.sh": "product/product_04_handle_migrations.sh.j2",
         "scripts/05_0_start_app_dev.sh": "product/product_05_0_start_app_dev.sh.j2",
@@ -96,6 +100,7 @@ def make_product(name, features_file):
         "LICENSE": "product/product_LICENSE.j2",
         "package.json": "product/product_package.json.j2",
         "pyproject.toml": "product/product_pyproject.toml.j2",
+        f"uvl/{name}.uvl": "product/product_uvl.j2",
         "README.md": "product/product_README.md.j2",
         f"src/{name}/__init__.py": "product/product_init.py.j2",
         f"src/{name}/config.py": "product/product_config.py.j2",
@@ -117,7 +122,7 @@ def make_product(name, features_file):
 
     for rel_path, tpl in jinja_templates.items():
         abs_path = os.path.join(base_path, rel_path)
-        render_and_write_file(env, tpl, abs_path, context)
+        render_and_write_file(env, tpl, abs_path, template_ctx)
 
     for rel_path, tpl in raw_files.items():
         abs_path = os.path.join(base_path, rel_path)
@@ -125,19 +130,28 @@ def make_product(name, features_file):
 
     uid = 1000
     gid = 1000
-    os.chown(base_path, uid, gid)
+    try:
+        os.chown(base_path, uid, gid)
+    except PermissionError:
+        pass
     os.chmod(base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
 
     for root, dirs, files in os.walk(base_path):
         for d in dirs:
             dir_path = os.path.join(root, d)
-            os.chown(dir_path, uid, gid)
+            try:
+                os.chown(dir_path, uid, gid)
+            except PermissionError:
+                pass
             os.chmod(
                 dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
             )
         for f in files:
             file_path = os.path.join(root, f)
-            os.chown(file_path, uid, gid)
+            try:
+                os.chown(file_path, uid, gid)
+            except PermissionError:
+                pass
             os.chmod(
                 file_path,
                 stat.S_IRUSR

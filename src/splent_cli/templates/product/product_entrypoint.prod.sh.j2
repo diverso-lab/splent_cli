@@ -56,6 +56,7 @@ run_step () {
 # MAIN STARTUP SEQUENCE
 # ---------------------------------------------------------------------------
 run_step "02_0_db_wait"             "/workspace/{{ product_name }}/scripts/02_0_db_wait_connection.sh"
+run_step "02_2_db_splent_migrations" "/workspace/{{ product_name }}/scripts/02_2_db_create_splent_migrations.sh"
 run_step "03_init_migrations"       "/workspace/{{ product_name }}/scripts/03_initialize_migrations.sh"
 run_step "04_handle_migrations"     "/workspace/{{ product_name }}/scripts/04_handle_migrations.sh"
 run_step "05_1_start_app_prod"      "/workspace/{{ product_name }}/scripts/05_1_start_app_prod.sh"

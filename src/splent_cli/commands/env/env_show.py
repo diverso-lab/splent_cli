@@ -1,6 +1,6 @@
 import click
-from pathlib import Path
 import subprocess
+from splent_cli.services import context
 
 
 def _mask(value: str, key: str) -> str:
@@ -12,12 +12,11 @@ def _mask(value: str, key: str) -> str:
 
 @click.command(
     "env:show",
-    short_help="Display .env variables and check which ones are currently loaded in the shell."
+    short_help="Display .env variables and check which ones are currently loaded in the shell.",
 )
 def env_show():
     """Check which variables from .env are actually available in the current Bash shell."""
-    workspace = "/workspace"
-    env_file = Path(workspace) / ".env"
+    env_file = context.workspace() / ".env"
 
     if not env_file.exists():
         click.secho("⚠️  No .env file found.", fg="red")
@@ -39,16 +38,16 @@ def env_show():
         key, file_value = line.split("=", 1)
         key, file_value = key.strip(), file_value.strip().strip('"')
 
-        # Ejecuta `echo $VAR` en bash para obtener su valor real del entorno
+        # Run `echo $VAR` in bash to read the variable's live value from the shell environment
         try:
             result = subprocess.run(
                 ["bash", "-c", f"echo ${key}"], capture_output=True, text=True
             )
             current_value = result.stdout.strip()
-        except Exception:
+        except OSError:
             current_value = ""
 
-        # Compara
+        # Compare file value vs live shell value
         if not current_value:
             click.secho(f"⚠️  {key} not loaded", fg="yellow")
             click.echo(f"   .env: {_mask(file_value, key)}")

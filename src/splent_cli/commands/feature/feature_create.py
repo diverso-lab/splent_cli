@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 import click
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 def pascalcase(s):
@@ -18,7 +20,7 @@ def setup_jinja_env():
 
 
 def render_and_write_file(env, template_name, filename, context):
-    """Renderiza una plantilla Jinja y la escribe en disco."""
+    """Render a Jinja template and write the result to disk."""
     content = env.get_template(template_name).render(context) + "\n"
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, "w") as f:
@@ -49,7 +51,7 @@ def make_feature(full_name):
     org_safe = namespace.replace("-", "_")
 
     # --- Target directory (local cache) ---
-    workspace = PathUtils.get_working_dir()
+    workspace = str(context.workspace())
     cache_dir = os.path.join(
         workspace, ".splent_cache", "features", org_safe, feature_name
     )
@@ -64,7 +66,7 @@ def make_feature(full_name):
 
     # --- Jinja setup ---
     env = setup_jinja_env()
-    context = {
+    template_ctx = {
         "feature_name": feature_name,
         "org_safe": org_safe,
         "feature_import": f"{org_safe}.{feature_name}",
@@ -94,6 +96,15 @@ def make_feature(full_name):
         os.path.join(
             "tests", "test_selenium.py"
         ): "feature/feature_tests_test_selenium.py.j2",
+        # Migrations scaffold
+        os.path.join("migrations", "env.py"): "feature/feature_migrations_env.py.j2",
+        os.path.join(
+            "migrations", "alembic.ini"
+        ): "feature/feature_migrations_alembic.ini.j2",
+        os.path.join(
+            "migrations", "script.py.mako"
+        ): "feature/feature_migrations_script.py.mako.j2",
+        os.path.join("migrations", "versions", ".gitkeep"): None,
     }
 
     base_files_and_templates = {
@@ -106,19 +117,19 @@ def make_feature(full_name):
     for filename, template in src_files_and_templates.items():
         full_path = os.path.join(src_path, filename)
         if template:
-            render_and_write_file(env, template, full_path, context)
+            render_and_write_file(env, template, full_path, template_ctx)
         else:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            open(full_path, "a").close()
+            Path(full_path).touch()
 
     # --- Create base files ---
     for filename, template in base_files_and_templates.items():
         full_path = os.path.join(cache_dir, filename)
         if template:
-            render_and_write_file(env, template, full_path, context)
+            render_and_write_file(env, template, full_path, template_ctx)
         else:
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            open(full_path, "a").close()
+            Path(full_path).touch()
 
     # --- src/__init__.py (namespace root) ---
     src_root = os.path.join(cache_dir, "src")
@@ -128,11 +139,20 @@ def make_feature(full_name):
     # --- Permissions (UID:GID 1000:1000) ---
     uid, gid = 1000, 1000
     for root, dirs, files in os.walk(cache_dir):
-        os.chown(root, uid, gid)
+        try:
+            os.chown(root, uid, gid)
+        except PermissionError:
+            pass
         for d in dirs:
-            os.chown(os.path.join(root, d), uid, gid)
+            try:
+                os.chown(os.path.join(root, d), uid, gid)
+            except PermissionError:
+                pass
         for f in files:
-            os.chown(os.path.join(root, f), uid, gid)
+            try:
+                os.chown(os.path.join(root, f), uid, gid)
+            except PermissionError:
+                pass
 
     click.echo(
         click.style(f"✅ Feature '{full_name}' created successfully!", fg="green")
