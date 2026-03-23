@@ -49,7 +49,7 @@ class SPLENTCLI(click.Group):
             "🐍 Development & QA": [
                 cmd
                 for cmd in self.commands
-                if cmd.startswith(("linter", "test", "coverage", "locust"))
+                if cmd.startswith(("test", "coverage", "locust"))
             ],
             "⚙️ Build & Assets": [
                 cmd for cmd in self.commands if cmd.startswith("webpack:")
