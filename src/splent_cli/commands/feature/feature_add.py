@@ -73,8 +73,9 @@ def feature_add(full_name):
     if os.path.islink(link_path) or os.path.exists(link_path):
         os.unlink(link_path)
 
-    os.symlink(cache_dir, link_path)
-    click.echo(f"🔗 Linked {link_path} → {cache_dir}")
+    rel_target = os.path.relpath(cache_dir, product_features_dir)
+    os.symlink(rel_target, link_path)
+    click.echo(f"🔗 Linked {link_path} → {rel_target}")
 
     # --------------------------
     # 3️⃣ Update manifest

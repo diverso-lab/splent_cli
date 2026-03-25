@@ -121,7 +121,8 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
     if os.path.islink(old):
         os.unlink(old)
     if not os.path.islink(new):
-        os.symlink(editable_path, new)
+        rel_target = os.path.relpath(editable_path, product_features_dir)
+        os.symlink(rel_target, new)
 
     click.secho(f"     ✔  ready for editing.", fg="green")
     return True

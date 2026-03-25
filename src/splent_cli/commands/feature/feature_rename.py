@@ -148,7 +148,8 @@ def feature_rename(old_name, new_name, namespace):
         # Update symlink
         if os.path.islink(old_link):
             os.unlink(old_link)
-            os.symlink(new_dir, new_link)
+            rel_target = os.path.relpath(new_dir, product_features_dir)
+            os.symlink(rel_target, new_link)
             symlink_updated = True
 
         # Update pyproject

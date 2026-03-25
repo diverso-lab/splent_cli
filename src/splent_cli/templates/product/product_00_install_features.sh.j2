@@ -23,10 +23,17 @@ echo "📃 Features parsed:"
 echo "$features"
 
 for feature in $features; do
+    # Parse "splent-io/splent_feature_auth@v1.2.1" → name_ver="splent_feature_auth@v1.2.1"
+    if echo "$feature" | grep -q '/'; then
+        name_ver="${feature#*/}"
+    else
+        name_ver="$feature"
+    fi
+
     found_path=""
     for org_dir in /workspace/{{ product_name }}/features/*; do
         [ -d "$org_dir" ] || continue
-        candidate="$org_dir/$feature"
+        candidate="$org_dir/$name_ver"
         if [ -d "$candidate" ]; then
             found_path="$candidate"
             break
@@ -34,8 +41,12 @@ for feature in $features; do
     done
 
     if [ -n "$found_path" ]; then
-        echo "🔁 Installing $feature in editable mode from $found_path..."
-        pip install --no-cache-dir --root-user-action=ignore -e "$found_path" || echo "❌ Error installing $feature"
+        if pip show "${name_ver%%@*}" > /dev/null 2>&1; then
+            echo "✅ $feature already installed."
+        else
+            echo "🔁 Installing $feature in editable mode from $found_path..."
+            pip install --no-cache-dir --root-user-action=ignore -e "$found_path" || echo "❌ Error installing $feature"
+        fi
     else
         echo "⚠️  $feature not found locally under /workspace/{{ product_name }}/features/*/. Skipping."
     fi

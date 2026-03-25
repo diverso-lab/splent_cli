@@ -147,9 +147,10 @@ def feature_attach(feature_identifier, version):
     new_link = os.path.join(product_features_dir, f"{feature_name}@{version}")
     if os.path.islink(new_link):
         os.unlink(new_link)
-    os.symlink(versioned_dir, new_link)
+    rel_target = os.path.relpath(versioned_dir, product_features_dir)
+    os.symlink(rel_target, new_link)
 
-    click.echo(f"🔗 Linked {new_link} → {versioned_dir}")
+    click.echo(f"🔗 Linked {new_link} → {rel_target}")
 
     # --- 5️⃣ Update manifest ------------------------------------------------
     key = feature_key(namespace_fs, feature_name, version)
