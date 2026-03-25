@@ -188,9 +188,12 @@ def product_env(generate, merge, env_name, process_all):
 
         feature_env_paths = []
         for feature in features:
-            org_part, feat_part = (
-                feature.split("/", 1) if "/" in feature else ("splent_io", feature)
-            )
+            if "/" in feature:
+                raw_org, feat_part = feature.split("/", 1)
+                org_part = raw_org.replace("-", "_").replace(".", "_")
+            else:
+                org_part = "splent_io"
+                feat_part = feature
             docker_dir_f = os.path.join(
                 workspace, ".splent_cache", "features", org_part, feat_part, "docker"
             )

@@ -39,8 +39,9 @@ def fetch_uvl(force):
     target = os.path.join(uvl_dir, file)
 
     if os.path.exists(target) and not force:
-        click.echo(f"UVL already present: {target}")
-        return
+        if not click.confirm(f"UVL file already exists: {target}\nOverwrite?"):
+            click.echo("Aborted.")
+            return
 
     click.echo(f"Downloading UVL from {url}")
 
