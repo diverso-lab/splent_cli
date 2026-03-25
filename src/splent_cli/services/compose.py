@@ -38,11 +38,15 @@ def normalize_feature_ref(feat: str) -> str:
     'features/splent_io/splent_feature_auth' -> 'splent_io/splent_feature_auth'
     'splent_feature_auth'                    -> 'splent_io/splent_feature_auth'
     'splent_io/splent_feature_auth'          -> 'splent_io/splent_feature_auth'
+    'splent-io/splent_feature_auth'          -> 'splent_io/splent_feature_auth'
     """
     if "features/" in feat:
         feat = feat.split("features/")[-1]
     if "/" not in feat:
         feat = f"splent_io/{feat}"
+    else:
+        org, rest = feat.split("/", 1)
+        feat = f"{org.replace('-', '_').replace('.', '_')}/{rest}"
     return feat
 
 

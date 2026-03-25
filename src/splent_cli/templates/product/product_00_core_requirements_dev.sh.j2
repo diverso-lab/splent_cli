@@ -17,11 +17,11 @@ echo "🚀 [Core requirements] entrypoint starting..."
 
 # Check if splent_framework is already installed in editable mode
 if [ -d /workspace/splent_framework ]; then
-    if ! pip show -f splent_framework | grep -q "/workspace/splent_framework"; then
+    if pip show splent_framework 2>/dev/null | grep -q "Editable project location.*/workspace/splent_framework"; then
+        echo "✅ splent_framework already installed in editable mode."
+    else
         echo "🔁 Installing splent_framework in editable mode..."
         pip install --no-cache-dir --root-user-action=ignore -e /workspace/splent_framework
-    else
-        echo "✅ splent_framework already installed in editable mode."
     fi
 else
     echo "📦 Installing splent_framework from pyproject.toml [core]..."
@@ -30,12 +30,11 @@ fi
 
 # Check if splent_cli is already installed
 if [ -d /workspace/splent_cli ]; then
-    if ! pip show -f splent_cli | grep -q "/workspace/splent_cli"; then
-        echo "🔁 Installing splent_cli in editable mode (with [dev])..."
-        pip install --no-cache-dir --root-user-action=ignore -e /workspace/splent_cli
-        pip install --no-cache-dir --root-user-action=ignore -e /workspace/splent_cli[dev]
-    else
+    if pip show splent_cli 2>/dev/null | grep -q "Editable project location.*/workspace/splent_cli"; then
         echo "✅ splent_cli already installed in editable mode."
+    else
+        echo "🔁 Installing splent_cli in editable mode (with [dev])..."
+        pip install --no-cache-dir --root-user-action=ignore -e "/workspace/splent_cli[dev]"
     fi
 else
     echo "⚠️  splent_cli directory not found. Skipping editable install."

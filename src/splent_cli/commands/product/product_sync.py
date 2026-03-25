@@ -98,5 +98,6 @@ def _create_symlink(cache_dir, product_features_dir, link_path):
     os.makedirs(product_features_dir, exist_ok=True)
     if os.path.islink(link_path) or os.path.exists(link_path):
         os.unlink(link_path)
-    os.symlink(cache_dir, link_path)
-    click.secho(f"🔗 Linked {link_path} → {cache_dir}", fg="cyan")
+    rel_target = os.path.relpath(cache_dir, product_features_dir)
+    os.symlink(rel_target, link_path)
+    click.secho(f"🔗 Linked {link_path} → {rel_target}", fg="cyan")

@@ -1,7 +1,6 @@
-import os
 import click
 from flask import current_app
-from flask_migrate import upgrade as alembic_upgrade, migrate as alembic_migrate
+from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import text, MetaData
 
 from splent_cli.utils.decorators import requires_db
@@ -16,93 +15,71 @@ from splent_cli.commands.clear_uploads import clear_uploads
 @requires_db
 @click.command(
     "db:reset",
-    short_help="Resets the database, optionally clears migrations and recreates them.",
-)
-@click.option(
-    "--clear-migrations",
-    is_flag=True,
-    help="Drop alembic_<feature> tables, wipe versions/, clear splent_migrations, and regenerate.",
+    short_help="Drop all tables and re-apply migrations from scratch.",
 )
 @click.option("-y", "--yes", is_flag=True, help="Confirm without prompting.")
-def db_reset(clear_migrations, yes):
+def db_reset(yes):
+    """
+    Full database reset: drops ALL tables (data, alembic tracking,
+    splent_migrations), then re-applies existing feature migrations.
+
+    Feature migration files are NOT deleted — only the database is wiped.
+    """
     app = current_app
 
     if not yes and not click.confirm(
-        "⚠️  WARNING: This will delete all data and clear uploads. Are you sure?",
+        "⚠️  WARNING: This will DROP all tables and clear uploads. Are you sure?",
         abort=True,
     ):
         return
 
-    # --- STEP 1: Drop all table data (keep alembic tracking tables) ---
+    # --- STEP 1: Drop ALL tables (including alembic_* and splent_migrations) ---
+    click.echo(click.style("🗑️  Dropping all tables...", fg="yellow"))
     try:
-        meta = MetaData()
-        meta.reflect(bind=db.engine)
         with db.engine.connect() as conn:
-            trans = conn.begin()
-            for table in reversed(meta.sorted_tables):
-                skip = (
-                    table.name.startswith("alembic_")
-                    or table.name == SPLENT_MIGRATIONS_TABLE
-                )
-                if not skip:
-                    conn.execute(table.delete())
-            trans.commit()
-        click.echo(click.style("✅ All table data cleared.", fg="yellow"))
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+            meta = MetaData()
+            meta.reflect(bind=db.engine)
+            for table in meta.sorted_tables:
+                conn.execute(text(f"DROP TABLE IF EXISTS `{table.name}`"))
+                click.echo(click.style(f"   Dropped {table.name}", fg="bright_black"))
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+            conn.commit()
+        click.echo(click.style("✅ All tables dropped.", fg="yellow"))
     except Exception as e:
-        click.echo(click.style(f"❌ Error clearing table data: {e}", fg="red"))
+        click.echo(click.style(f"❌ Error dropping tables: {e}", fg="red"))
         return
 
-    # --- STEP 2: Clear uploads ---
+    # --- STEP 2: Recreate splent_migrations tracking table ---
+    click.echo(click.style("📋 Recreating splent_migrations table...", fg="cyan"))
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS `{SPLENT_MIGRATIONS_TABLE}` (
+                        `feature`        VARCHAR(255) NOT NULL,
+                        `last_migration` VARCHAR(255) DEFAULT NULL,
+                        PRIMARY KEY (`feature`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    """
+                )
+            )
+    except Exception as e:
+        click.echo(click.style(f"❌ Error creating tracking table: {e}", fg="red"))
+        return
+
+    # --- STEP 3: Clear uploads ---
     ctx = click.get_current_context()
     ctx.invoke(clear_uploads)
 
-    # --- STEP 3: Per-feature migration reset ---
+    # --- STEP 4: Re-apply all existing feature migrations ---
     dirs = MigrationManager.get_all_feature_migration_dirs()
-
-    if clear_migrations:
-        # Drop alembic_<feature> tables and wipe versions/
-        with db.engine.connect() as conn:
-            trans = conn.begin()
-            for feat in dirs:
-                try:
-                    conn.execute(text(f"DROP TABLE IF EXISTS `alembic_{feat}`"))
-                    click.echo(click.style(f"🗑️  Dropped alembic_{feat}", fg="yellow"))
-                except Exception:
-                    pass
-            # Clear splent_migrations
-            try:
-                conn.execute(text(f"DELETE FROM `{SPLENT_MIGRATIONS_TABLE}`"))
-            except Exception:
-                pass
-            trans.commit()
-
-        for feat, mdir in dirs.items():
-            versions_dir = os.path.join(mdir, "versions")
-            if os.path.isdir(versions_dir):
-                for f in os.listdir(versions_dir):
-                    if f.endswith(".py"):
-                        os.remove(os.path.join(versions_dir, f))
-                click.echo(click.style(f"🧹 Cleared versions/ for {feat}", fg="yellow"))
-
-        # Regenerate
-        for feat, mdir in dirs.items():
-            click.echo(click.style(f"  ⚙️  Regenerating {feat}...", fg="cyan"))
-            try:
-                alembic_migrate(directory=mdir, message=feat)
-                alembic_upgrade(directory=mdir)
-                revision = MigrationManager.get_current_feature_revision(
-                    feat, db.engine
-                )
-                MigrationManager.update_feature_status(app, feat, revision)
-                click.echo(
-                    click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green")
-                )
-            except Exception as e:
-                click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
+    if not dirs:
+        click.echo(click.style("⚠️  No feature migrations found.", fg="yellow"))
     else:
-        # Just re-apply existing migrations
+        click.echo(click.style(f"⬆️  Applying migrations for {len(dirs)} features...", fg="cyan"))
         for feat, mdir in dirs.items():
-            click.echo(click.style(f"  ⬆️  Re-applying {feat}...", fg="cyan"))
             try:
                 alembic_upgrade(directory=mdir)
                 revision = MigrationManager.get_current_feature_revision(
@@ -115,7 +92,7 @@ def db_reset(clear_migrations, yes):
             except Exception as e:
                 click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
 
-    click.echo(click.style("🎉 Database reset successfully.", fg="green"))
+    click.echo(click.style("\n🎉 Database reset complete.", fg="green"))
 
 
 cli_command = db_reset

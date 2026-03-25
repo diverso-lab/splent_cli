@@ -45,3 +45,6 @@ def db_dump(filename):
         )
     except subprocess.CalledProcessError as e:
         click.echo(click.style(f"Error creating database dump: {e}", fg="red"))
+
+
+cli_command = db_dump

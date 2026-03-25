@@ -1,9 +1,41 @@
+import os
+
 import click
 from flask import current_app
 from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
 
 from splent_cli.utils.decorators import requires_db
 from splent_framework.managers.migration_manager import MigrationManager
+
+
+def _count_versions(mdir: str) -> int:
+    """Count .py migration files in a versions/ directory."""
+    versions_dir = os.path.join(mdir, "versions")
+    if not os.path.isdir(versions_dir):
+        return 0
+    return len([f for f in os.listdir(versions_dir) if f.endswith(".py")])
+
+
+def _is_empty_migration(path: str) -> bool:
+    """Check if a migration file only contains pass in upgrade/downgrade."""
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    # Strip upgrade() and downgrade() bodies — if both are just pass, it's empty
+    import re
+    upgrades = re.findall(r"def upgrade\(\).*?(?=\ndef |\Z)", content, re.DOTALL)
+    downgrades = re.findall(r"def downgrade\(\).*?(?=\ndef |\Z)", content, re.DOTALL)
+    for body in upgrades + downgrades:
+        # Remove comments, docstrings, and whitespace — if only 'pass' remains, it's empty
+        lines = [
+            l.strip()
+            for l in body.splitlines()
+            if l.strip()
+            and not l.strip().startswith("#")
+            and not l.strip().startswith("def ")
+        ]
+        if any(line != "pass" for line in lines):
+            return False
+    return True
 
 
 @requires_db
@@ -13,6 +45,12 @@ from splent_framework.managers.migration_manager import MigrationManager
 )
 @click.argument("feature", required=False, default=None)
 def db_migrate(feature):
+    """
+    Generate new migration files for features that have schema changes,
+    then apply all pending migrations.
+
+    Empty migrations (no schema changes detected) are automatically removed.
+    """
     app = current_app
 
     if feature:
@@ -36,10 +74,35 @@ def db_migrate(feature):
 
     for feat, mdir in dirs.items():
         click.echo(click.style(f"  ⚙️  Generating migrations for {feat}...", fg="cyan"))
+
+        before = _count_versions(mdir)
         try:
             alembic_migrate(directory=mdir, message=feat)
         except Exception as e:
             click.echo(click.style(f"  ℹ️  {e}", fg="yellow"))
+
+        after = _count_versions(mdir)
+
+        # If a new file was generated, check if it's empty (no real schema changes)
+        if after > before:
+            versions_dir = os.path.join(mdir, "versions")
+            newest = max(
+                (os.path.join(versions_dir, f) for f in os.listdir(versions_dir) if f.endswith(".py")),
+                key=os.path.getmtime,
+            )
+            if _is_empty_migration(newest):
+                os.remove(newest)
+                click.echo(
+                    click.style(f"  ⏩ {feat}: no schema changes detected, skipping.", fg="yellow")
+                )
+            else:
+                click.echo(
+                    click.style(f"  📝 {feat}: new migration generated.", fg="green")
+                )
+        else:
+            click.echo(
+                click.style(f"  ⏩ {feat}: no schema changes detected, skipping.", fg="yellow")
+            )
 
         click.echo(click.style(f"  ⬆️  Applying migrations for {feat}...", fg="cyan"))
         try:

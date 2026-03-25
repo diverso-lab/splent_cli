@@ -43,3 +43,6 @@ def db_console():
         )
     except subprocess.CalledProcessError as e:
         click.secho(f"❌ Error opening MariaDB console: {e}", fg="red")
+
+
+cli_command = db_console

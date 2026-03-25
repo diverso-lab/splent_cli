@@ -301,7 +301,7 @@ def _bump(version_str: str, bump_type: str) -> str:
 def _semver_wizard(ns_github: str, feature_name: str) -> str:
     """
     Interactive wizard: fetch current version, offer major/minor/patch,
-    return the chosen next version string (e.g. 'v1.2.0').
+    return the chosen next version string (e.g. 'v1.2.1').
     """
     click.echo()
     click.secho("  Fetching current version from GitHub...", fg="bright_black")

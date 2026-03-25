@@ -43,9 +43,14 @@ def get_installed_seeders(specific_module=None):
 
     seeders = []
     for feature in ordered:
-        # Handle versioned feature names like "splent_feature_auth@v1.0.0"
+        # Handle "splent-io/splent_feature_auth@v1.0.0" → org_safe.base_name.seeders
         base_name = feature.split("@")[0]
-        module_name = f"splent_io.{base_name}.seeders"
+        if "/" in base_name:
+            org_raw, base_name = base_name.split("/", 1)
+            org_safe = org_raw.replace("-", "_").replace(".", "_")
+        else:
+            org_safe = "splent_io"
+        module_name = f"{org_safe}.{base_name}.seeders"
 
         if specific_module and not base_name.endswith(specific_module):
             continue
@@ -93,7 +98,7 @@ def db_seed(reset, yes, module):
         ):
             click.echo(click.style("🔄 Resetting the database...", fg="yellow"))
             ctx = click.get_current_context()
-            ctx.invoke(db_reset, clear_migrations=False, yes=True)
+            ctx.invoke(db_reset, yes=True)
         else:
             click.echo(click.style("❌ Database reset cancelled.", fg="yellow"))
             return
