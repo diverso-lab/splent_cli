@@ -140,29 +140,107 @@ def _declared_version(features: list[str], feature_name: str) -> str | None:
 
 # ── Diff helper ───────────────────────────────────────────────────────────────
 
-def _print_diff(gh_versions: list[str], pypi_versions: list[str]) -> None:
-    """Print versions missing from one source or the other."""
+def _pypi_version_exists(package: str, version: str) -> bool:
+    """Check if a specific version exists on PyPI via the per-version endpoint.
+
+    The main /json endpoint is CDN-cached and may lag after a fresh release.
+    The per-version endpoint is always up to date.
+    """
+    url = f"https://pypi.org/pypi/{package}/{version}/json"
+    req = urllib.request.Request(url, headers={"User-Agent": "splent-cli"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status == 200
+    except urllib.error.HTTPError as e:
+        return e.code != 404
+    except urllib.error.URLError:
+        return False
+
+
+def _semver_sort_key(v: str) -> tuple:
+    clean = _strip_v(v)
+    try:
+        return tuple(int(x) for x in clean.split(".")[:3])
+    except ValueError:
+        return (0, 0, 0)
+
+
+def _print_diff_table(
+    gh_versions: list[str], pypi_versions: list[str], package: str
+) -> None:
+    """Unified version sync table with arrows and colours."""
     gh_norm = {_strip_v(v): v for v in gh_versions}
     pypi_norm = {_strip_v(v): v for v in pypi_versions}
 
-    only_gh = sorted(gh_norm.keys() - pypi_norm.keys(), reverse=True)
-    only_pypi = sorted(pypi_norm.keys() - gh_norm.keys(), reverse=True)
+    all_norm = sorted(
+        gh_norm.keys() | pypi_norm.keys(),
+        key=_semver_sort_key,
+        reverse=True,
+    )
 
-    click.echo(click.style("\n  Sync diff", fg="cyan"))
+    COL_VER = 10
+    COL_SRC = 16
 
-    if not only_gh and not only_pypi:
-        click.secho("    ✔ GitHub and PyPI are in sync.", fg="green")
-        return
+    click.echo()
+    click.echo(
+        click.style(f"  {'Version':<{COL_VER}}", bold=True)
+        + click.style(f"  {'GitHub':<{COL_SRC}}", bold=True, fg="cyan")
+        + click.style("     ")
+        + click.style(f"{'PyPI':<{COL_SRC}}", bold=True, fg="magenta")
+    )
+    click.echo(
+        click.style(
+            f"  {'─' * (COL_VER + COL_SRC * 2 + 10)}", fg="bright_black"
+        )
+    )
 
-    if only_gh:
-        click.secho("    Tagged on GitHub but missing on PyPI:", fg="yellow")
-        for v in only_gh:
-            click.echo(f"      {gh_norm[v]}")
+    all_in_sync = True
+    for v in all_norm:
+        in_gh = v in gh_norm
+        in_pypi = v in pypi_norm
 
-    if only_pypi:
-        click.secho("    Published on PyPI but missing GitHub tag:", fg="yellow")
-        for v in only_pypi:
-            click.echo(f"      {pypi_norm[v]}")
+        # For versions only on GitHub, verify against per-version endpoint
+        # to avoid false positives from CDN lag after a fresh release.
+        if in_gh and not in_pypi:
+            in_pypi_live = _pypi_version_exists(package, v)
+            cdn_lag = in_pypi_live
+        else:
+            in_pypi_live = in_pypi
+            cdn_lag = False
+
+        display_ver = click.style(
+            f"  {gh_norm.get(v, pypi_norm.get(v, v)):<{COL_VER}}",
+            fg="bright_white",
+        )
+
+        if in_gh and in_pypi_live:
+            gh_col = click.style(f"  {'✔  tagged':<{COL_SRC}}", fg="green")
+            arrow = click.style("  ↔  ", fg="green", bold=True)
+            pypi_label = "✔  published"
+            if cdn_lag:
+                pypi_label += " *"
+            pypi_col = click.style(f"{pypi_label:<{COL_SRC}}", fg="green")
+        elif in_gh:
+            all_in_sync = False
+            gh_col = click.style(f"  {'✔  tagged':<{COL_SRC}}", fg="green")
+            arrow = click.style("  →  ", fg="yellow", bold=True)
+            pypi_col = click.style(f"{'✗  not published':<{COL_SRC}}", fg="red")
+        else:
+            all_in_sync = False
+            gh_col = click.style(f"  {'✗  no tag':<{COL_SRC}}", fg="red")
+            arrow = click.style("  ←  ", fg="yellow", bold=True)
+            pypi_col = click.style(f"{'✔  published':<{COL_SRC}}", fg="magenta")
+
+        click.echo(display_ver + gh_col + arrow + pypi_col)
+
+    click.echo()
+    if all_in_sync:
+        click.secho("  ✔  GitHub and PyPI are in sync.", fg="green", bold=True)
+    else:
+        click.secho(
+            "  ↔  in sync   →  only on GitHub   ←  only on PyPI",
+            fg="bright_black",
+        )
 
 
 # ── Command ───────────────────────────────────────────────────────────────────
@@ -245,6 +323,16 @@ def feature_versions(feature_identifier, only_github, only_pypi, show_diff, show
             click.echo()
         return
 
+    # ── Diff: unified table replaces the two separate lists ───────────────────
+    if show_diff:
+        _print_diff_table(gh_versions, pypi_versions, feature_name)
+        if not token:
+            click.secho(
+                "  💡 Set GITHUB_TOKEN to avoid rate limits.", fg="yellow"
+            )
+            click.echo()
+        return
+
     # ── GitHub ────────────────────────────────────────────────────────────────
     if show_github:
         click.echo(click.style("\n  GitHub tags", fg="cyan"))
@@ -262,10 +350,6 @@ def feature_versions(feature_identifier, only_github, only_pypi, show_diff, show
                 click.echo(f"    {v}")
         else:
             click.secho("    (not published on PyPI)", fg="bright_black")
-
-    # ── Diff ──────────────────────────────────────────────────────────────────
-    if show_diff:
-        _print_diff(gh_versions, pypi_versions)
 
     click.echo()
     if show_github and not token:

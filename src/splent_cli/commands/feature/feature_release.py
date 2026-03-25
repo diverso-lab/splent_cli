@@ -1,7 +1,10 @@
+import json
 import os
 import re
 import subprocess
 import tomllib
+import urllib.error
+import urllib.request
 import click
 from pathlib import Path
 
@@ -51,6 +54,11 @@ def validate_environment():
         click.echo("❌ Missing required environment variables:")
         for m in missing:
             click.echo(f"   - {m}")
+        click.echo()
+        click.secho(
+            "   Run 'splent tokens' for instructions on how to obtain them.",
+            fg="bright_black",
+        )
         raise SystemExit(1)
 
 
@@ -251,6 +259,96 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
 
 
 # =====================================================================
+# SEMVER WIZARD
+# =====================================================================
+
+def _fetch_latest_tag(ns_github: str, feature_name: str) -> str | None:
+    """Return the latest GitHub tag for this feature, or None."""
+    token = os.getenv("GITHUB_TOKEN")
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "splent-cli",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"token {token}"
+    url = (
+        f"https://api.github.com/repos/{ns_github}/{feature_name}"
+        f"/tags?per_page=1&page=1"
+    )
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            batch = json.loads(resp.read().decode())
+        return batch[0]["name"] if batch else None
+    except Exception:
+        return None
+
+
+def _bump(version_str: str, bump_type: str) -> str:
+    """Return the next version string for the given bump type (major/minor/patch)."""
+    clean = version_str.lstrip("v")
+    parts = clean.split(".")
+    major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+
+    if bump_type == "major":
+        return f"v{major + 1}.0.0"
+    if bump_type == "minor":
+        return f"v{major}.{minor + 1}.0"
+    return f"v{major}.{minor}.{patch + 1}"
+
+
+def _semver_wizard(ns_github: str, feature_name: str) -> str:
+    """
+    Interactive wizard: fetch current version, offer major/minor/patch,
+    return the chosen next version string (e.g. 'v1.2.0').
+    """
+    click.echo()
+    click.secho("  Fetching current version from GitHub...", fg="bright_black")
+    current = _fetch_latest_tag(ns_github, feature_name)
+
+    if current:
+        click.echo(f"  Current version: {click.style(current, fg='cyan', bold=True)}")
+    else:
+        click.secho("  No tags found — this will be the first release.", fg="yellow")
+        current = "v0.0.0"
+
+    patch_v = _bump(current, "patch")
+    minor_v = _bump(current, "minor")
+    major_v = _bump(current, "major")
+
+    click.echo()
+    click.echo(click.style("  Bump type:", bold=True))
+    click.echo(
+        f"    {click.style('[1]', bold=True)} patch  →  "
+        f"{click.style(patch_v, fg='green')}   bug fixes, no new features"
+    )
+    click.echo(
+        f"    {click.style('[2]', bold=True)} minor  →  "
+        f"{click.style(minor_v, fg='yellow')}   new features, backward compatible"
+    )
+    click.echo(
+        f"    {click.style('[3]', bold=True)} major  →  "
+        f"{click.style(major_v, fg='red')}   breaking changes"
+    )
+    click.echo()
+
+    choice = click.prompt(
+        "  Choice",
+        type=click.Choice(["1", "2", "3"]),
+        show_choices=False,
+    )
+    chosen = {"1": patch_v, "2": minor_v, "3": major_v}[choice]
+
+    click.echo()
+    click.echo(
+        f"  Will release as {click.style(chosen, fg='cyan', bold=True)}"
+    )
+    click.confirm("  Proceed?", abort=True)
+    return chosen
+
+
+# =====================================================================
 # VERSIONED SNAPSHOT
 # =====================================================================
 def create_versioned_snapshot(namespace, feature_name, version, workspace):
@@ -280,12 +378,21 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
     short_help="Release a feature: bump version, tag, publish to GitHub/PyPI, and snapshot.",
 )
 @click.argument("feature_ref")
-@click.argument("version")
+@click.argument("version", required=False, default=None)
 @click.option("--attach", is_flag=True)
 def feature_release(feature_ref, version, attach):
     validate_environment()
 
     workspace = str(context.workspace())
+
+    # Resolve feature path early so we have namespace/name for the wizard
+    ns, name, ver_in_ref = parse_feature_ref(feature_ref)
+    ns_github = ns.replace("_", "-")
+
+    if not version:
+        version = _semver_wizard(ns_github, name)
+
+    click.echo()
 
     feature_path, namespace, feature_name, normalized = resolve_feature_path(
         feature_ref, version, workspace

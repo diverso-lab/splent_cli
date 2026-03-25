@@ -18,11 +18,13 @@ def check_github():
     # --- presence checks ---
     if not user:
         click.echo(click.style("[✖] ", fg="red") + "GITHUB_USER not set in .env")
+        click.secho("   Run 'splent tokens' for setup instructions.", fg="bright_black")
         raise SystemExit(1)
     click.echo(click.style("[✔] ", fg="green") + f"GITHUB_USER = {user}")
 
     if not token:
         click.echo(click.style("[✖] ", fg="red") + "GITHUB_TOKEN not set in .env")
+        click.secho("   Run 'splent tokens' for setup instructions.", fg="bright_black")
         raise SystemExit(1)
 
     masked = token[:4] + "*" * (len(token) - 8) + token[-4:]
@@ -51,10 +53,18 @@ def check_github():
                 click.style("[✖] ", fg="red")
                 + "Token invalid or expired (401 Unauthorized)"
             )
+            click.secho(
+                "   Run 'splent tokens' for instructions on obtaining a valid token.",
+                fg="bright_black",
+            )
         elif e.code == 403:
             click.echo(
                 click.style("[✖] ", fg="red")
                 + "Token lacks required permissions (403 Forbidden)"
+            )
+            click.secho(
+                "   Run 'splent tokens' — ensure the token has 'repo' scope.",
+                fg="bright_black",
             )
         else:
             click.echo(

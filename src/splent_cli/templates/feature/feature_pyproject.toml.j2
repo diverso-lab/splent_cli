@@ -19,6 +19,9 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.splent]
+cli_version = "{{ cli_version }}"
+
 # ── Feature Contract ──────────────────────────────────────────────────────────
 # Declares what this feature provides to and requires from the product.
 # Used by `splent feature:check` and `splent product:derive` for validation.

@@ -79,14 +79,64 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
 
 
 # =====================================================================
+# CORE LOGIC (single feature)
+# =====================================================================
+def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str):
+    """Convert one pyproject feature entry to editable. Returns True on success."""
+    _, ns_git, ns_fs, rest = compose.parse_feature_identifier(match)
+    if "@" in rest:
+        name, version = rest.split("@", 1)
+    else:
+        name, version = rest, None
+
+    if not version:
+        click.echo(f"  ℹ️  {match} — already editable, skipping.")
+        return True
+
+    click.echo(f"  🧩 {ns_git}/{name}@{version}")
+
+    versioned_path, editable_path = get_cache_paths(workspace, ns_fs, name, version)
+
+    if not os.path.exists(versioned_path):
+        click.secho(f"  ❌ Versioned cache not found: {versioned_path}", fg="red")
+        return False
+
+    if not os.path.exists(editable_path):
+        click.echo(f"     📦 Creating editable copy → {editable_path}")
+        subprocess.run(["rm", "-rf", editable_path], check=True)
+        result = subprocess.run(["cp", "-r", versioned_path, editable_path])
+        if result.returncode != 0:
+            click.secho("     ❌ Failed to copy feature to editable path.", fg="red")
+            return False
+
+    ensure_git_main(editable_path, ns_git, name)
+    replace_pyproject_reference(pyproject_path, name, version)
+
+    product_features_dir = os.path.join(product_path, "features", ns_fs)
+    os.makedirs(product_features_dir, exist_ok=True)
+
+    old = os.path.join(product_features_dir, f"{name}@{version}")
+    new = os.path.join(product_features_dir, name)
+
+    if os.path.islink(old):
+        os.unlink(old)
+    if not os.path.islink(new):
+        os.symlink(editable_path, new)
+
+    click.secho(f"     ✔  ready for editing.", fg="green")
+    return True
+
+
+# =====================================================================
 # MAIN COMMAND
 # =====================================================================
 @click.command(
     "feature:edit",
     short_help="Convert a released feature into a local editable version.",
 )
-@click.argument("feature_name")
-def feature_edit(feature_name):
+@click.argument("feature_name", required=False, default=None)
+@click.option("--all", "edit_all", is_flag=True, help="Convert all versioned features to editable.")
+def feature_edit(feature_name, edit_all):
     workspace = str(context.workspace())
     product = context.require_app()
 
@@ -97,70 +147,57 @@ def feature_edit(feature_name):
         click.echo("❌ pyproject.toml not found.")
         raise SystemExit(1)
 
-    # Load pyproject
+    if not feature_name and not edit_all:
+        raise click.UsageError("Provide a <feature_name> or use --all.")
+
+    if feature_name and edit_all:
+        raise click.UsageError("Cannot use --all with a feature name.")
+
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
     features = data["project"]["optional-dependencies"]["features"]
 
-    # Normalizar: si el usuario pasó splent_io/name, nos quedamos con name
-    if "/" in feature_name:
-        _, feature_name = feature_name.split("/", 1)
+    # ── Single feature ────────────────────────────────────────────────
+    if feature_name:
+        if "/" in feature_name:
+            _, feature_name = feature_name.split("/", 1)
 
-    # Buscar por nombre real, sin namespace ni versión
-    match = next(
-        (f for f in features if f.split("@")[0].split("/")[-1] == feature_name),
-        None,
-    )
-
-    if not match:
-        click.echo(f"❌ Feature {feature_name} not found in pyproject.")
-        raise SystemExit(1)
-
-    _, ns_git, ns_fs, rest = compose.parse_feature_identifier(match)
-    if "@" in rest:
-        name, version = rest.split("@", 1)
-    else:
-        name, version = rest, None
-
-    if not version:
-        click.echo("ℹ️ Feature already editable.")
-        return
-
-    click.echo(f"🧩 Editing feature {ns_git}/{name}@{version}")
-
-    versioned_path, editable_path = get_cache_paths(workspace, ns_fs, name, version)
-
-    if not os.path.exists(versioned_path):
-        click.echo(f"❌ Versioned cache not found: {versioned_path}")
-        raise SystemExit(1)
-
-    # Create editable copy only if missing (clean up partial previous attempt first)
-    if not os.path.exists(editable_path):
-        click.echo(f"📦 Creating editable copy → {editable_path}")
-        subprocess.run(["rm", "-rf", editable_path], check=True)
-        result = subprocess.run(["cp", "-r", versioned_path, editable_path])
-        if result.returncode != 0:
-            click.echo("❌ Failed to copy feature to editable path.")
+        match = next(
+            (f for f in features if f.split("@")[0].split("/")[-1] == feature_name),
+            None,
+        )
+        if not match:
+            click.echo(f"❌ Feature {feature_name} not found in pyproject.")
             raise SystemExit(1)
 
-    # Ensure Git repo points to main branch and right remote
-    ensure_git_main(editable_path, ns_git, name)
+        click.echo()
+        _edit_one(workspace, product_path, pyproject_path, match)
+        click.echo()
+        return
 
-    # Update pyproject to remove @version
-    replace_pyproject_reference(pyproject_path, name, version)
+    # ── All features ──────────────────────────────────────────────────
+    versioned = [f for f in features if "@" in f.split("/")[-1]]
+    already_editable = [f for f in features if "@" not in f.split("/")[-1]]
 
-    # Fix symlink
-    product_features_dir = os.path.join(product_path, "features", ns_fs)
-    os.makedirs(product_features_dir, exist_ok=True)
+    click.echo()
+    if already_editable:
+        click.secho(
+            f"  ℹ️  {len(already_editable)} feature(s) already editable — skipping.",
+            fg="bright_black",
+        )
 
-    old = os.path.join(product_features_dir, f"{name}@{version}")
-    new = os.path.join(product_features_dir, name)
+    if not versioned:
+        click.secho("  ✅ All features are already editable.", fg="green")
+        click.echo()
+        return
 
-    if os.path.islink(old):
-        os.unlink(old)
+    click.secho(f"  Converting {len(versioned)} feature(s) to editable:\n", fg="cyan")
+    ok = 0
+    for match in versioned:
+        if _edit_one(workspace, product_path, pyproject_path, match):
+            ok += 1
+        click.echo()
 
-    if not os.path.islink(new):
-        os.symlink(editable_path, new)
-
-    click.echo("🎯 Feature ready for editing (editable, main branch, correct origin).")
+    click.secho(f"  {ok}/{len(versioned)} feature(s) converted.", fg="green" if ok == len(versioned) else "yellow")
+    click.echo()

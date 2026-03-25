@@ -5,6 +5,12 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from splent_cli.utils.path_utils import PathUtils
 from splent_cli.services import context
 
+try:
+    from importlib.metadata import version as _pkg_version
+    _CLI_VERSION = _pkg_version("splent_cli")
+except Exception:
+    _CLI_VERSION = "dev"
+
 
 def pascalcase(s):
     return "".join(word.capitalize() for word in s.split("_"))
@@ -70,6 +76,7 @@ def make_feature(full_name):
         "feature_name": feature_name,
         "org_safe": org_safe,
         "feature_import": f"{org_safe}.{feature_name}",
+        "cli_version": _CLI_VERSION,
     }
 
     # --- File mappings ---

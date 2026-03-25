@@ -49,7 +49,7 @@ class SPLENTCLI(click.Group):
                 cmd
                 for cmd in self.commands
                 if cmd.startswith(
-                    ("clear:", "env", "select", "info", "version", "doctor")
+                    ("clear:", "env", "select", "info", "version", "doctor", "tokens")
                 )
             ],
             "🐍 Development & QA": [
