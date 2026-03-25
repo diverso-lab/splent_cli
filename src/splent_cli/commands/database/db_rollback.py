@@ -2,11 +2,11 @@ import click
 from flask import current_app
 from flask_migrate import downgrade as alembic_downgrade
 
-from splent_cli.utils.decorators import requires_app
+from splent_cli.utils.decorators import requires_db
 from splent_framework.managers.migration_manager import MigrationManager
 
 
-@requires_app
+@requires_db
 @click.command(
     "db:rollback",
     short_help="Roll back migrations for a feature.",

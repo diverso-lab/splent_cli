@@ -118,6 +118,7 @@ def feature_attach(feature_identifier, version):
 
     # --- 3️⃣ Update pyproject.toml ------------------------------------------
     full_name = f"{namespace}/{feature_name}@{version}"
+    bare_name = f"{namespace}/{feature_name}"
 
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
@@ -126,13 +127,18 @@ def feature_attach(feature_identifier, version):
     optional_deps = project.setdefault("optional-dependencies", {})
     features = optional_deps.setdefault("features", [])
 
-    if full_name not in features:
+    if full_name in features:
+        click.echo(f"ℹ️  Feature '{full_name}' already present in pyproject.toml.")
+    else:
+        # Replace bare entry (added by uvl:sync) or old versioned entry if present
+        features[:] = [
+            f for f in features
+            if f != bare_name and not f.startswith(f"{bare_name}@")
+        ]
         features.append(full_name)
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
         click.echo(f"🧩 Updated pyproject.toml → {full_name}")
-    else:
-        click.echo(f"ℹ️  Feature '{full_name}' already present in pyproject.toml.")
 
     # --- 4️⃣ Create/update symlink ------------------------------------------
     product_features_dir = os.path.join(product_path, "features", namespace_fs)

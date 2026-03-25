@@ -2,11 +2,11 @@ import click
 from flask import current_app
 from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
 
-from splent_cli.utils.decorators import requires_app
+from splent_cli.utils.decorators import requires_db
 from splent_framework.managers.migration_manager import MigrationManager
 
 
-@requires_app
+@requires_db
 @click.command(
     "db:migrate",
     short_help="Generate and apply migrations (all features or a single one).",

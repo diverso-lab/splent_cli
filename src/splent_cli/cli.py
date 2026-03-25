@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 
 from splent_cli.utils.dynamic_imports import get_app
 from splent_cli.utils.command_loader import load_commands
+from splent_cli.utils.db_utils import check_db_connection
 
 load_dotenv()
 
@@ -12,6 +13,7 @@ class SPLENTCLI(click.Group):
     Main SPLENT CLI class.
 
     - Automatically injects the Flask app context for commands marked with `requires_app = True`.
+    - Checks DB connectivity for commands marked with `requires_db = True`.
     - Displays commands grouped by category for a cleaner, more readable help output.
     """
 
@@ -21,6 +23,9 @@ class SPLENTCLI(click.Group):
 
         if command and getattr(command, "requires_app", False):
             app = get_app()
+            if getattr(command, "requires_db", False):
+                if not check_db_connection(app):
+                    raise SystemExit(1)
             with app.app_context():
                 return super().invoke(ctx)
 

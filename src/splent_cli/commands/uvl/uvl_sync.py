@@ -49,9 +49,9 @@ def _closure_requires(selected: set[str], req_graph: dict[str, set[str]]) -> set
 def _parse_feature_metadata_from_uvl_text(uvl_text: str) -> dict[str, dict]:
     """
     Parse lines like:
-        auth {org 'splent-io', package 'splent_feature_auth', version 'v1.0.0'}
+        auth {org 'splent-io', package 'splent_feature_auth'}
     Returns:
-      meta['auth'] = {'org': 'splent-io', 'package': 'splent_feature_auth', 'version': 'v1.0.0'}
+      meta['auth'] = {'org': 'splent-io', 'package': 'splent_feature_auth'}
     Notes:
       - Works on your current UVL formatting.
       - Ignores features without {...}.
@@ -80,37 +80,29 @@ def _dep_spec_from_meta(
     feature_name: str, meta: dict[str, dict], default_org: str | None = None
 ) -> str:
     """
-    Build dependency string to put in pyproject optional-dependencies.features
-    Prefer: org/package@version
-    If org missing, fallback to package@version.
+    Build dependency string to put in pyproject optional-dependencies.features.
+    Versions are managed via feature:attach, not stored in the UVL.
+    Returns: org/package  (or just package if no org).
     """
     fields = meta.get(feature_name)
     if not fields:
         raise click.ClickException(
-            f"UVL metadata missing for feature '{feature_name}' (no {{org, package, version}} found)"
+            f"UVL metadata missing for feature '{feature_name}'"
+            " (no {org, package} found)"
         )
 
     org = fields.get("org")
     pkg = fields.get("package")
-    ver = fields.get("version")
 
     if not pkg:
         raise click.ClickException(
             f"UVL metadata missing 'package' for feature '{feature_name}'"
         )
-    if not ver:
-        raise click.ClickException(
-            f"UVL metadata missing 'version' for feature '{feature_name}'"
-        )
-
-    # if you want to omit org when it's the default, you can do it here
-    if org and default_org and org == default_org:
-        return f"{pkg}@{ver}"
 
     if org:
-        return f"{org}/{pkg}@{ver}"
+        return f"{org}/{pkg}"
 
-    return f"{pkg}@{ver}"
+    return pkg
 
 
 # -------------------------

@@ -4,7 +4,7 @@ from flask import current_app
 from flask_migrate import upgrade as alembic_upgrade, migrate as alembic_migrate
 from sqlalchemy import text, MetaData
 
-from splent_cli.utils.decorators import requires_app
+from splent_cli.utils.decorators import requires_db
 from splent_framework.db import db
 from splent_framework.managers.migration_manager import (
     MigrationManager,
@@ -13,7 +13,7 @@ from splent_framework.managers.migration_manager import (
 from splent_cli.commands.clear_uploads import clear_uploads
 
 
-@requires_app
+@requires_db
 @click.command(
     "db:reset",
     short_help="Resets the database, optionally clears migrations and recreates them.",

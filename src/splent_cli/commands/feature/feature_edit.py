@@ -107,8 +107,11 @@ def feature_edit(feature_name):
     if "/" in feature_name:
         _, feature_name = feature_name.split("/", 1)
 
-    # Buscar por nombre real, sin namespace
-    match = next((f for f in features if f.split("@")[0] == feature_name), None)
+    # Buscar por nombre real, sin namespace ni versión
+    match = next(
+        (f for f in features if f.split("@")[0].split("/")[-1] == feature_name),
+        None,
+    )
 
     if not match:
         click.echo(f"❌ Feature {feature_name} not found in pyproject.")

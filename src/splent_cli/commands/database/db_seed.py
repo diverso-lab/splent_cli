@@ -4,7 +4,7 @@ import os
 import click
 
 from splent_cli.commands.database.db_reset import db_reset
-from splent_cli.utils.decorators import requires_app
+from splent_cli.utils.decorators import requires_db
 from splent_cli.utils.feature_utils import get_features_from_pyproject
 from splent_framework.seeders.BaseSeeder import BaseSeeder
 from splent_framework.managers.feature_order import FeatureLoadOrderResolver
@@ -78,7 +78,7 @@ def get_installed_seeders(specific_module=None):
     return seeders
 
 
-@requires_app
+@requires_db
 @click.command(
     "db:seed", short_help="Populate the database using feature-level seeders."
 )

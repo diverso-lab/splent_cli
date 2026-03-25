@@ -4,8 +4,8 @@ splent feature:order
 Shows the topological load order for every feature declared in the active
 product's pyproject.toml, resolved against the product's UVL constraints.
 
-Each feature is annotated with the features it directly requires (from its
-[tool.splent.contract.requires].features).  Independent features keep their
+Each feature is annotated with the features it directly requires, read from
+the UVL constraints (primary source).  Independent features keep their
 original pyproject.toml order (stable sort).
 
 If no UVL file is found the output preserves the pyproject.toml order and
@@ -14,7 +14,8 @@ says so.
 
 import json
 import os
-import tomllib
+from pathlib import Path
+
 import click
 
 from splent_cli.services import context
@@ -33,34 +34,26 @@ def _uvl_path(product_dir: str) -> str | None:
     return None
 
 
-def _contract_requires(product_dir: str, namespace: str, name: str, version: str | None) -> list[str]:
-    """Read [tool.splent.contract.requires].features from a feature's pyproject.toml.
+def _build_requires_map(uvl: str | None) -> dict[str, list[str]]:
+    """Return {package_name: [required_package_names]} from UVL constraints.
 
-    Tries the versioned symlink name first (e.g. splent_feature_auth@v1.1.1),
-    then falls back to the unversioned name.
+    Uses FeatureLoadOrderResolver's own parsers so the logic stays in one place.
+    Short names (e.g. 'profile') are resolved to package names (e.g. 'splent_feature_profile').
     """
-    features_base = os.path.join(product_dir, "features", namespace)
-    candidates = []
-    if version:
-        candidates.append(os.path.join(features_base, f"{name}@{version}", "pyproject.toml"))
-    candidates.append(os.path.join(features_base, name, "pyproject.toml"))
+    if not uvl or not os.path.isfile(uvl):
+        return {}
 
-    for pyproject in candidates:
-        if not os.path.exists(pyproject):
-            continue
-        try:
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
-            return (
-                data.get("tool", {})
-                .get("splent", {})
-                .get("contract", {})
-                .get("requires", {})
-                .get("features", [])
-            )
-        except Exception:
-            continue
-    return []
+    text = Path(uvl).read_text(encoding="utf-8", errors="replace")
+    pkg_map = FeatureLoadOrderResolver._parse_package_map(text)   # {short → pkg}
+    constraints = FeatureLoadOrderResolver._parse_constraints(text)  # [(requirer_short, required_short)]
+
+    result: dict[str, list[str]] = {}
+    for requirer_short, required_short in constraints:
+        requirer_pkg = pkg_map.get(requirer_short)
+        required_pkg = pkg_map.get(required_short)
+        if requirer_pkg and required_pkg:
+            result.setdefault(requirer_pkg, []).append(required_pkg)
+    return result
 
 
 def _parse_entry(entry: str) -> tuple[str, str, str | None]:
@@ -80,14 +73,18 @@ def _parse_entry(entry: str) -> tuple[str, str, str | None]:
     short_help="Show the topological load order of features in the active product.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON array.")
-def feature_order(as_json):
+@click.option("--no-namespace", is_flag=True, default=False, help="Hide namespace prefix from feature names.")
+@click.option("--no-version", is_flag=True, default=False, help="Hide version suffix from feature names.")
+@click.option("--short", is_flag=True, default=False, help="Shorthand for --no-namespace --no-version.")
+def feature_order(as_json, no_namespace, no_version, short):
+    no_namespace = no_namespace or short
+    no_version = no_version or short
     """
     Display the order in which features are loaded (and seeded), resolved by
     UVL dependency constraints.  Features that depend on others always appear
     after their dependencies.
 
-    The 'Requires' column shows direct feature dependencies declared in each
-    feature's [tool.splent.contract.requires].features.
+    The 'Requires' column shows direct feature dependencies from the UVL constraints.
     """
     product = context.require_app()
     workspace = str(context.workspace())
@@ -105,12 +102,13 @@ def feature_order(as_json):
 
     uvl = _uvl_path(product_dir)
     ordered = FeatureLoadOrderResolver().resolve(features_raw, uvl)
+    requires_map = _build_requires_map(uvl)
 
     # Build output rows
     rows = []
     for i, entry in enumerate(ordered, start=1):
         namespace, name, version = _parse_entry(entry)
-        requires = _contract_requires(product_dir, namespace, name, version)
+        requires = requires_map.get(name, [])
         rows.append({
             "position": i,
             "feature": entry,
@@ -130,17 +128,28 @@ def feature_order(as_json):
         else click.style("  No UVL found — preserving pyproject.toml order", fg="yellow")
     )
 
+    def _format_feature(row: dict) -> str:
+        label = row["name"]
+        if not no_namespace and row["namespace"]:
+            label = f"{row['namespace']}/{label}"
+        if not no_version and row["version"]:
+            label = f"{label}@{row['version']}"
+        return label
+
+    col_w = 34 if (no_namespace or no_version) else 44
+    sep_w = col_w + 12
+
     click.echo()
     click.echo(click.style(f"  Feature load order — {product}", bold=True))
-    click.echo(click.style(f"  {'─' * 66}", fg="bright_black"))
-    click.echo(f"  {'#':<4} {'Feature':<44} Requires")
-    click.echo(click.style(f"  {'─' * 66}", fg="bright_black"))
+    click.echo(click.style(f"  {'─' * sep_w}", fg="bright_black"))
+    click.echo(f"  {'#':<4} {'Feature':<{col_w}} Requires")
+    click.echo(click.style(f"  {'─' * sep_w}", fg="bright_black"))
 
     for row in rows:
         pos = click.style(f"{row['position']:<4}", fg="bright_black")
-        feature_label = row["feature"]
+        feature_label = _format_feature(row)
         requires_label = ", ".join(row["requires"]) if row["requires"] else click.style("—", fg="bright_black")
-        click.echo(f"  {pos} {feature_label:<44} {requires_label}")
+        click.echo(f"  {pos} {feature_label:<{col_w}} {requires_label}")
 
     click.echo()
     click.echo(uvl_note)

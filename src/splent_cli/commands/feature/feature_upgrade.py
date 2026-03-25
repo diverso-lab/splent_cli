@@ -1,92 +1,86 @@
+import json
 import os
-import re
 import subprocess
-import click
+import tomllib
+import urllib.error
+import urllib.request
 from pathlib import Path
+
+import click
 from packaging.version import Version, InvalidVersion
+
 from splent_cli.services import context
 
 
-def _latest_cached_version(ns_dir: Path, name: str) -> str | None:
-    """Return the latest version string cached for a given feature name."""
-    versions = []
-    for d in ns_dir.iterdir():
-        if d.is_dir() and d.name.startswith(f"{name}@"):
-            v = d.name.split("@", 1)[1]
-            versions.append(v)
-    if not versions:
+# ── GitHub helpers ────────────────────────────────────────────────────────────
+
+def _github_headers(token: str | None) -> dict:
+    h = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "splent-cli",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        h["Authorization"] = f"token {token}"
+    return h
+
+
+def _latest_remote_version(org: str, repo: str, token: str | None) -> str | None:
+    """Return the latest tag from GitHub, or None if the repo has no tags."""
+    headers = _github_headers(token)
+    url = f"https://api.github.com/repos/{org}/{repo}/tags?per_page=1&page=1"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            batch = json.loads(resp.read().decode())
+        return batch[0]["name"] if batch else None
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+    except urllib.error.URLError as e:
+        click.secho(f"  ⚠  Network error fetching {repo}: {e.reason}", fg="yellow")
         return None
 
-    def sort_key(v):
-        try:
-            return Version(v.lstrip("v"))
-        except InvalidVersion:
-            return Version("0")
 
-    return max(versions, key=sort_key)
+# ── Pyproject helpers ─────────────────────────────────────────────────────────
 
-
-def _get_product_feature_versions(pyproject_path: Path) -> dict:
-    """Returns {name: current_version_or_None} from the product's pyproject."""
-    import tomllib
-
+def _read_features(pyproject_path: Path) -> list[dict]:
+    """Return list of {name, version, ns_github, ns_fs} from the product's pyproject."""
     if not pyproject_path.exists():
-        return {}
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-        refs = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
-        result = {}
-        for ref in refs:
-            base = ref.split("/", 1)[1] if "/" in ref else ref
-            if "@" in base:
-                name, ver = base.split("@", 1)
-            else:
-                name, ver = base, None
-            result[name] = ver
-        return result
-    except Exception:
-        return {}
+        return []
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+    refs = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    result = []
+    for ref in refs:
+        if "/" in ref:
+            ns_part, rest = ref.split("/", 1)
+            ns_github = ns_part
+            ns_fs = ns_part.replace("-", "_")
+        else:
+            ns_github = "splent-io"
+            ns_fs = "splent_io"
+            rest = ref
+        if "@" in rest:
+            name, version = rest.split("@", 1)
+        else:
+            name, version = rest, None
+        result.append({"name": name, "version": version, "ns_github": ns_github, "ns_fs": ns_fs})
+    return result
 
 
-def _update_pyproject(pyproject_path: Path, name: str, old_ver: str, new_ver: str):
+def _update_pyproject(pyproject_path: Path, ns_github: str, name: str, old_ver: str | None, new_ver: str):
     content = pyproject_path.read_text()
     if old_ver:
-        new_content = content.replace(f"{name}@{old_ver}", f"{name}@{new_ver}")
+        content = content.replace(f"{name}@{old_ver}", f"{name}@{new_ver}")
     else:
-        # editable → add version
-        new_content = re.sub(
-            rf'(["\'](?:[^/\"\']+/)?){re.escape(name)}(["\'])',
-            rf"\g<1>{name}@{new_ver}\g<2>",
-            content,
-        )
-    pyproject_path.write_text(new_content)
+        # editable entry: append version
+        content = content.replace(f"{ns_github}/{name}", f"{ns_github}/{name}@{new_ver}")
+    pyproject_path.write_text(content)
 
 
-def _update_symlink(
-    product_path: Path,
-    ns_fs: str,
-    name: str,
-    old_ver: str | None,
-    new_ver: str,
-    cache_root: Path,
-):
-    features_dir = product_path / "features" / ns_fs
-    features_dir.mkdir(parents=True, exist_ok=True)
-
-    if old_ver:
-        old_link = features_dir / f"{name}@{old_ver}"
-        if old_link.is_symlink():
-            old_link.unlink()
-
-    new_link = features_dir / f"{name}@{new_ver}"
-    target = cache_root / ns_fs / f"{name}@{new_ver}"
-    if new_link.is_symlink():
-        new_link.unlink()
-    new_link.symlink_to(target)
-
+# ── Cache / clone helpers ─────────────────────────────────────────────────────
 
 def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
     target = cache_root / ns_fs / f"{name}@{version}"
@@ -108,23 +102,39 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
     )
 
 
+def _update_symlink(product_path: Path, ns_fs: str, name: str, old_ver: str | None, new_ver: str, cache_root: Path):
+    features_dir = product_path / "features" / ns_fs
+    features_dir.mkdir(parents=True, exist_ok=True)
+    if old_ver:
+        old_link = features_dir / f"{name}@{old_ver}"
+        if old_link.is_symlink():
+            old_link.unlink()
+    new_link = features_dir / f"{name}@{new_ver}"
+    target = cache_root / ns_fs / f"{name}@{new_ver}"
+    if new_link.is_symlink():
+        new_link.unlink()
+    new_link.symlink_to(target)
+
+
+# ── Command ───────────────────────────────────────────────────────────────────
+
 @click.command(
     "feature:upgrade",
-    short_help="Upgrade declared features to the latest cached version.",
+    short_help="Upgrade declared features to the latest version on GitHub.",
 )
 @click.argument("feature_ref", required=False)
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
 def feature_upgrade(feature_ref, yes):
     """
-    Upgrade one or all features declared in the active product to the latest version
-    available in the local cache.
+    Upgrade one or all features declared in the active product to the latest
+    version available on GitHub. Clones the new version if not already cached,
+    then updates pyproject.toml and the feature symlink.
 
     \b
     With no arguments, checks all declared features.
-    With FEATURE_REF (e.g. splent_feature_auth), upgrades only that one.
-
-    Pairs naturally with: splent cache:outdated
+    With <feature_name> (e.g. splent_feature_auth), upgrades only that one.
     """
+    token = os.getenv("GITHUB_TOKEN")
     workspace = context.workspace()
     product = context.require_app()
 
@@ -132,86 +142,77 @@ def feature_upgrade(feature_ref, yes):
     pyproject_path = product_path / "pyproject.toml"
     cache_root = workspace / ".splent_cache" / "features"
 
-    declared = _get_product_feature_versions(pyproject_path)
-    if not declared:
+    features = _read_features(pyproject_path)
+    if not features:
         click.secho("ℹ️  No features declared in pyproject.toml.", fg="yellow")
         return
 
     if feature_ref:
         name = feature_ref.split("/", 1)[1] if "/" in feature_ref else feature_ref
-        if name not in declared:
+        features = [f for f in features if f["name"] == name]
+        if not features:
             click.secho(f"⚠️  '{name}' not declared in this product.", fg="yellow")
             return
-        targets = {name: declared[name]}
-    else:
-        targets = declared
+
+    # ── Resolve latest remote version for each feature ────────────────────────
+    click.echo()
+    click.secho("  Checking latest versions on GitHub...", fg="bright_black")
 
     upgrades = []
-    for name, current_ver in targets.items():
-        # Find namespace in cache
-        ns_dir = None
-        ns_fs = None
-        for ns in cache_root.iterdir():
-            if ns.is_dir() and (
-                (ns / name).exists()
-                or any(
-                    d.name.startswith(f"{name}@") for d in ns.iterdir() if d.is_dir()
-                )
-            ):
-                ns_dir = ns
-                ns_fs = ns.name
-                break
-
-        if not ns_dir:
-            continue
-
-        latest = _latest_cached_version(ns_dir, name)
+    for feat in features:
+        latest = _latest_remote_version(feat["ns_github"], feat["name"], token)
         if not latest:
             continue
 
-        if current_ver is None:
-            upgrades.append((ns_fs, name, current_ver, latest))
+        current = feat["version"]
+        if current is None:
+            # editable → offer to pin to latest
+            upgrades.append({**feat, "latest": latest})
             continue
 
         try:
-            is_newer = Version(latest.lstrip("v")) > Version(current_ver.lstrip("v"))
+            is_newer = Version(latest.lstrip("v")) > Version(current.lstrip("v"))
         except InvalidVersion:
-            is_newer = latest != current_ver
+            is_newer = latest != current
 
         if is_newer:
-            upgrades.append((ns_fs, name, current_ver, latest))
+            upgrades.append({**feat, "latest": latest})
 
     if not upgrades:
-        click.secho(
-            "✅ All features are already at the latest cached version.", fg="green"
-        )
+        click.echo()
+        click.secho("  ✅ All features are already at the latest version.", fg="green")
+        click.echo()
         return
 
-    click.secho(f"Features to upgrade ({len(upgrades)}):\n", fg="cyan")
-    for ns_fs, name, cur, new in upgrades:
-        cur_label = click.style(cur or "editable", fg="red")
-        new_label = click.style(new, fg="green")
-        click.echo(f"  {ns_fs}/{name}  {cur_label} → {new_label}")
+    click.echo()
+    click.secho(f"  Features to upgrade ({len(upgrades)}):\n", fg="cyan")
+    for u in upgrades:
+        cur_label = click.style(u["version"] or "editable", fg="red")
+        new_label = click.style(u["latest"], fg="green")
+        click.echo(f"    {u['ns_fs']}/{u['name']}    {cur_label} → {new_label}")
 
     click.echo()
-    if not yes and not click.confirm("Proceed with upgrade?"):
-        click.echo("❎ Cancelled.")
+    if not yes and not click.confirm("  Proceed with upgrade?"):
+        click.echo("  ❎ Cancelled.")
         raise SystemExit(0)
 
-    for ns_fs, name, cur, new in upgrades:
+    click.echo()
+    for u in upgrades:
         try:
-            _clone_if_missing(ns_fs, name, new, cache_root)
-            _update_pyproject(pyproject_path, name, cur, new)
-            _update_symlink(product_path, ns_fs, name, cur, new, cache_root)
-            click.secho(f"  ✔ {ns_fs}/{name} → {new}", fg="green")
+            _clone_if_missing(u["ns_fs"], u["name"], u["latest"], cache_root)
+            _update_pyproject(pyproject_path, u["ns_github"], u["name"], u["version"], u["latest"])
+            _update_symlink(product_path, u["ns_fs"], u["name"], u["version"], u["latest"], cache_root)
+            click.secho(f"  ✔  {u['ns_fs']}/{u['name']} → {u['latest']}", fg="green")
         except Exception as e:
-            click.secho(f"  ✖ {ns_fs}/{name}: {e}", fg="red")
+            click.secho(f"  ✖  {u['ns_fs']}/{u['name']}: {e}", fg="red")
 
     click.echo()
-    click.secho(
-        "Done. Run 'splent product:sync' if any feature was missing from cache.",
-        fg="cyan",
-    )
+    click.secho("  Done. Run 'splent product:sync' to reinstall pip dependencies.", fg="cyan")
+    click.echo()
+
+    if not token:
+        click.secho("  💡 Set GITHUB_TOKEN to avoid rate limits.", fg="yellow")
+        click.echo()
 
 
 cli_command = feature_upgrade

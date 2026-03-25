@@ -15,6 +15,21 @@ def db_console():
     mariadb_password = os.getenv("MARIADB_PASSWORD")
     mariadb_database = os.getenv("MARIADB_DATABASE")
 
+    missing = [
+        name for name, val in {
+            "MARIADB_HOSTNAME": mariadb_hostname,
+            "MARIADB_USER": mariadb_user,
+            "MARIADB_PASSWORD": mariadb_password,
+            "MARIADB_DATABASE": mariadb_database,
+        }.items() if not val
+    ]
+    if missing:
+        click.secho("❌ Missing required environment variables:", fg="red")
+        for var in missing:
+            click.secho(f"   - {var}", fg="red")
+        click.secho("\n   Make sure the product .env is loaded: splent product:env --merge --dev", fg="yellow")
+        raise SystemExit(1)
+
     try:
         subprocess.run(
             [
@@ -27,4 +42,4 @@ def db_console():
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        click.echo(click.style(f"Error opening MariaDB console: {e}", fg="red"))
+        click.secho(f"❌ Error opening MariaDB console: {e}", fg="red")
