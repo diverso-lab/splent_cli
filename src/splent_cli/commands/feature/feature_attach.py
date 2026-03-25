@@ -1,5 +1,6 @@
 import os
-import re
+import tomllib
+import tomli_w
 import subprocess
 import click
 import requests
@@ -116,16 +117,22 @@ def feature_attach(feature_identifier, version):
         click.echo(f"✅ Cache exists → {versioned_dir}")
 
     # --- 3️⃣ Update pyproject.toml ------------------------------------------
-    with open(pyproject_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    full_name = f"{namespace}/{feature_name}@{version}"
 
-    pattern = rf"{feature_name}(?!@)"
-    new_content = re.sub(pattern, f"{feature_name}@{version}", content)
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
 
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        f.write(new_content)
+    project = data.setdefault("project", {})
+    optional_deps = project.setdefault("optional-dependencies", {})
+    features = optional_deps.setdefault("features", [])
 
-    click.echo(f"🧩 Updated pyproject.toml → {feature_name}@{version}")
+    if full_name not in features:
+        features.append(full_name)
+        with open(pyproject_path, "wb") as f:
+            tomli_w.dump(data, f)
+        click.echo(f"🧩 Updated pyproject.toml → {full_name}")
+    else:
+        click.echo(f"ℹ️  Feature '{full_name}' already present in pyproject.toml.")
 
     # --- 4️⃣ Create/update symlink ------------------------------------------
     product_features_dir = os.path.join(product_path, "features", namespace_fs)

@@ -49,9 +49,9 @@ def _closure_requires(selected: set[str], req_graph: dict[str, set[str]]) -> set
 def _parse_feature_metadata_from_uvl_text(uvl_text: str) -> dict[str, dict]:
     """
     Parse lines like:
-        auth {org 'splent-io', package 'splent_feature_auth', version 'v1_0_0'}
+        auth {org 'splent-io', package 'splent_feature_auth', version 'v1.0.0'}
     Returns:
-      meta['auth'] = {'org': 'splent-io', 'package': 'splent_feature_auth', 'version': 'v1_0_0'}
+      meta['auth'] = {'org': 'splent-io', 'package': 'splent_feature_auth', 'version': 'v1.0.0'}
     Notes:
       - Works on your current UVL formatting.
       - Ignores features without {...}.
@@ -76,18 +76,6 @@ def _parse_feature_metadata_from_uvl_text(uvl_text: str) -> dict[str, dict]:
     return meta
 
 
-def _normalize_uvl_version(v: str) -> str:
-    """
-    Your UVL stores version like v1_0_0, but you want v1.0.0 for pyproject spec.
-    If already has dots, keep.
-    """
-    if v is None:
-        return v
-    if re.match(r"^v\d+_\d+_\d+$", v):
-        return v.replace("_", ".")
-    return v
-
-
 def _dep_spec_from_meta(
     feature_name: str, meta: dict[str, dict], default_org: str | None = None
 ) -> str:
@@ -104,7 +92,7 @@ def _dep_spec_from_meta(
 
     org = fields.get("org")
     pkg = fields.get("package")
-    ver = _normalize_uvl_version(fields.get("version"))
+    ver = fields.get("version")
 
     if not pkg:
         raise click.ClickException(
