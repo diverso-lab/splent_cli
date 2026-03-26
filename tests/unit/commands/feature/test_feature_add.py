@@ -17,13 +17,14 @@ def runner():
 
 
 @pytest.fixture
-def product_workspace_with_cache(product_workspace):
+def product_workspace_with_feature(product_workspace):
     """
-    Extends product_workspace with a feature in the cache.
-    Adds: .splent_cache/features/splent_io/splent_feature_auth/
+    Extends product_workspace with an editable feature at workspace root.
+    Adds: {workspace}/splent_feature_auth/
     """
-    cache_dir = product_workspace / ".splent_cache" / "features" / "splent_io" / "splent_feature_auth"
-    cache_dir.mkdir(parents=True)
+    # Editable features live at workspace root (not in .splent_cache)
+    feature_dir = product_workspace / "splent_feature_auth"
+    feature_dir.mkdir(parents=True)
     return product_workspace
 
 
@@ -44,14 +45,14 @@ class TestArgumentValidation:
 
 
 # ---------------------------------------------------------------------------
-# Cache checks
+# Workspace root checks
 # ---------------------------------------------------------------------------
 
-class TestCacheCheck:
-    def test_exits_when_not_in_cache(self, runner, product_workspace):
+class TestWorkspaceRootCheck:
+    def test_exits_when_not_at_workspace_root(self, runner, product_workspace):
         result = runner.invoke(feature_add, ["splent_io/nonexistent_feature"])
         assert result.exit_code == 1
-        assert "not found in cache" in result.output.lower()
+        assert "not found" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ class TestCacheCheck:
 # ---------------------------------------------------------------------------
 
 class TestSuccessfulAdd:
-    def test_adds_feature_to_pyproject(self, runner, product_workspace_with_cache, tmp_path):
+    def test_adds_feature_to_pyproject(self, runner, product_workspace_with_feature, tmp_path):
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         assert result.exit_code == 0
 
@@ -67,36 +68,35 @@ class TestSuccessfulAdd:
         content = pyproject_path.read_text()
         assert "splent_io/splent_feature_auth" in content
 
-    def test_creates_symlink(self, runner, product_workspace_with_cache, tmp_path):
+    def test_creates_symlink(self, runner, product_workspace_with_feature, tmp_path):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
 
         link = tmp_path / "test_app" / "features" / "splent_io" / "splent_feature_auth"
         assert link.is_symlink()
 
-    def test_symlink_points_to_cache(self, runner, product_workspace_with_cache, tmp_path):
+    def test_symlink_points_to_workspace_root(self, runner, product_workspace_with_feature, tmp_path):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
 
         link = tmp_path / "test_app" / "features" / "splent_io" / "splent_feature_auth"
-        expected_target = tmp_path / ".splent_cache" / "features" / "splent_io" / "splent_feature_auth"
+        expected_target = tmp_path / "splent_feature_auth"
         assert link.resolve() == expected_target.resolve()
 
-    def test_success_message(self, runner, product_workspace_with_cache):
+    def test_success_message(self, runner, product_workspace_with_feature):
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         assert result.exit_code == 0
-        assert "✅" in result.output
+        assert "added successfully" in result.output.lower() or "✅" in result.output
 
 
 # ---------------------------------------------------------------------------
-# Missing pyproject.toml (lines 47-48)
+# Missing pyproject.toml
 # ---------------------------------------------------------------------------
 
 class TestMissingPyproject:
     def test_exits_when_pyproject_missing(self, runner, workspace, monkeypatch, tmp_path):
         """Product directory exists but has no pyproject.toml → exit 1."""
         monkeypatch.setenv("SPLENT_APP", "test_app")
-        # Cache entry exists
-        cache = tmp_path / ".splent_cache" / "features" / "splent_io" / "splent_feature_auth"
-        cache.mkdir(parents=True)
+        # Feature exists at workspace root
+        (tmp_path / "splent_feature_auth").mkdir(parents=True)
         # Product directory exists but NO pyproject.toml
         (tmp_path / "test_app").mkdir()
 
@@ -110,7 +110,7 @@ class TestMissingPyproject:
 # ---------------------------------------------------------------------------
 
 class TestIdempotency:
-    def test_adding_twice_does_not_duplicate(self, runner, product_workspace_with_cache, tmp_path):
+    def test_adding_twice_does_not_duplicate(self, runner, product_workspace_with_feature, tmp_path):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
 
@@ -119,16 +119,15 @@ class TestIdempotency:
         count = content.count("splent_io/splent_feature_auth")
         assert count == 1
 
-    def test_second_add_shows_already_present(self, runner, product_workspace_with_cache):
+    def test_second_add_shows_already_present(self, runner, product_workspace_with_feature):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         assert result.exit_code == 0
         assert "already present" in result.output.lower()
 
-    def test_existing_symlink_replaced_not_errored(self, runner, product_workspace_with_cache, tmp_path):
+    def test_existing_symlink_replaced_not_errored(self, runner, product_workspace_with_feature, tmp_path):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
-        # Should still have a valid symlink, no crash
         link = tmp_path / "test_app" / "features" / "splent_io" / "splent_feature_auth"
         assert link.is_symlink()
 
@@ -139,9 +138,8 @@ class TestIdempotency:
 
 class TestCustomNamespace:
     def test_custom_namespace_creates_correct_dir(self, runner, product_workspace, tmp_path):
-        # Create cache for custom namespace
-        cache_dir = tmp_path / ".splent_cache" / "features" / "drorganvidez" / "custom_feature"
-        cache_dir.mkdir(parents=True)
+        # Create feature at workspace root
+        (tmp_path / "custom_feature").mkdir(parents=True)
 
         result = runner.invoke(feature_add, ["drorganvidez/custom_feature"])
         assert result.exit_code == 0

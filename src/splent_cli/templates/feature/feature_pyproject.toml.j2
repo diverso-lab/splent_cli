@@ -18,6 +18,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+exclude = ["*.tests", "*.tests.*"]
 
 [tool.splent]
 cli_version = "{{ cli_version }}"

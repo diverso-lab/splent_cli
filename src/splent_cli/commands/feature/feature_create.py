@@ -93,14 +93,17 @@ def make_feature(full_name):
         os.path.join(
             "assets", "js", "webpack.config.js"
         ): "feature/feature_webpack.config.js.j2",
-        os.path.join("tests", "__init__.py"): None,
-        os.path.join("tests", "test_unit.py"): "feature/feature_tests_test_unit.py.j2",
-        os.path.join(
-            "tests", "locustfile.py"
-        ): "feature/feature_tests_locustfile.py.j2",
-        os.path.join(
-            "tests", "test_selenium.py"
-        ): "feature/feature_tests_test_selenium.py.j2",
+        # Test structure
+        os.path.join("tests", "conftest.py"): "feature/feature_tests_conftest.py.j2",
+        os.path.join("tests", "unit", "__init__.py"): None,
+        os.path.join("tests", "unit", "test_services.py"): "feature/feature_tests_unit.py.j2",
+        os.path.join("tests", "integration", "__init__.py"): None,
+        os.path.join("tests", "integration", "test_repositories.py"): "feature/feature_tests_integration.py.j2",
+        os.path.join("tests", "functional", "__init__.py"): None,
+        os.path.join("tests", "functional", "test_routes.py"): "feature/feature_tests_functional.py.j2",
+        os.path.join("tests", "e2e", "__init__.py"): None,
+        os.path.join("tests", "e2e", "test_browser.py"): "feature/feature_tests_e2e.py.j2",
+        os.path.join("tests", "load", "locustfile.py"): "feature/feature_tests_locustfile.py.j2",
         # Migrations scaffold
         os.path.join("migrations", "env.py"): "feature/feature_migrations_env.py.j2",
         os.path.join(

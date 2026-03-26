@@ -1,0 +1,13 @@
+"""
+Functional tests for {{ feature_name }}.
+
+Functional tests use Flask's test client to exercise full HTTP
+request/response cycles (GET, POST, redirects, rendered HTML).
+They verify user-facing behaviour end to end within the test process.
+"""
+
+
+def test_index_returns_ok(test_client):
+    """Verify the feature index page is accessible."""
+    response = test_client.get("/{{ feature_name }}")
+    assert response.status_code == 200

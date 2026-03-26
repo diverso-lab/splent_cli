@@ -380,7 +380,10 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
         check=True,
     )
 
-    click.echo("✅ Snapshot created.")
+    from splent_cli.utils.cache_utils import make_feature_readonly
+    make_feature_readonly(snapshot_path)
+
+    click.echo("🔒 Snapshot created (read-only).")
 
 
 # =====================================================================
