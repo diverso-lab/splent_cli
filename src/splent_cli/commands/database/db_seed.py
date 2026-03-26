@@ -3,7 +3,6 @@ import importlib
 import os
 import click
 
-from splent_cli.commands.database.db_reset import db_reset
 from splent_cli.utils.decorators import requires_db
 from splent_cli.utils.feature_utils import get_features_from_pyproject
 from splent_framework.seeders.BaseSeeder import BaseSeeder
@@ -83,24 +82,48 @@ def get_installed_seeders(specific_module=None):
     return seeders
 
 
+def _truncate_data():
+    """Delete all row data from feature tables, preserving schema and migrations."""
+    from flask import current_app
+    from splent_framework.db import db
+    from sqlalchemy import text, MetaData
+    from splent_framework.managers.migration_manager import SPLENT_MIGRATIONS_TABLE
+
+    skip_prefixes = ("alembic_",)
+    skip_names = (SPLENT_MIGRATIONS_TABLE,)
+
+    meta = MetaData()
+    meta.reflect(bind=db.engine)
+
+    with db.engine.connect() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        for table in reversed(meta.sorted_tables):
+            if table.name.startswith(skip_prefixes) or table.name in skip_names:
+                continue
+            conn.execute(table.delete())
+            click.echo(click.style(f"  🗑️  Cleared {table.name}", fg="bright_black"))
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        conn.commit()
+
+
 @requires_db
 @click.command(
     "db:seed", short_help="Populate the database using feature-level seeders."
 )
-@click.option("--reset", is_flag=True, help="Reset the database before seeding.")
+@click.option("--reset", is_flag=True, help="Clear all data before seeding (keeps schema and migrations).")
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
 @click.argument("module", required=False)
 def db_seed(reset, yes, module):
     if reset:
         if yes or click.confirm(
-            click.style("⚠️  This will reset the database. Continue?", fg="red"),
+            click.style("⚠️  This will delete all data (tables and migrations are preserved). Continue?", fg="red"),
             abort=True,
         ):
-            click.echo(click.style("🔄 Resetting the database...", fg="yellow"))
-            ctx = click.get_current_context()
-            ctx.invoke(db_reset, yes=True)
+            click.echo(click.style("🔄 Clearing data...", fg="yellow"))
+            _truncate_data()
+            click.secho("✅ Data cleared.\n", fg="yellow")
         else:
-            click.echo(click.style("❌ Database reset cancelled.", fg="yellow"))
+            click.echo(click.style("❌ Cancelled.", fg="yellow"))
             return
 
     seeders = get_installed_seeders(specific_module=module)
@@ -123,9 +146,20 @@ def db_seed(reset, yes, module):
                 click.style(f"✔ {seeder.__class__.__name__} completed.", fg="blue")
             )
         except Exception as e:
-            click.echo(
-                click.style(f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red")
-            )
+            err_str = str(e)
+            if "Duplicate entry" in err_str or "IntegrityError" in err_str:
+                click.echo(
+                    click.style(
+                        f"❌ {seeder.__class__.__name__}: duplicate data detected.\n"
+                        f"   The database already contains seeded data.\n"
+                        f"   Run: splent db:seed --reset",
+                        fg="red",
+                    )
+                )
+            else:
+                click.echo(
+                    click.style(f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red")
+                )
             success = False
             break
 

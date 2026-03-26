@@ -1,7 +1,7 @@
 """
 Tests for feature_compile command helpers.
 
-Focus: _is_inside_container() and the container/direct branching in
+Focus: _is_product_container() and the container/direct branching in
 _compile_in_container(). Full integration (docker exec) is not testable
 in unit tests — those paths require a running container.
 """
@@ -9,23 +9,28 @@ in unit tests — those paths require a running container.
 import subprocess
 import pytest
 from unittest.mock import MagicMock, patch
-from splent_cli.commands.feature_compile import _is_inside_container, _compile_in_container
+from splent_cli.commands.feature_compile import _is_product_container, _compile_in_container
 
 
 # ---------------------------------------------------------------------------
-# _is_inside_container
+# _is_product_container
 # ---------------------------------------------------------------------------
 
 class TestIsInsideContainer:
-    def test_returns_true_when_dockerenv_exists(self, tmp_path, monkeypatch):
-        dockerenv = tmp_path / ".dockerenv"
-        dockerenv.touch()
+    def test_returns_true_in_product_container(self, monkeypatch):
+        monkeypatch.delenv("SPLENT_CONTAINER", raising=False)
         with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=True):
-            assert _is_inside_container() is True
+            assert _is_product_container() is True
 
-    def test_returns_false_when_dockerenv_absent(self):
+    def test_returns_false_in_cli_container(self, monkeypatch):
+        monkeypatch.setenv("SPLENT_CONTAINER", "cli")
+        with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=True):
+            assert _is_product_container() is False
+
+    def test_returns_false_when_not_in_docker(self, monkeypatch):
+        monkeypatch.delenv("SPLENT_CONTAINER", raising=False)
         with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=False):
-            assert _is_inside_container() is False
+            assert _is_product_container() is False
 
 
 # ---------------------------------------------------------------------------

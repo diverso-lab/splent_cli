@@ -49,6 +49,7 @@ class TestFeatureStatusWithManifest:
     def test_shows_feature_name(self, runner, workspace):
         product_path = workspace / "test_product"
         product_path.mkdir()
+        _write_pyproject(product_path, ["splent_io/splent_feature_auth@v1.1.1"])
         key = feature_key("splent_io", "splent_feature_auth", "v1.1.1")
         set_feature_state(
             str(product_path), "test_product", key, "active",
@@ -65,6 +66,7 @@ class TestFeatureStatusWithManifest:
     def test_shows_state(self, runner, workspace):
         product_path = workspace / "test_product"
         product_path.mkdir()
+        _write_pyproject(product_path, ["splent_io/splent_feature_redis@v1.1.0"])
         key = feature_key("splent_io", "splent_feature_redis", "v1.1.0")
         set_feature_state(
             str(product_path), "test_product", key, "installed",

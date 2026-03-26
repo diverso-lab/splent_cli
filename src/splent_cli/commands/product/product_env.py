@@ -4,6 +4,7 @@ import subprocess
 import shutil
 import click
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 @click.command(
@@ -103,9 +104,7 @@ def product_env(generate, merge, env_name, process_all):
         with open(py_path, "rb") as f:
             data = tomllib.load(f)
 
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data, env_name)
         if not features:
             click.echo("ℹ️ No features declared in pyproject.toml.")
             return
@@ -172,9 +171,7 @@ def product_env(generate, merge, env_name, process_all):
 
         with open(py_path, "rb") as f:
             data = tomllib.load(f)
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data, env_name)
         if not features:
             click.echo("ℹ️ No features declared.")
             raise SystemExit(0)

@@ -6,6 +6,7 @@ import importlib.metadata
 
 import tomllib
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def _pkg_version(name: str) -> str | None:
@@ -59,9 +60,7 @@ def _declared_features(app_path: str) -> list:
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        return (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        return read_features_from_data(data)
     except Exception:
         return []
 

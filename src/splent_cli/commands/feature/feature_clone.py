@@ -116,18 +116,20 @@ def feature_clone(full_name):
 
     click.secho(f"⬇️ Cloning {fork_url}@{version}", fg="cyan")
 
-    # Try clone specific tag/branch
+    # Try clone specific tag/branch (suppress git noise)
     try:
         subprocess.run(
-            ["git", "clone", "--depth", "1", "--branch", version, fork_url, local_path],
-            check=True,
+            ["git", "-c", "advice.detachedHead=false", "clone", "--depth", "1",
+             "--branch", version, "--quiet", fork_url, local_path],
+            check=True, capture_output=True, text=True,
         )
     except subprocess.CalledProcessError:
         click.secho(
             f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow"
         )
         subprocess.run(
-            ["git", "clone", "--depth", "1", fork_url, local_path], check=True
+            ["git", "clone", "--depth", "1", "--quiet", fork_url, local_path],
+            check=True, capture_output=True, text=True,
         )
 
     click.secho(

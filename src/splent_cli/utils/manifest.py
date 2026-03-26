@@ -45,7 +45,7 @@ VALID_STATES = {"declared", "installed", "migrated", "active", "disabled"}
 
 STATE_COLORS = {
     "declared": "yellow",
-    "installed": "cyan",
+    "installed": "bright_cyan",
     "migrated": "blue",
     "active": "green",
     "disabled": "bright_black",
@@ -199,3 +199,18 @@ def get_feature_state(product_path: str, key: str) -> str | None:
     data = _load(product_path)
     entry = data.get("features", {}).get(key)
     return entry.get("state") if entry else None
+
+
+def cleanup_stale_entries(product_path: str, product_name: str, active_keys: set[str]) -> int:
+    """Remove manifest entries whose keys are not in active_keys.
+
+    Returns the number of entries removed.
+    """
+    data = _load(product_path)
+    features = data.get("features", {})
+    stale = [k for k in features if k not in active_keys]
+    for k in stale:
+        del features[k]
+    if stale:
+        _save(product_path, product_name, data)
+    return len(stale)

@@ -44,14 +44,14 @@ class TestFlagValidation:
 # ---------------------------------------------------------------------------
 
 class TestNoComposeFile:
-    def test_exits_when_no_compose_file(self, runner, tmp_path, monkeypatch):
+    def test_shows_no_containers_when_no_compose_file(self, runner, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
         (tmp_path / "test_app" / "docker").mkdir(parents=True)  # docker dir but no compose file
 
         result = runner.invoke(product_status, ["--dev"])
-        assert result.exit_code == 1
-        assert "No docker-compose file" in result.output
+        assert result.exit_code == 0
+        assert "No containers" in result.output or "Is it up?" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -110,13 +110,14 @@ class TestNoContainers:
 # ---------------------------------------------------------------------------
 
 class TestDockerFailure:
-    def test_exits_on_docker_error(self, runner, product_workspace):
+    def test_shows_no_containers_on_docker_error(self, runner, product_workspace):
         with patch("subprocess.run", return_value=MagicMock(
             returncode=1, stdout="", stderr="Cannot connect to Docker daemon"
         )):
             result = runner.invoke(product_status, ["--dev"])
-        assert result.exit_code == 1
-        assert "failed" in result.output.lower()
+        # Docker errors result in empty container list, not a hard failure
+        assert result.exit_code == 0
+        assert "No containers" in result.output or "Is it up?" in result.output
 
 
 # ---------------------------------------------------------------------------

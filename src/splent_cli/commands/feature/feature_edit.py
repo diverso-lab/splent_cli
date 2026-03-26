@@ -3,6 +3,7 @@ import subprocess
 import tomllib
 import click
 from splent_cli.services import context, compose
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 # =====================================================================
@@ -47,7 +48,14 @@ def _git_out(path: str, *args) -> subprocess.CompletedProcess:
 # GIT → ensure main branch editable
 # =====================================================================
 def ensure_git_main(path: str, ns_git: str, name: str):
-    remote_url = f"git@github.com:{ns_git}/{name}.git"
+    token = os.getenv("GITHUB_TOKEN")
+    use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
+    if use_ssh:
+        remote_url = f"git@github.com:{ns_git}/{name}.git"
+    elif token:
+        remote_url = f"https://{token}@github.com/{ns_git}/{name}.git"
+    else:
+        remote_url = f"https://github.com/{ns_git}/{name}.git"
     r = _git_out(path, "remote", "get-url", "origin")
     if r.returncode == 0:
         _git_check(path, "remote", "set-url", "origin", remote_url)
@@ -81,8 +89,10 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
 # =====================================================================
 # CORE LOGIC (single feature)
 # =====================================================================
-def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str):
+def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str, *, force: bool = False):
     """Convert one pyproject feature entry to editable. Returns True on success."""
+    from splent_cli.utils.lifecycle import require_state, resolve_feature_key_from_entry
+
     _, ns_git, ns_fs, rest = compose.parse_feature_identifier(match)
     if "@" in rest:
         name, version = rest.split("@", 1)
@@ -92,6 +102,10 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
     if not version:
         click.echo(f"  ℹ️  {match} — already editable, skipping.")
         return True
+
+    # Guard: cannot edit a feature with applied migrations
+    key, _, _, _ = resolve_feature_key_from_entry(match)
+    require_state(product_path, key, command="feature:edit", force=force)
 
     click.echo(f"  🧩 {ns_git}/{name}@{version}")
 
@@ -137,7 +151,8 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
 )
 @click.argument("feature_name", required=False, default=None)
 @click.option("--all", "edit_all", is_flag=True, help="Convert all versioned features to editable.")
-def feature_edit(feature_name, edit_all):
+@click.option("--force", is_flag=True, help="Bypass lifecycle state checks.")
+def feature_edit(feature_name, edit_all, force):
     workspace = str(context.workspace())
     product = context.require_app()
 
@@ -157,7 +172,7 @@ def feature_edit(feature_name, edit_all):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = data["project"]["optional-dependencies"]["features"]
+    features = read_features_from_data(data)
 
     # ── Single feature ────────────────────────────────────────────────
     if feature_name:
@@ -173,7 +188,7 @@ def feature_edit(feature_name, edit_all):
             raise SystemExit(1)
 
         click.echo()
-        _edit_one(workspace, product_path, pyproject_path, match)
+        _edit_one(workspace, product_path, pyproject_path, match, force=force)
         click.echo()
         return
 
@@ -196,7 +211,7 @@ def feature_edit(feature_name, edit_all):
     click.secho(f"  Converting {len(versioned)} feature(s) to editable:\n", fg="cyan")
     ok = 0
     for match in versioned:
-        if _edit_one(workspace, product_path, pyproject_path, match):
+        if _edit_one(workspace, product_path, pyproject_path, match, force=force):
             ok += 1
         click.echo()
 

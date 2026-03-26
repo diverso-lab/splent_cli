@@ -4,6 +4,7 @@ import shutil
 import click
 from splent_cli.services import context
 from splent_cli.commands.feature.feature_clone import feature_clone
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 @click.command(
@@ -28,9 +29,7 @@ def product_sync(ctx, force):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = (
-        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-    )
+    features = read_features_from_data(data, os.getenv("SPLENT_ENV"))
 
     if not features:
         click.secho("ℹ️ No features declared.", fg="yellow")
@@ -90,6 +89,30 @@ def product_sync(ctx, force):
 
         # 3️⃣ Create symlink
         _create_symlink(cache_dir, product_features_dir, link_path)
+
+    # Clean up stale manifest entries and ensure all features are tracked
+    from splent_cli.utils.manifest import cleanup_stale_entries, get_feature_state
+    from splent_cli.utils.lifecycle import resolve_feature_key_from_entry, advance_state
+
+    active_keys = set()
+    all_entries = remote_features + local_features
+    for entry in all_entries:
+        key, _, _, _ = resolve_feature_key_from_entry(entry)
+        active_keys.add(key)
+
+    product_path = os.path.join(workspace, product)
+    removed = cleanup_stale_entries(product_path, product, active_keys)
+    if removed:
+        click.secho(f"🧹 Cleaned {removed} stale manifest entries.", fg="yellow")
+
+    # Ensure every active feature has at least a "declared" entry
+    for entry in all_entries:
+        key, ns, name, version = resolve_feature_key_from_entry(entry)
+        if get_feature_state(product_path, key) is None:
+            advance_state(
+                product_path, product, key,
+                to="declared", namespace=ns, name=name, version=version,
+            )
 
     click.secho("\n✅ Product synced successfully.", fg="green")
 

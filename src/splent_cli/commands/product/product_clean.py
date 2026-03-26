@@ -3,6 +3,7 @@ import subprocess
 import click
 import tomllib
 from splent_cli.services import compose, context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def _docker_down(name: str, docker_dir: str, env: str):
@@ -70,9 +71,7 @@ def product_clean(env_dev, env_prod, yes):
     if os.path.exists(pyproject_path):
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data, env)
 
     _docker_down(product, os.path.join(product_path, "docker"), env)
     for feat in features:

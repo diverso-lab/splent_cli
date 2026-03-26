@@ -16,6 +16,11 @@ set -e
 
 echo "🚀 [Start app in dev mode] entrypoint starting..."
 
+# Kill any previous Flask/watchmedo processes to avoid port conflicts and stale code
+pkill -f "watchmedo.*auto-restart" 2>/dev/null || true
+pkill -f "flask run" 2>/dev/null || true
+sleep 1
+
 watchmedo auto-restart \
     --directory=/workspace/{{ product_name }}/src/{{ product_name }} \
     --pattern=*.py \

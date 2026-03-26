@@ -1,14 +1,19 @@
+import os
+
 import click
 from flask import current_app
 from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import text, MetaData
 
 from splent_cli.utils.decorators import requires_db
+from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry
 from splent_framework.db import db
 from splent_framework.managers.migration_manager import (
     MigrationManager,
     SPLENT_MIGRATIONS_TABLE,
 )
+from splent_framework.utils.feature_utils import get_features_from_pyproject
+from splent_framework.utils.path_utils import PathUtils
 from splent_cli.commands.clear_uploads import clear_uploads
 
 
@@ -75,6 +80,15 @@ def db_reset(yes):
 
     # --- STEP 4: Re-apply all existing feature migrations ---
     dirs = MigrationManager.get_all_feature_migration_dirs()
+
+    # Build entry→key lookup for manifest updates
+    product_path = PathUtils.get_app_base_dir()
+    product_name = os.getenv("SPLENT_APP", "")
+    entry_lookup = {}
+    for entry in get_features_from_pyproject() or []:
+        key, ns, name, version = resolve_feature_key_from_entry(entry)
+        entry_lookup[name] = (key, ns, name, version)
+
     if not dirs:
         click.echo(click.style("⚠️  No feature migrations found.", fg="yellow"))
     else:
@@ -89,6 +103,15 @@ def db_reset(yes):
                 click.echo(
                     click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green")
                 )
+
+                # Advance lifecycle state to "migrated"
+                info = entry_lookup.get(feat)
+                if info:
+                    key, ns, name, version = info
+                    advance_state(
+                        product_path, product_name, key,
+                        to="migrated", namespace=ns, name=name, version=version,
+                    )
             except Exception as e:
                 click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
 

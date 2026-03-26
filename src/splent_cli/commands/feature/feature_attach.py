@@ -123,19 +123,20 @@ def feature_attach(feature_identifier, version):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    project = data.setdefault("project", {})
-    optional_deps = project.setdefault("optional-dependencies", {})
-    features = optional_deps.setdefault("features", [])
+    from splent_cli.utils.feature_utils import read_features_from_data, write_features_to_data
+
+    features = read_features_from_data(data)
 
     if full_name in features:
         click.echo(f"ℹ️  Feature '{full_name}' already present in pyproject.toml.")
     else:
         # Replace bare entry (added by uvl:sync) or old versioned entry if present
-        features[:] = [
+        features = [
             f for f in features
             if f != bare_name and not f.startswith(f"{bare_name}@")
         ]
         features.append(full_name)
+        write_features_to_data(data, features)
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
         click.echo(f"🧩 Updated pyproject.toml → {full_name}")

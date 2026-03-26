@@ -3,6 +3,7 @@ import subprocess
 import click
 import tomllib
 from splent_cli.services import compose, context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 @click.command(
@@ -55,9 +56,7 @@ def product_up(dev, prod):
     with open(py, "rb") as f:
         data = tomllib.load(f)
 
-    features = (
-        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-    )
+    features = read_features_from_data(data, env)
     ws = str(context.workspace())
     for feat in features:
         clean = compose.normalize_feature_ref(feat)

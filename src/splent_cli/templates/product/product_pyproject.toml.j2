@@ -22,11 +22,17 @@ core = [
     "splent_framework"
 ]
 
-features = [
-]
-
 [tool.splent]
 cli_version = "{{ cli_version }}"
+
+# Features active in all environments
+features = []
+
+# Features active only in dev (e.g. debug tools, fake data generators)
+features_dev = []
+
+# Features active only in prod (e.g. monitoring, caching)
+features_prod = []
 
 [tool.splent.uvl]
 mirror = "uvlhub.io"

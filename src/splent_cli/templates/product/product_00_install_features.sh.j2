@@ -13,10 +13,17 @@ echo "🚀 [Install features] entrypoint starting..."
 echo "📦 Installing editable features listed in [features] of pyproject.toml..."
 
 features=$(python3 -c '
-import tomllib
+import os, tomllib
 with open("/workspace/{{ product_name }}/pyproject.toml", "rb") as f:
     data = tomllib.load(f)
-print("\n".join(data["project"]["optional-dependencies"].get("features", [])))
+splent = data.get("tool", {}).get("splent", {})
+feats = list(splent.get("features", []))
+env = os.getenv("SPLENT_ENV")
+if env:
+    feats += [f for f in splent.get(f"features_{env}", []) if f not in feats]
+if not feats:
+    feats = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+print("\n".join(feats))
 ')
 
 echo "📃 Features parsed:"
@@ -41,11 +48,27 @@ for feature in $features; do
     done
 
     if [ -n "$found_path" ]; then
-        if pip show "${name_ver%%@*}" > /dev/null 2>&1; then
+        # Resolve the real path of the symlink for comparison
+        real_path=$(cd "$found_path" 2>/dev/null && pwd -P)
+        current_path=$(pip show "${name_ver%%@*}" 2>/dev/null | grep "Editable project location" | cut -d' ' -f4-)
+        current_real=$(cd "$current_path" 2>/dev/null && pwd -P)
+
+        if [ -n "$current_real" ] && [ "$current_real" = "$real_path" ]; then
             echo "✅ $feature already installed."
         else
             echo "🔁 Installing $feature in editable mode from $found_path..."
-            pip install --no-cache-dir --root-user-action=ignore -e "$found_path" || echo "❌ Error installing $feature"
+            if pip install --no-cache-dir --root-user-action=ignore -e "$found_path"; then
+                # Advance lifecycle state to "installed"
+                python3 -c "
+from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry
+import os
+key, ns, name, ver = resolve_feature_key_from_entry('$feature')
+product_path = os.path.join(os.getenv('WORKING_DIR', '/workspace'), os.getenv('SPLENT_APP', ''))
+advance_state(product_path, os.getenv('SPLENT_APP', ''), key, to='installed', namespace=ns, name=name, version=ver)
+" 2>/dev/null || true
+            else
+                echo "❌ Error installing $feature"
+            fi
         fi
     else
         echo "⚠️  $feature not found locally under /workspace/{{ product_name }}/features/*/. Skipping."

@@ -3,6 +3,7 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import read_features_from_data, write_features_to_data
 from splent_cli.utils.manifest import (
     feature_key,
     remove_feature,
@@ -79,16 +80,14 @@ def feature_remove(feature_name, namespace, force):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    project = data.get("project", {})
-    optional_deps = project.get("optional-dependencies", {})
-    features = optional_deps.get("features", [])
+    features = read_features_from_data(data)
 
     default_orgs = {"splent-io", github_user}
     entry_name = feature_name if org in default_orgs else f"{org_safe}/{feature_name}"
 
     if entry_name in features:
         features.remove(entry_name)
-        data["project"]["optional-dependencies"]["features"] = features
+        write_features_to_data(data, features)
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
         click.echo(f"🧩 Removed '{entry_name}' from pyproject.toml.")

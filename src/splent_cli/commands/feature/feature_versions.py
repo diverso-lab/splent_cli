@@ -7,6 +7,7 @@ import urllib.request
 import click
 
 from splent_cli.services import compose
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -124,7 +125,7 @@ def _read_product_features() -> list[str]:
         return []
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
-    return data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    return read_features_from_data(data)
 
 
 def _declared_version(features: list[str], feature_name: str) -> str | None:

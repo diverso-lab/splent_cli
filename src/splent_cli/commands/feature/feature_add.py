@@ -51,12 +51,13 @@ def feature_add(full_name):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    project = data.setdefault("project", {})
-    optional_deps = project.setdefault("optional-dependencies", {})
-    features = optional_deps.setdefault("features", [])
+    from splent_cli.utils.feature_utils import read_features_from_data, write_features_to_data
+
+    features = read_features_from_data(data)
 
     if full_name not in features:
         features.append(full_name)
+        write_features_to_data(data, features)
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
         click.echo(f"🧩 Added '{full_name}' to pyproject.toml.")

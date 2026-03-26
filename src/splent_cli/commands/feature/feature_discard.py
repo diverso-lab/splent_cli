@@ -3,6 +3,7 @@ import click
 import shutil
 import tomllib
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
@@ -30,9 +31,7 @@ def _find_products_using_editable(workspace, feature_name, ns_safe):
         except Exception:
             continue
 
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data)
 
         # Editable feature = aparece SIN @versión
         if feature_name in features:

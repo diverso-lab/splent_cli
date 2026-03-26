@@ -12,6 +12,7 @@ import click
 import tomllib
 
 from flamapy.core.discover import DiscoverMetamodels
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def read_splent_app(workspace: str) -> str:
@@ -59,7 +60,7 @@ def get_uvl_cfg(data: dict) -> dict:
 
 def get_feature_deps(data: dict) -> list[str]:
     """Return the features list from [project.optional-dependencies]."""
-    return data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    return read_features_from_data(data)
 
 
 def normalize_feature_name(dep: str) -> str:

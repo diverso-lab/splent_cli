@@ -357,7 +357,14 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
     cache_root = os.path.join(workspace, ".splent_cache", "features", namespace)
     snapshot_path = os.path.join(cache_root, f"{feature_name}@{version}")
 
-    clone_url = f"git@github.com:{org_github}/{feature_name}.git"
+    token = os.getenv("GITHUB_TOKEN")
+    use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
+    if use_ssh:
+        clone_url = f"git@github.com:{org_github}/{feature_name}.git"
+    elif token:
+        clone_url = f"https://{token}@github.com/{org_github}/{feature_name}.git"
+    else:
+        clone_url = f"https://github.com/{org_github}/{feature_name}.git"
 
     click.echo(f"📥 Creating versioned snapshot: {snapshot_path}")
     click.echo(f"🔗 GitHub repo: {clone_url}")

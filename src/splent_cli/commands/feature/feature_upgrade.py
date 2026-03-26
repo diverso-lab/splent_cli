@@ -10,6 +10,7 @@ import click
 from packaging.version import Version, InvalidVersion
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 # ── GitHub helpers ────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ def _read_features(pyproject_path: Path) -> list[dict]:
         return []
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
-    refs = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    refs = read_features_from_data(data)
     result = []
     for ref in refs:
         if "/" in ref:
@@ -113,7 +114,8 @@ def _update_symlink(product_path: Path, ns_fs: str, name: str, old_ver: str | No
     target = cache_root / ns_fs / f"{name}@{new_ver}"
     if new_link.is_symlink():
         new_link.unlink()
-    new_link.symlink_to(target)
+    rel_target = os.path.relpath(str(target), str(features_dir))
+    new_link.symlink_to(rel_target)
 
 
 # ── Command ───────────────────────────────────────────────────────────────────
@@ -197,7 +199,17 @@ def feature_upgrade(feature_ref, yes):
         raise SystemExit(0)
 
     click.echo()
+    from splent_cli.utils.lifecycle import require_state, resolve_feature_key_from_entry
+    from splent_cli.utils.manifest import feature_key
+
     for u in upgrades:
+        # Guard: cannot upgrade a feature with applied migrations
+        key = feature_key(u["ns_fs"], u["name"], u["version"])
+        try:
+            require_state(str(product_path), key, command="feature:upgrade")
+        except SystemExit:
+            continue
+
         try:
             _clone_if_missing(u["ns_fs"], u["name"], u["latest"], cache_root)
             _update_pyproject(pyproject_path, u["ns_github"], u["name"], u["version"], u["latest"])

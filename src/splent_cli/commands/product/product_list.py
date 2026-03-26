@@ -3,6 +3,7 @@ import tomllib
 import click
 from pathlib import Path
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def _product_info(product_dir: Path) -> dict | None:
@@ -14,9 +15,7 @@ def _product_info(product_dir: Path) -> dict | None:
             data = tomllib.load(f)
         name = data.get("project", {}).get("name", product_dir.name)
         version = data.get("project", {}).get("version", "?")
-        n_features = len(
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        n_features = len(read_features_from_data(data))
         return {"name": name, "version": version, "features": n_features}
     except Exception:
         return None

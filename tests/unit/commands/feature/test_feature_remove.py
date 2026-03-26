@@ -46,8 +46,8 @@ class TestPyprojectUpdate:
             "project": {
                 "name": "test_app",
                 "version": "1.0.0",
-                "optional-dependencies": {"features": features}
-            }
+            },
+            "tool": {"splent": {"features": features}},
         }
         with open(path, "wb") as f:
             tomli_w.dump(data, f)
@@ -62,7 +62,7 @@ class TestPyprojectUpdate:
 
         with open(pyproject, "rb") as f:
             data = tomllib.load(f)
-        features = data["project"]["optional-dependencies"]["features"]
+        features = data["tool"]["splent"]["features"]
         assert "my_feature" not in features
 
     def test_feature_not_found_shows_info(self, runner, product_workspace):

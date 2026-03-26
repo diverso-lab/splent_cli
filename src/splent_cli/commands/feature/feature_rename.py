@@ -4,6 +4,7 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import write_features_to_data
 
 
 @click.command(
@@ -87,11 +88,7 @@ def feature_rename(old_name, new_name, namespace):
             try:
                 with open(pyproject_path, "rb") as f:
                     data = tomllib.load(f)
-                features_list = (
-                    data.get("project", {})
-                    .get("optional-dependencies", {})
-                    .get("features", [])
-                )
+                features_list = read_features_from_data(data)
                 if old_name in features_list:
                     feature_is_active = True
             except Exception as e:
@@ -157,7 +154,7 @@ def feature_rename(old_name, new_name, namespace):
         try:
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
-            data["project"]["optional-dependencies"]["features"] = updated_features
+            write_features_to_data(data, updated_features)
             with open(pyproject_path, "wb") as f:
                 tomli_w.dump(data, f)
             pyproject_updated = True

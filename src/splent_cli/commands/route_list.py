@@ -6,6 +6,7 @@ from collections import defaultdict
 
 from splent_cli.utils.decorators import requires_app
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def get_feature_names():
@@ -17,7 +18,7 @@ def get_feature_names():
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        features = data["project"]["optional-dependencies"].get("features", [])
+        features = read_features_from_data(data)
         return [
             f.split("_")[-1] for f in features
         ]  # e.g. "splent_feature_auth" → "auth"

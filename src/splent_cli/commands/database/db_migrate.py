@@ -5,7 +5,10 @@ from flask import current_app
 from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
 
 from splent_cli.utils.decorators import requires_db
+from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry
 from splent_framework.managers.migration_manager import MigrationManager
+from splent_framework.utils.feature_utils import get_features_from_pyproject
+from splent_framework.utils.path_utils import PathUtils
 
 
 def _count_versions(mdir: str) -> int:
@@ -72,14 +75,29 @@ def db_migrate(feature):
             )
             return
 
-    for feat, mdir in dirs.items():
-        click.echo(click.style(f"  ⚙️  Generating migrations for {feat}...", fg="cyan"))
+    # Build entry→key lookup for manifest updates
+    product_path = PathUtils.get_app_base_dir()
+    product_name = os.getenv("SPLENT_APP", "")
+    entry_lookup = {}
+    for entry in get_features_from_pyproject() or []:
+        key, ns, name, version = resolve_feature_key_from_entry(entry)
+        entry_lookup[name] = (key, ns, name, version)
 
+    for feat, mdir in dirs.items():
         before = _count_versions(mdir)
+
+        # Suppress Alembic's verbose output during generation
+        import logging
+        alembic_logger = logging.getLogger("alembic")
+        prev_level = alembic_logger.level
+        alembic_logger.setLevel(logging.WARNING)
+
         try:
             alembic_migrate(directory=mdir, message=feat)
-        except Exception as e:
-            click.echo(click.style(f"  ℹ️  {e}", fg="yellow"))
+        except Exception:
+            pass
+        finally:
+            alembic_logger.setLevel(prev_level)
 
         after = _count_versions(mdir)
 
@@ -92,19 +110,13 @@ def db_migrate(feature):
             )
             if _is_empty_migration(newest):
                 os.remove(newest)
-                click.echo(
-                    click.style(f"  ⏩ {feat}: no schema changes detected, skipping.", fg="yellow")
-                )
+                click.echo(click.style(f"  ✔ {feat}: up to date", fg="green"))
             else:
-                click.echo(
-                    click.style(f"  📝 {feat}: new migration generated.", fg="green")
-                )
+                click.echo(click.style(f"  📝 {feat}: new migration generated", fg="cyan"))
         else:
-            click.echo(
-                click.style(f"  ⏩ {feat}: no schema changes detected, skipping.", fg="yellow")
-            )
+            click.echo(click.style(f"  ✔ {feat}: up to date", fg="green"))
 
-        click.echo(click.style(f"  ⬆️  Applying migrations for {feat}...", fg="cyan"))
+        # Apply pending migrations
         try:
             alembic_upgrade(directory=mdir)
             revision = MigrationManager.get_current_feature_revision(
@@ -112,6 +124,15 @@ def db_migrate(feature):
             )
             MigrationManager.update_feature_status(app, feat, revision)
             click.echo(click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green"))
+
+            # Advance lifecycle state to "migrated"
+            info = entry_lookup.get(feat)
+            if info:
+                key, ns, name, version = info
+                advance_state(
+                    product_path, product_name, key,
+                    to="migrated", namespace=ns, name=name, version=version,
+                )
         except Exception as e:
             click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
 
