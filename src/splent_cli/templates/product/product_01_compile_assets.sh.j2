@@ -16,6 +16,13 @@ set -e
 
 echo "🚀 [Compile assets] entrypoint starting..."
 
+PRODUCT_DIR="/workspace/${SPLENT_APP:-{{ product_name }}}"
+
+if [ ! -d "$PRODUCT_DIR/node_modules/.bin" ]; then
+    echo "📦 Installing npm dependencies..."
+    cd "$PRODUCT_DIR" && npm install --no-audit --no-fund
+fi
+
 splent feature:compile --watch
 
 echo "✅ [Compile assets] entrypoint finished."

@@ -30,6 +30,22 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------------------
+# PlantUML (Java + plantuml.jar for diagram export)
+# ----------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        default-jre-headless \
+        graphviz \
+        fonts-dejavu \
+        librsvg2-bin && \
+    mkdir -p /opt/plantuml && \
+    curl -fsSL -o /opt/plantuml/plantuml.jar \
+        https://github.com/plantuml/plantuml/releases/download/v1.2024.8/plantuml-1.2024.8.jar && \
+    printf '#!/bin/sh\njava -jar /opt/plantuml/plantuml.jar "$@"\n' > /usr/local/bin/plantuml && \
+    chmod +x /usr/local/bin/plantuml && \
+    rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
 # Node.js
 # ----------------------------------------------------
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \

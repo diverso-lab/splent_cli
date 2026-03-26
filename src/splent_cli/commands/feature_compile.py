@@ -13,9 +13,9 @@ from splent_cli.utils.feature_utils import (
 logger = logging.getLogger(__name__)
 
 
-def _is_inside_container() -> bool:
-    """Return True when this process is already running inside a Docker container."""
-    return os.path.exists("/.dockerenv")
+def _is_product_container() -> bool:
+    """Return True when running inside the product's web container (not the CLI)."""
+    return os.path.exists("/.dockerenv") and os.getenv("SPLENT_CONTAINER") != "cli"
 
 
 @click.command("feature:compile", help="Compile frontend assets for one or all features.")
@@ -37,9 +37,9 @@ def feature_compile(feature_name, watch, env_dev, env_prod):
     workspace = str(context.workspace())
     product_path = os.path.join(workspace, product)
 
-    # When running inside the container the Docker CLI is not available —
-    # webpack must be invoked directly instead of via `docker exec`.
-    if _is_inside_container():
+    # If running inside the product's web container, webpack is available locally.
+    # Otherwise (CLI container or host), delegate to the product container via docker exec.
+    if _is_product_container():
         container_id = None
     else:
         docker_dir = os.path.join(product_path, "docker")
@@ -63,7 +63,8 @@ def feature_compile(feature_name, watch, env_dev, env_prod):
 def _compile_in_container(container_id, feature, watch, production, workspace, product):
     parts = feature.split("/")
     if len(parts) == 2:
-        org_safe, name_version = parts
+        org_raw, name_version = parts
+        org_safe = org_raw.replace("-", "_").replace(".", "_")
     else:
         org_safe, name_version = "splent_io", parts[0]
 
