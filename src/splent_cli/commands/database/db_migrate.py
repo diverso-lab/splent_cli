@@ -5,7 +5,7 @@ from flask import current_app
 from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
 
 from splent_cli.utils.decorators import requires_db
-from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry
+from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry, require_editable
 from splent_framework.managers.migration_manager import MigrationManager
 from splent_framework.utils.feature_utils import get_features_from_pyproject
 from splent_framework.utils.path_utils import PathUtils
@@ -84,6 +84,15 @@ def db_migrate(feature):
         entry_lookup[name] = (key, ns, name, version)
 
     for feat, mdir in dirs.items():
+        # Guard: cannot generate migrations for a pinned (read-only) feature
+        info = entry_lookup.get(feat)
+        if info:
+            key, _, _, _ = info
+            try:
+                require_editable(product_path, key, command="db:migrate")
+            except SystemExit:
+                continue
+
         before = _count_versions(mdir)
 
         # Suppress Alembic's verbose output during generation

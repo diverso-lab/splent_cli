@@ -56,17 +56,15 @@ def make_feature(full_name):
     namespace, feature_name = full_name.split("/", 1)
     org_safe = namespace.replace("-", "_")
 
-    # --- Target directory (local cache) ---
+    # --- Target directory (workspace root for editable features) ---
     workspace = str(context.workspace())
-    cache_dir = os.path.join(
-        workspace, ".splent_cache", "features", org_safe, feature_name
-    )
-    src_path = os.path.join(cache_dir, "src", org_safe, feature_name)
+    feature_dir = os.path.join(workspace, feature_name)
+    src_path = os.path.join(feature_dir, "src", org_safe, feature_name)
 
     # --- Validation ---
-    if os.path.exists(cache_dir):
+    if os.path.exists(feature_dir):
         click.echo(
-            click.style(f"⚠️  The feature '{full_name}' already exists.", fg="yellow")
+            click.style(f"⚠️  The feature '{full_name}' already exists at {feature_dir}.", fg="yellow")
         )
         return
 
@@ -131,7 +129,7 @@ def make_feature(full_name):
 
     # --- Create base files ---
     for filename, template in base_files_and_templates.items():
-        full_path = os.path.join(cache_dir, filename)
+        full_path = os.path.join(feature_dir, filename)
         if template:
             render_and_write_file(env, template, full_path, template_ctx)
         else:
@@ -139,13 +137,13 @@ def make_feature(full_name):
             Path(full_path).touch()
 
     # --- src/__init__.py (namespace root) ---
-    src_root = os.path.join(cache_dir, "src")
+    src_root = os.path.join(feature_dir, "src")
     os.makedirs(src_root, exist_ok=True)
     open(os.path.join(src_root, "__init__.py"), "a").close()
 
     # --- Permissions (UID:GID 1000:1000) ---
     uid, gid = 1000, 1000
-    for root, dirs, files in os.walk(cache_dir):
+    for root, dirs, files in os.walk(feature_dir):
         try:
             os.chown(root, uid, gid)
         except PermissionError:
@@ -164,7 +162,7 @@ def make_feature(full_name):
     click.echo(
         click.style(f"✅ Feature '{full_name}' created successfully!", fg="green")
     )
-    click.echo(click.style(f"📦 Cached at: {cache_dir}", fg="blue"))
+    click.echo(click.style(f"📦 Created at: {feature_dir}", fg="blue"))
     click.echo(click.style(f"🏷️  Namespace: {org_safe}", fg="bright_black"))
 
 

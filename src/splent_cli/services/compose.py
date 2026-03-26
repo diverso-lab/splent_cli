@@ -28,7 +28,20 @@ def resolve_file(product_path: str, env: str) -> str | None:
 
 
 def feature_docker_dir(workspace: str, feature: str) -> str:
-    """Return the docker/ directory for a feature entry in the cache."""
+    """Return the docker/ directory for a feature.
+
+    Checks workspace root first (editable features), then falls back
+    to the .splent_cache (pinned features).
+    """
+    # Extract bare name (strip org prefix if present)
+    name = feature.split("/")[-1] if "/" in feature else feature
+
+    # Editable feature at workspace root
+    root_docker = os.path.join(workspace, name, "docker")
+    if os.path.isdir(root_docker):
+        return root_docker
+
+    # Pinned feature in cache
     return os.path.join(workspace, ".splent_cache", "features", feature, "docker")
 
 

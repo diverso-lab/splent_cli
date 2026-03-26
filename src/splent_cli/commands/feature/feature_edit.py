@@ -4,16 +4,17 @@ import tomllib
 import click
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.cache_utils import make_feature_writable
 
 
 # =====================================================================
 # CACHE PATH RESOLVER
 # =====================================================================
-def get_cache_paths(workspace: str, ns_fs: str, name: str, version: str | None):
-    base = os.path.join(workspace, ".splent_cache", "features", ns_fs)
-
-    versioned = os.path.join(base, f"{name}@{version}") if version else None
-    editable = os.path.join(base, name)
+def get_feature_paths(workspace: str, ns_fs: str, name: str, version: str | None):
+    """Return (versioned_cache_path, editable_workspace_root_path)."""
+    cache_base = os.path.join(workspace, ".splent_cache", "features", ns_fs)
+    versioned = os.path.join(cache_base, f"{name}@{version}") if version else None
+    editable = os.path.join(workspace, name)  # workspace root
 
     return versioned, editable
 
@@ -87,6 +88,40 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
 
 
 # =====================================================================
+# HOT REINSTALL — pip install + Flask reload in the web container
+# =====================================================================
+def _hot_reinstall(workspace: str, product_path: str, editable_path: str, name: str):
+    """Reinstall the feature via pip in the product's web container and trigger Flask reload."""
+    product = os.path.basename(product_path)
+    env = os.getenv("SPLENT_ENV", "dev")
+    docker_dir = os.path.join(product_path, "docker")
+
+    compose_file = compose.resolve_file(product_path, env)
+    if not compose_file:
+        return  # no docker-compose file — nothing to do
+
+    pname = compose.project_name(product, env)
+    container_id = compose.find_main_container(pname, compose_file, docker_dir)
+    if not container_id:
+        return  # container not running — nothing to do
+
+    # 1. pip install -e from the new path
+    click.echo(f"     🔄 Reinstalling {name} in web container...")
+    pip_cmd = f"pip install --no-cache-dir --root-user-action=ignore -q -e /workspace/{name}"
+    subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", pip_cmd],
+        capture_output=True,
+    )
+
+    # 2. Touch the app's __init__.py to trigger watchmedo auto-restart
+    init_py = f"/workspace/{product}/src/{product}/__init__.py"
+    subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", f"touch {init_py}"],
+        capture_output=True,
+    )
+
+
+# =====================================================================
 # CORE LOGIC (single feature)
 # =====================================================================
 def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str, *, force: bool = False):
@@ -109,7 +144,7 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
 
     click.echo(f"  🧩 {ns_git}/{name}@{version}")
 
-    versioned_path, editable_path = get_cache_paths(workspace, ns_fs, name, version)
+    versioned_path, editable_path = get_feature_paths(workspace, ns_fs, name, version)
 
     if not os.path.exists(versioned_path):
         click.secho(f"  ❌ Versioned cache not found: {versioned_path}", fg="red")
@@ -122,6 +157,8 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
         if result.returncode != 0:
             click.secho("     ❌ Failed to copy feature to editable path.", fg="red")
             return False
+        # Unlock files so the editable copy is writable
+        make_feature_writable(editable_path)
 
     ensure_git_main(editable_path, ns_git, name)
     replace_pyproject_reference(pyproject_path, name, version)
@@ -134,9 +171,15 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
 
     if os.path.islink(old):
         os.unlink(old)
-    if not os.path.islink(new):
-        rel_target = os.path.relpath(editable_path, product_features_dir)
-        os.symlink(rel_target, new)
+    # Always recreate the symlink to ensure it points to workspace root
+    if os.path.islink(new):
+        os.unlink(new)
+    rel_target = os.path.relpath(editable_path, product_features_dir)
+    os.symlink(rel_target, new)
+
+    # Reinstall via pip in the product's web container so the running
+    # Flask process picks up the new location without a manual restart.
+    _hot_reinstall(workspace, product_path, editable_path, name)
 
     click.secho(f"     ✔  ready for editing.", fg="green")
     return True

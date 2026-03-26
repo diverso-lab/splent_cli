@@ -74,6 +74,12 @@ def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
             f"   Use: {ns}/{name}"
         )
 
+    # Editable features live at workspace root
+    root_dir = os.path.join(workspace, name)
+    if os.path.exists(root_dir):
+        return root_dir, ns, name, version_arg.lstrip("v")
+
+    # Fallback: legacy location in cache (for backwards compat)
     cache_base = os.path.join(
         workspace, ".splent_cache", "features", ns.replace("-", "_")
     )
@@ -82,8 +88,8 @@ def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
     if not os.path.exists(base_dir):
         raise SystemExit(
             f"❌ Editable feature not found at:\n"
-            f"   {base_dir}\n\n"
-            f"Run: splent feature:clone {ns}/{name}"
+            f"   {root_dir}\n\n"
+            f"Create it with: splent feature:create {ns}/{name}"
         )
 
     return base_dir, ns, name, version_arg.lstrip("v")

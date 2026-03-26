@@ -51,13 +51,19 @@ def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str, 
             f"   Run: splent feature:attach {ns.replace('_', '-')}/{name} {version}"
         )
 
+    # Editable feature at workspace root
+    ws_root = Path(workspace) / name
+    if ws_root.exists():
+        return ws_root, ns, name, None
+
+    # Legacy: editable in cache
     candidate = cache_root / name
     if candidate.exists():
         return candidate, ns, name, None
 
     raise SystemExit(
-        f"❌ Feature not found in cache: {cache_root / name}\n"
-        f"   Run: splent feature:clone {ns.replace('_', '-')}/{name}"
+        f"❌ Feature not found at workspace root or cache: {name}\n"
+        f"   Run: splent feature:create {ns.replace('_', '-')}/{name}"
     )
 
 

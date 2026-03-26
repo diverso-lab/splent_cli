@@ -3,6 +3,8 @@ import time
 import click
 import requests
 from splent_cli.commands.feature.feature_clone import feature_clone
+from splent_cli.utils.cache_utils import make_feature_writable
+from splent_cli.services import context
 
 
 @click.command(
@@ -57,3 +59,13 @@ def feature_fork(feature_name, version):
     click.secho("\n🚀 Cloning fork into local namespace...\n", fg="cyan")
     ctx = click.get_current_context()
     ctx.invoke(feature_clone, full_name=f"{github_user}/{feature_name}@{version}")
+
+    # Forked features are meant to be edited — unlock the cached copy
+    ns_safe = github_user.replace("-", "_").replace(".", "_")
+    workspace = str(context.workspace())
+    forked_path = os.path.join(
+        workspace, ".splent_cache", "features", ns_safe, f"{feature_name}@{version}"
+    )
+    if os.path.exists(forked_path):
+        make_feature_writable(forked_path)
+        click.secho("🔓 Fork unlocked for editing.", fg="green")

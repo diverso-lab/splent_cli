@@ -101,6 +101,8 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    from splent_cli.utils.cache_utils import make_feature_readonly
+    make_feature_readonly(str(target))
 
 
 def _update_symlink(product_path: Path, ns_fs: str, name: str, old_ver: str | None, new_ver: str, cache_root: Path):

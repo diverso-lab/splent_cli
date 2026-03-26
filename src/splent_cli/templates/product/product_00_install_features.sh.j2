@@ -49,9 +49,9 @@ for feature in $features; do
 
     if [ -n "$found_path" ]; then
         # Resolve the real path of the symlink for comparison
-        real_path=$(cd "$found_path" 2>/dev/null && pwd -P)
+        real_path=$(cd "$found_path" 2>/dev/null && pwd -P) || real_path=""
         current_path=$(pip show "${name_ver%%@*}" 2>/dev/null | grep "Editable project location" | cut -d' ' -f4-)
-        current_real=$(cd "$current_path" 2>/dev/null && pwd -P)
+        current_real=$(cd "$current_path" 2>/dev/null && pwd -P) || current_real=""
 
         if [ -n "$current_real" ] && [ "$current_real" = "$real_path" ]; then
             echo "✅ $feature already installed."

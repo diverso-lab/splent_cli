@@ -65,7 +65,8 @@ def _declared_features(app_path: str) -> list:
         return []
 
 
-def _in_cache(workspace: str, ref: str) -> bool:
+def _feature_location(workspace: str, ref: str) -> str:
+    """Return 'cache', 'workspace', or 'missing'."""
     if "/" in ref:
         ns, rest = ref.split("/", 1)
     else:
@@ -76,9 +77,14 @@ def _in_cache(workspace: str, ref: str) -> bool:
         path = os.path.join(
             workspace, ".splent_cache", "features", ns_fs, f"{name}@{version}"
         )
+        return "cache" if os.path.isdir(path) else "missing"
     else:
-        path = os.path.join(workspace, ".splent_cache", "features", ns_fs, rest)
-    return os.path.isdir(path)
+        # Editable: check workspace root first, then cache
+        if os.path.isdir(os.path.join(workspace, rest)):
+            return "workspace"
+        if os.path.isdir(os.path.join(workspace, ".splent_cache", "features", ns_fs, rest)):
+            return "cache"
+        return "missing"
 
 
 def _fingerprint(parts: list) -> str:
@@ -122,12 +128,12 @@ def version(as_json: bool) -> None:
         features = _declared_features(app_path)
         for ref in features:
             name, ver = _parse_feature_ref(ref)
-            cached = _in_cache(workspace, ref)
+            location = _feature_location(workspace, ref)
             feature_status.append(
                 {
                     "name": name,
                     "version": ver,
-                    "in_cache": cached,
+                    "location": location,
                     "ref": ref,
                 }
             )
@@ -185,11 +191,13 @@ def version(as_json: bool) -> None:
                 if f["version"]
                 else click.style("editable", fg="blue")
             )
-            cache_label = (
-                click.style("✔ in cache", fg="green")
-                if f["in_cache"]
-                else click.style("✖ missing from cache", fg="red")
-            )
+            loc = f["location"]
+            if loc == "cache":
+                cache_label = click.style("✔ in cache", fg="green")
+            elif loc == "workspace":
+                cache_label = click.style("✔ workspace root", fg="magenta")
+            else:
+                cache_label = click.style("✖ not found", fg="red")
             click.echo(f"  {connector} {f['name']:<32} {ver_label:<18}  {cache_label}")
     elif app_name:
         click.echo()

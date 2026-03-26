@@ -33,11 +33,11 @@ def feature_add(full_name):
     workspace = str(context.workspace())
     product = context.require_app()
 
-    cache_dir = os.path.join(
-        workspace, ".splent_cache", "features", org_safe, feature_name
-    )
-    if not os.path.exists(cache_dir):
-        click.echo(f"❌ Feature not found in cache: {cache_dir}")
+    # Editable features live at workspace root
+    feature_dir = os.path.join(workspace, feature_name)
+    if not os.path.exists(feature_dir):
+        click.echo(f"❌ Feature not found at workspace root: {feature_dir}")
+        click.echo(f"   Create it first with: splent feature:create {full_name}")
         raise SystemExit(1)
 
     # --------------------------
@@ -74,7 +74,7 @@ def feature_add(full_name):
     if os.path.islink(link_path) or os.path.exists(link_path):
         os.unlink(link_path)
 
-    rel_target = os.path.relpath(cache_dir, product_features_dir)
+    rel_target = os.path.relpath(feature_dir, product_features_dir)
     os.symlink(rel_target, link_path)
     click.echo(f"🔗 Linked {link_path} → {rel_target}")
 

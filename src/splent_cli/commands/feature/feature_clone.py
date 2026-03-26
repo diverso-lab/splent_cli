@@ -3,6 +3,7 @@ import subprocess
 import requests
 import click
 from splent_cli.services import context
+from splent_cli.utils.cache_utils import make_feature_readonly
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -132,7 +133,10 @@ def feature_clone(full_name):
             check=True, capture_output=True, text=True,
         )
 
+    # Lock files as read-only to prevent accidental edits on pinned features
+    make_feature_readonly(local_path)
+
     click.secho(
         f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green"
     )
-    click.secho(f"📦 Cached at: {local_path}", fg="blue")
+    click.secho(f"🔒 Cached (read-only) at: {local_path}", fg="blue")

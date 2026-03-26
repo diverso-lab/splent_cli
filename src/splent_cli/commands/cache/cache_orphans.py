@@ -1,5 +1,4 @@
 from splent_cli.services import context
-import re
 import click
 from pathlib import Path
 
@@ -40,6 +39,7 @@ def _get_cache_entries(cache_root: Path) -> list:
 
 def _get_all_product_refs(workspace: Path) -> set:
     """Returns set of 'name' and 'name@version' (no namespace) from all products' pyproject.toml."""
+    import tomllib
     refs = set()
     for product_dir in sorted(workspace.iterdir()):
         if not product_dir.is_dir() or product_dir.name.startswith("."):
@@ -47,20 +47,18 @@ def _get_all_product_refs(workspace: Path) -> set:
         pyproject = product_dir / "pyproject.toml"
         if not pyproject.exists():
             continue
-        content = pyproject.read_text()
-        m = re.search(
-            r"\[project\.optional-dependencies\].*?features\s*=\s*\[(.*?)\]",
-            content,
-            re.DOTALL,
-        )
-        if not m:
+        try:
+            with open(pyproject, "rb") as f:
+                data = tomllib.load(f)
+            splent = data.get("tool", {}).get("splent", {})
+            feats = list(splent.get("features", []))
+            feats += list(splent.get("features_dev", []))
+            feats += list(splent.get("features_prod", []))
+            for entry in feats:
+                ref = entry.split("/", 1)[1] if "/" in entry else entry
+                refs.add(ref)
+        except Exception:
             continue
-        for raw in re.findall(r'"([^"]+)"|\'([^\']+)\'', m.group(1)):
-            ref = raw[0] or raw[1]
-            # Strip namespace if present (e.g. "splent_io/auth@v1.0" → "auth@v1.0")
-            if "/" in ref:
-                ref = ref.split("/", 1)[1]
-            refs.add(ref)
     return refs
 
 

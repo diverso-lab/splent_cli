@@ -5,6 +5,7 @@ import click
 from splent_cli.services import context
 from splent_cli.commands.feature.feature_clone import feature_clone
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.cache_utils import make_feature_writable, make_feature_readonly
 
 
 @click.command(
@@ -40,10 +41,25 @@ def product_sync(ctx, force):
     local_features = [f for f in features if "@" not in f]
 
     if local_features:
-        click.secho(
-            f"🧱 Skipping {len(local_features)} local features (no version).",
-            fg="cyan",
-        )
+        click.secho(f"🧱 Syncing {len(local_features)} local features (workspace root)...", fg="cyan")
+        for entry in local_features:
+            if "/" in entry:
+                ns_raw, name = entry.split("/", 1)
+            else:
+                ns_raw = "splent-io"
+                name = entry
+            ns_safe = ns_raw.replace("-", "_").replace(".", "_")
+
+            feature_root = os.path.join(workspace, name)
+            if not os.path.exists(feature_root):
+                click.secho(f"  ⚠️  {name} not found at workspace root — skipping.", fg="yellow")
+                continue
+
+            product_features_dir = os.path.join(workspace, product, "features", ns_safe)
+            link_path = os.path.join(product_features_dir, name)
+            _create_symlink(feature_root, product_features_dir, link_path)
+
+        click.echo()
 
     click.secho(f"🔄 Syncing {len(remote_features)} remote features...\n", fg="green")
 
@@ -73,6 +89,7 @@ def product_sync(ctx, force):
         # 1️⃣ FORCE → clear **only** this feature cache
         if os.path.exists(cache_dir) and force:
             click.secho(f"♻️ Removing cached feature: {cache_dir}", fg="yellow")
+            make_feature_writable(cache_dir)  # unlock before deleting
             shutil.rmtree(cache_dir)
 
         # 2️⃣ Clone if missing

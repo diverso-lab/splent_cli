@@ -77,16 +77,24 @@ def check_features():
 
         click.echo(click.style(f"  {label}", bold=True))
 
-        # 1. Cache
-        cache_dir = os.path.join(cache_root, org_safe, dir_name)
-        if os.path.isdir(cache_dir):
-            src_dir = os.path.join(cache_dir, "src", org_safe, name)
-            if os.path.isdir(src_dir):
-                _ok("Cache OK")
-            else:
-                _fail("Cache exists but missing src/ structure")
+        # 1. Cache / workspace root
+        if version:
+            # Pinned → must be in .splent_cache
+            feature_dir = os.path.join(cache_root, org_safe, dir_name)
+            location = "cache"
         else:
-            _fail(f"Not in cache: {cache_dir}")
+            # Editable → lives at workspace root
+            feature_dir = os.path.join(workspace, name)
+            location = "workspace root"
+
+        if os.path.isdir(feature_dir):
+            src_dir = os.path.join(feature_dir, "src", org_safe, name)
+            if os.path.isdir(src_dir):
+                _ok(f"Found in {location}")
+            else:
+                _fail(f"Found in {location} but missing src/ structure")
+        else:
+            _fail(f"Not found ({location}): {feature_dir}")
 
         # 2. Symlink
         link_path = os.path.join(features_dir, org_safe, dir_name)
@@ -114,7 +122,7 @@ def check_features():
         if not version:
             try:
                 r = subprocess.run(
-                    ["git", "-C", cache_dir, "status", "--porcelain"],
+                    ["git", "-C", feature_dir, "status", "--porcelain"],
                     capture_output=True, text=True, timeout=5,
                 )
                 if r.returncode != 0:

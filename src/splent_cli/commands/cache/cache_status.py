@@ -24,15 +24,36 @@ def _get_cache_grouped(cache_root: Path) -> dict:
     return grouped
 
 
+def _get_workspace_root_features(workspace: Path) -> dict:
+    """Returns {namespace/name: ['workspace']} for editable features at workspace root."""
+    grouped = defaultdict(list)
+    for entry in sorted(workspace.iterdir()):
+        if not entry.is_dir() or not entry.name.startswith("splent_feature_"):
+            continue
+        # Detect namespace from the feature's src/ structure
+        src = entry / "src"
+        if not src.is_dir():
+            continue
+        for ns_dir in src.iterdir():
+            if ns_dir.is_dir() and not ns_dir.name.startswith("_"):
+                grouped[f"{ns_dir.name}/{entry.name}"].append("workspace")
+                break
+    return grouped
+
+
 @click.command(
     "cache:status", short_help="Show all cached features (versioned vs editable)."
 )
 def cache_status():
-    """Lists all features in cache, showing which are editable and which are versioned snapshots."""
+    """Lists all features in cache and workspace root, showing which are editable and which are versioned snapshots."""
     workspace = context.workspace()
     cache_root = workspace / ".splent_cache" / "features"
 
     grouped = _get_cache_grouped(cache_root)
+    # Merge editable features from workspace root
+    for key, vals in _get_workspace_root_features(workspace).items():
+        grouped[key].extend(vals)
+
     if not grouped:
         click.secho("ℹ️  Feature cache is empty.", fg="yellow")
         return
@@ -48,10 +69,12 @@ def cache_status():
         sorted_versions = sorted(versions, key=lambda x: (x is not None, x or ""))
         for i, v in enumerate(sorted_versions):
             connector = "└──" if i == len(sorted_versions) - 1 else "├──"
-            if v is None:
-                click.echo(f"    {connector} " + click.style("editable", fg="blue"))
+            if v == "workspace":
+                click.echo(f"    {connector} " + click.style("editable (workspace root)", fg="magenta"))
+            elif v is None:
+                click.echo(f"    {connector} " + click.style("editable (cache)", fg="blue"))
             else:
-                click.echo(f"    {connector} " + click.style(f"@{v}", fg="green"))
+                click.echo(f"    {connector} " + click.style(f"@{v}", fg="green") + click.style(" (pinned)", fg="bright_black"))
         click.echo()
 
 

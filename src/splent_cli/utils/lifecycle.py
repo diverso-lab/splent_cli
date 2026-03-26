@@ -212,3 +212,27 @@ def resolve_feature_key_from_entry(entry: str) -> tuple[str, str, str, str | Non
     version = version or None
     key = feature_key(ns, name, version)
     return key, ns, name, version
+
+
+def require_editable(
+    product_path: str,
+    key: str,
+    *,
+    command: str = "",
+) -> None:
+    """Abort if the feature is pinned (read-only).
+
+    Pinned features are versioned snapshots that must not be modified
+    in place.  Use ``feature:edit`` to create an editable copy first.
+    """
+    manifest = read_manifest(product_path)
+    entry = manifest.get("features", {}).get(key, {})
+    mode = entry.get("mode", "editable")
+
+    if mode == "pinned":
+        click.secho(
+            f"❌ Feature '{key}' is pinned (read-only). "
+            f"Run 'splent feature:edit {entry.get('name', key)}' first to create an editable copy.",
+            fg="red",
+        )
+        raise SystemExit(1)

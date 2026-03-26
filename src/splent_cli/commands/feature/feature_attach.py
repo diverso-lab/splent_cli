@@ -6,6 +6,7 @@ import click
 import requests
 from splent_cli.services import context, compose
 from splent_cli.utils.manifest import feature_key, set_feature_state
+from splent_cli.utils.cache_utils import make_feature_readonly
 
 
 @click.command(
@@ -109,7 +110,8 @@ def feature_attach(feature_identifier, version):
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            click.echo(f"✅ Feature cloned → {versioned_dir}")
+            make_feature_readonly(versioned_dir)
+            click.echo(f"🔒 Feature cloned (read-only) → {versioned_dir}")
         except subprocess.CalledProcessError as e:
             click.echo(f"❌ Failed to clone: {e.stderr.strip()}")
             raise SystemExit(1)
