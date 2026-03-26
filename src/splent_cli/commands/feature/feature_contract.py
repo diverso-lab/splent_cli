@@ -8,6 +8,8 @@ highlights differences from what is currently written in pyproject.toml.
 
 Use --write to actually update [tool.splent.contract] in pyproject.toml
 without touching version, git tags, or PyPI.
+
+Works with both editable features (no version) and versioned features (@v1.x.x).
 """
 
 import os
@@ -23,29 +25,51 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Public API — used by feature:release and others
+# ─────────────────────────────────────────────────────────────────────────────
+
+def update_contract(feature_path: str, namespace: str, feature_name: str) -> dict:
+    """Infer the contract from source code and write it to pyproject.toml.
+
+    Returns the inferred contract dict. Can be called from any command.
+    """
+    contract = infer_contract(feature_path, namespace, feature_name)
+    pyproject_path = os.path.join(feature_path, "pyproject.toml")
+    write_contract(pyproject_path, contract, feature_name)
+    return contract
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_editable(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
-    """Resolve an editable (non-versioned) feature from the cache."""
-    base, _, version = feature_ref.partition("@")
-    if version:
-        raise SystemExit(
-            f"❌ feature:contract only works on editable features.\n"
-            f"   Remove the version suffix: {base}"
-        )
-
-    if "/" in base:
-        ns_raw, name = base.split("/", 1)
-        ns = ns_raw.replace("-", "_")
+def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
+    """Resolve a feature from the cache (editable or versioned)."""
+    if "/" in feature_ref:
+        ns_raw, rest = feature_ref.split("/", 1)
+        ns = ns_raw.replace("-", "_").replace(".", "_")
     else:
         ns = DEFAULT_NAMESPACE
-        name = base
+        rest = feature_ref
 
-    cache_path = Path(workspace) / ".splent_cache" / "features" / ns / name
+    name, _, version = rest.partition("@")
+
+    cache_base = Path(workspace) / ".splent_cache" / "features" / ns
+
+    if version:
+        # Versioned: look for exact match
+        cache_path = cache_base / f"{name}@{version}"
+    else:
+        # Editable: look for bare name first, then any versioned entry
+        cache_path = cache_base / name
+        if not cache_path.exists():
+            candidates = sorted(cache_base.glob(f"{name}@*"))
+            if candidates:
+                cache_path = candidates[-1]  # latest version
+
     if not cache_path.exists():
         raise SystemExit(
-            f"❌ Editable feature not found: {cache_path}\n"
+            f"❌ Feature not found: {cache_path}\n"
             f"   Run: splent feature:clone {ns.replace('_', '-')}/{name}"
         )
     return cache_path, ns, name
@@ -171,7 +195,7 @@ def feature_contract(feature_ref, write):
       splent feature:contract splent-io/splent_feature_notes --write
     """
     workspace = str(context.workspace())
-    cache_path, ns, name = _resolve_editable(feature_ref, workspace)
+    cache_path, ns, name = _resolve_feature(feature_ref, workspace)
 
     pyproject_path = cache_path / "pyproject.toml"
 
@@ -207,7 +231,7 @@ def feature_contract(feature_ref, write):
         return
 
     # Write
-    write_contract(str(pyproject_path), inferred, name)
+    update_contract(str(cache_path), ns, name)
     click.secho("  ✅ Contract written to pyproject.toml.", fg="green")
     click.echo()
 

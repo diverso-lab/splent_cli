@@ -400,9 +400,9 @@ def feature_release(feature_ref, version, attach):
 
     click.echo(f"🚀 Releasing {namespace}/{feature_name}@{version}")
 
-    click.echo("🔍 Inferring feature contract from source code...")
-    contract = infer_contract(feature_path, namespace, feature_name)
-    write_contract(os.path.join(feature_path, "pyproject.toml"), contract, feature_name)
+    click.echo("🔍 Updating feature contract from source code...")
+    from splent_cli.commands.feature.feature_contract import update_contract
+    update_contract(feature_path, namespace, feature_name)
     click.echo("✅ Contract written to pyproject.toml.")
 
     release.update_version(os.path.join(feature_path, "pyproject.toml"), normalized)
