@@ -58,7 +58,7 @@ def _get_all_product_refs(workspace: Path) -> set:
             for entry in feats:
                 ref = entry.split("/", 1)[1] if "/" in entry else entry
                 refs.add(ref)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError):
             continue
     return refs
 

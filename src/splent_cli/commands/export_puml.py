@@ -659,50 +659,66 @@ def _render_exports(
 
     svg_path = f"{base}.svg"
     click.echo("🔧 Rendering diagram...")
-    subprocess.run([plantuml_bin, "-tsvg", puml_path], check=True)
+    try:
+        subprocess.run(
+            [plantuml_bin, "-tsvg", puml_path],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as e:
+        click.secho("❌ PlantUML failed to render diagram.", fg="red")
+        if os.getenv("SPLENT_DEBUG"):
+            stderr = e.stderr
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode(errors="replace")
+            click.secho(stderr[:500], fg="bright_black")
+        return
 
-    if export_svg:
-        click.secho(f"✅ SVG exported: {svg_path}", fg="green")
+    try:
+        if export_svg:
+            click.secho(f"✅ SVG exported: {svg_path}", fg="green")
 
-    if export_pdf:
-        click.echo("📄 Converting to PDF...")
-        try:
-            subprocess.run(
-                ["rsvg-convert", "-f", "pdf", "-o", f"{base}.pdf", svg_path],
-                check=True,
-            )
-            click.secho(f"✅ PDF exported: {base}.pdf", fg="green")
-        except FileNotFoundError:
-            click.secho(
-                "❌ rsvg-convert not found. Rebuild: make setup-rebuild", fg="red"
-            )
+        if export_pdf:
+            click.echo("📄 Converting to PDF...")
+            try:
+                subprocess.run(
+                    ["rsvg-convert", "-f", "pdf", "-o", f"{base}.pdf", svg_path],
+                    check=True,
+                )
+                click.secho(f"✅ PDF exported: {base}.pdf", fg="green")
+            except FileNotFoundError:
+                click.secho(
+                    "❌ rsvg-convert not found. Rebuild: make setup-rebuild",
+                    fg="red",
+                )
 
-    if export_png:
-        click.echo("🖼️  Converting to PNG...")
-        try:
-            subprocess.run(
-                [
-                    "rsvg-convert",
-                    "-f",
-                    "png",
-                    "--dpi-x",
-                    "150",
-                    "--dpi-y",
-                    "150",
-                    "-o",
-                    f"{base}.png",
-                    svg_path,
-                ],
-                check=True,
-            )
-            click.secho(f"✅ PNG exported: {base}.png", fg="green")
-        except FileNotFoundError:
-            click.secho(
-                "❌ rsvg-convert not found. Rebuild: make setup-rebuild", fg="red"
-            )
-
-    if not export_svg and os.path.exists(svg_path):
-        os.remove(svg_path)
+        if export_png:
+            click.echo("🖼️  Converting to PNG...")
+            try:
+                subprocess.run(
+                    [
+                        "rsvg-convert",
+                        "-f",
+                        "png",
+                        "--dpi-x",
+                        "150",
+                        "--dpi-y",
+                        "150",
+                        "-o",
+                        f"{base}.png",
+                        svg_path,
+                    ],
+                    check=True,
+                )
+                click.secho(f"✅ PNG exported: {base}.png", fg="green")
+            except FileNotFoundError:
+                click.secho(
+                    "❌ rsvg-convert not found. Rebuild: make setup-rebuild",
+                    fg="red",
+                )
+    finally:
+        if not export_svg and os.path.exists(svg_path):
+            os.remove(svg_path)
 
 
 # ---------------------------------------------------------------------------
@@ -811,8 +827,13 @@ def export_puml(
     if mode_classes:
         all_models: dict[str, list[dict]] = {}
         for package, fpath in feature_paths.items():
-            for org_dir in os.listdir(os.path.join(fpath, "src")):
-                models_path = os.path.join(fpath, "src", org_dir, package, "models.py")
+            src_root = os.path.join(fpath, "src")
+            if not os.path.isdir(src_root):
+                continue
+            for org_dir in os.listdir(src_root):
+                models_path = os.path.join(
+                    src_root, org_dir, package, "models.py"
+                )
                 if os.path.isfile(models_path):
                     parsed = _parse_models(models_path)
                     if parsed:

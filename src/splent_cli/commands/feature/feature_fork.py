@@ -35,7 +35,9 @@ def feature_fork(feature_name, version):
     )
     resp = requests.post(api_url, headers=headers, json={"default_branch_only": False})
     if resp.status_code not in (201, 202):
-        click.secho(f"❌ Failed: {resp.status_code} {resp.text}", fg="red")
+        click.secho(f"❌ Fork failed (HTTP {resp.status_code}).", fg="red")
+        if os.getenv("SPLENT_DEBUG"):
+            click.secho(f"   {resp.text[:300]}", fg="bright_black")
         raise SystemExit(2)
 
     fork_html_url = resp.json()["html_url"]

@@ -109,8 +109,11 @@ def db_migrate(feature):
 
         try:
             alembic_migrate(directory=mdir, message=feat)
-        except Exception:
-            pass
+        except Exception as e:
+            if os.getenv("SPLENT_DEBUG"):
+                click.secho(
+                    f"  ⚠️  {feat}: migration generation skipped ({e})", fg="yellow"
+                )
         finally:
             alembic_logger.setLevel(prev_level)
 

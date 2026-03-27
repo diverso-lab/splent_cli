@@ -26,7 +26,7 @@ def _resolve_feature_order(features_raw: list[str]) -> list[str]:
             uvl_file = uvl_cfg.get("file")
             if uvl_file:
                 uvl_path = os.path.join(product_dir, "uvl", uvl_file)
-        except Exception:
+        except (OSError, KeyError, AttributeError):
             pass
 
     return FeatureLoadOrderResolver().resolve(features_raw, uvl_path)

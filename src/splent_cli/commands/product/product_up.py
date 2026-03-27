@@ -6,6 +6,22 @@ from splent_cli.services import compose, context
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
+def _check_docker_running():
+    """Exit with a clear message if the Docker daemon is not reachable."""
+    result = subprocess.run(
+        ["docker", "info"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.secho(
+            "❌ Docker daemon is not running or not reachable.\n"
+            "   Start Docker and try again.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+
 @click.command(
     "product:up",
     short_help="Start the active product and all its features with Docker Compose.",
@@ -22,9 +38,13 @@ def product_up(dev, prod):
         click.echo("❌ No environment specified. Use --dev, --prod or set SPLENT_ENV.")
         raise SystemExit(1)
 
+    _check_docker_running()
+
     env = context.resolve_env(dev, prod)
     product = context.require_app()
     product_path = compose.product_path(product, str(context.workspace()))
+
+    failed: list[str] = []
 
     def launch(name, docker_dir):
         compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
@@ -44,6 +64,7 @@ def product_up(dev, prod):
             click.secho(
                 f"❌  {name}: failed to start (exit {result.returncode})", fg="red"
             )
+            failed.append(name)
         else:
             click.echo(f"✅  {name}: started successfully")
 
@@ -62,5 +83,16 @@ def product_up(dev, prod):
         clean = compose.normalize_feature_ref(feat)
         launch(clean, compose.feature_docker_dir(ws, clean))
 
-    # Launch product last
+    if failed:
+        click.secho(
+            f"\n❌ {len(failed)} service(s) failed to start: {', '.join(failed)}\n"
+            "   The product was not launched. Fix the failing services and retry.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+    # Launch product last — only if all feature services started successfully
     launch(product, os.path.join(product_path, "docker"))
+
+    if failed:
+        raise SystemExit(1)

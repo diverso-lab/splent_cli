@@ -53,7 +53,7 @@ def feature_delete(feature_identifier, version, force):
             try:
                 with open(pyproject_path, "r", encoding="utf-8") as f:
                     content = f.read()
-            except Exception:
+            except OSError:
                 continue
 
             if f"{feature_name}@{version}" in content:
@@ -91,7 +91,7 @@ def feature_delete(feature_identifier, version, force):
     try:
         shutil.rmtree(cache_dir)
         click.echo(f"🧹 Deleted: {cache_dir}")
-    except Exception as e:
+    except OSError as e:
         click.echo(f"❌ Failed to delete: {e}")
         raise SystemExit(1)
 

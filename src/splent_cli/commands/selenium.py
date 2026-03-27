@@ -43,7 +43,11 @@ def selenium(module):
             test_command = ["python"] + selenium_test_paths
 
         click.echo(f"Running Selenium tests with command: {' '.join(test_command)}")
-        subprocess.run(test_command, check=True)
+        try:
+            subprocess.run(test_command, check=True)
+        except subprocess.CalledProcessError:
+            click.secho("❌ Selenium tests failed.", fg="red")
+            raise SystemExit(1)
 
     # Validate module if provided
     if module:

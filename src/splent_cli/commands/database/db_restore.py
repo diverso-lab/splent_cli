@@ -57,11 +57,13 @@ def db_restore(filename, yes):
             raise SystemExit(0)
 
     try:
+        env = {**os.environ, "MYSQL_PWD": password or ""}
         with open(filename, "rb") as sql_file:
             subprocess.run(
-                ["mysql", f"-h{host}", f"-u{user}", f"-p{password}", database],
+                ["mysql", f"-h{host}", f"-u{user}", database],
                 stdin=sql_file,
                 check=True,
+                env=env,
             )
         click.secho(f"✅ Database restored from: {filename}", fg="green")
     except subprocess.CalledProcessError as e:

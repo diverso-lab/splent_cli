@@ -197,10 +197,11 @@ def _edit_one(
         return False
 
     if not os.path.exists(editable_path):
+        import shutil
         click.echo(f"     📦 Creating editable copy → {editable_path}")
-        subprocess.run(["rm", "-rf", editable_path], check=True)
         result = subprocess.run(["cp", "-r", versioned_path, editable_path])
         if result.returncode != 0:
+            shutil.rmtree(editable_path, ignore_errors=True)
             click.secho("     ❌ Failed to copy feature to editable path.", fg="red")
             return False
         # Unlock files so the editable copy is writable
@@ -218,10 +219,12 @@ def _edit_one(
     if os.path.islink(old):
         os.unlink(old)
     # Always recreate the symlink to ensure it points to workspace root
-    if os.path.islink(new):
-        os.unlink(new)
     rel_target = os.path.relpath(editable_path, product_features_dir)
-    os.symlink(rel_target, new)
+    try:
+        os.symlink(rel_target, new)
+    except FileExistsError:
+        os.unlink(new)
+        os.symlink(rel_target, new)
 
     # Reinstall via pip in the product's web container so the running
     # Flask process picks up the new location without a manual restart.

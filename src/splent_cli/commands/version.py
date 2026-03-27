@@ -28,7 +28,7 @@ def _pyproject_version(pyproject_path: str) -> str | None:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
         return data.get("project", {}).get("version")
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return None
 
 
@@ -49,7 +49,7 @@ def _product_version(app_path: str) -> str | None:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
         return data.get("project", {}).get("version")
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return None
 
 
@@ -61,7 +61,7 @@ def _declared_features(app_path: str) -> list:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
         return read_features_from_data(data)
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return []
 
 

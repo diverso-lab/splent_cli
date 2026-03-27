@@ -139,7 +139,7 @@ def check_features():
                     _warn("Uncommitted changes")
                 else:
                     _ok("Git clean")
-            except (subprocess.TimeoutExpired, FileNotFoundError):
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
                 _warn("Could not check git status")
 
         click.echo()

@@ -24,6 +24,14 @@ def load_env():
     return data
 
 
+def _validate_env_value(value: str, label: str) -> str:
+    """Strip whitespace and reject values containing newlines."""
+    value = value.strip()
+    if "\n" in value or "\r" in value:
+        raise click.ClickException(f"{label} must not contain newlines.")
+    return value
+
+
 def write_env(env: dict):
     """Write dict back to .env."""
     lines = [f"{k}={v}" for k, v in env.items()]
@@ -62,6 +70,9 @@ def set_github_interactive():
     user = click.prompt("GitHub username", type=str)
     token = click.prompt("GitHub personal access token", hide_input=True)
 
+    user = _validate_env_value(user, "GitHub username")
+    token = _validate_env_value(token, "GitHub token")
+
     set_var("GITHUB_USER", user)
     set_var("GITHUB_TOKEN", token)
 
@@ -72,6 +83,8 @@ def set_github_interactive():
 def set_pypi_interactive():
     username = "__token__"
     token = click.prompt("PyPI token", hide_input=True)
+
+    token = _validate_env_value(token, "PyPI token")
 
     set_var("PYPI_USERNAME", username)
     set_var("PYPI_TOKEN", token)

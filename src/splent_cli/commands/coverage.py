@@ -36,5 +36,8 @@ def coverage(module_name, html):
 
     try:
         subprocess.run(coverage_cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        click.echo(click.style(f"Error running coverage: {e}", fg="red"))
+    except subprocess.CalledProcessError:
+        click.echo(
+            click.style("❌ Coverage run failed (tests may be failing).", fg="red")
+        )
+        raise SystemExit(1)

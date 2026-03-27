@@ -307,6 +307,10 @@ def _bump(version_str: str, bump_type: str) -> str:
     """Return the next version string for the given bump type (major/minor/patch)."""
     clean = version_str.lstrip("v")
     parts = clean.split(".")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        raise click.ClickException(
+            f"Cannot parse version '{version_str}' — expected format vMAJOR.MINOR.PATCH (e.g. v1.2.3)."
+        )
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
 
     if bump_type == "major":
@@ -384,12 +388,32 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
         clone_url = f"https://github.com/{org_github}/{feature_name}.git"
 
     click.echo(f"📥 Creating versioned snapshot: {snapshot_path}")
-    click.echo(f"🔗 GitHub repo: {clone_url}")
-
-    subprocess.run(
-        ["git", "clone", "--branch", version, "--depth", "1", clone_url, snapshot_path],
-        check=True,
+    display_url = (
+        f"git@github.com:{org_github}/{feature_name}.git"
+        if use_ssh
+        else f"https://github.com/{org_github}/{feature_name}.git"
     )
+    click.echo(f"🔗 GitHub repo: {display_url}")
+
+    try:
+        subprocess.run(
+            [
+                "git", "clone",
+                "--branch", version,
+                "--depth", "1",
+                clone_url,
+                snapshot_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError:
+        click.secho(
+            f"❌ Failed to create versioned snapshot"
+            f" for {feature_name}@{version}.",
+            fg="red",
+        )
+        raise SystemExit(1)
 
     from splent_cli.utils.cache_utils import make_feature_readonly
 

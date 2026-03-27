@@ -1,5 +1,4 @@
 import os
-import sys
 import click
 from splent_cli.services import context
 
@@ -20,11 +19,12 @@ def select_app(app_name, shell):
     # Check product exists
     if not os.path.isdir(product_path):
         click.echo(f"Error: product '{app_name}' not found in {workspace}", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
 
     # Ensure .env exists
     if not os.path.exists(workspace_env_path):
-        open(workspace_env_path, "w").close()
+        from pathlib import Path
+        Path(workspace_env_path).touch()
 
     # Update .env
     lines = []

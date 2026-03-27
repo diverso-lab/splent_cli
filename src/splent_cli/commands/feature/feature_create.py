@@ -73,6 +73,14 @@ def make_feature(full_name):
         return
 
     # --- Jinja setup ---
+    templates_dir = PathUtils.get_splent_cli_templates_dir()
+    if not os.path.isdir(templates_dir):
+        click.secho(
+            f"❌ Templates directory not found: {templates_dir}\n"
+            "   Ensure the CLI is installed correctly.",
+            fg="red",
+        )
+        raise SystemExit(1)
     env = setup_jinja_env()
     template_ctx = {
         "feature_name": feature_name,
@@ -160,27 +168,35 @@ def make_feature(full_name):
 
     # --- Permissions (UID:GID 1000:1000) ---
     uid, gid = 1000, 1000
+    chown_failed = False
     for root, dirs, files in os.walk(feature_dir):
         try:
             os.chown(root, uid, gid)
         except PermissionError:
-            pass
+            chown_failed = True
         for d in dirs:
             try:
                 os.chown(os.path.join(root, d), uid, gid)
             except PermissionError:
-                pass
+                chown_failed = True
         for f in files:
             try:
                 os.chown(os.path.join(root, f), uid, gid)
             except PermissionError:
-                pass
+                chown_failed = True
 
     click.echo(
         click.style(f"✅ Feature '{full_name}' created successfully!", fg="green")
     )
     click.echo(click.style(f"📦 Created at: {feature_dir}", fg="blue"))
     click.echo(click.style(f"🏷️  Namespace: {org_safe}", fg="bright_black"))
+
+    if chown_failed:
+        click.secho(
+            "⚠️  Could not set ownership 1000:1000 on some files.\n"
+            "   If running outside the Docker container, this is expected and harmless.",
+            fg="yellow",
+        )
 
 
 cli_command = make_feature

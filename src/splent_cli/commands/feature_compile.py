@@ -1,5 +1,6 @@
 import logging
 import os
+import shlex
 import subprocess
 
 import click
@@ -138,21 +139,16 @@ def _compile_in_container(container_id, feature, watch, production, workspace, p
     if not production:
         cmd_parts.extend(["--devtool=source-map", "--no-cache"])
 
-    shell_cmd = " ".join(cmd_parts)
+    shell_cmd = " ".join(shlex.quote(p) for p in cmd_parts)
+    cd_cmd = f"cd {shlex.quote(product_root)} && {shell_cmd}"
 
     # Inside a container: run webpack directly.
-    # From the host: run via `docker exec` so webpack uses the container's node_modules.
+    # From the host: run via `docker exec` so webpack uses the container's
+    # node_modules.
     if container_id:
-        run_cmd = [
-            "docker",
-            "exec",
-            container_id,
-            "bash",
-            "-c",
-            f"cd {product_root} && {shell_cmd}",
-        ]
+        run_cmd = ["docker", "exec", container_id, "bash", "-c", cd_cmd]
     else:
-        run_cmd = ["bash", "-c", f"cd {product_root} && {shell_cmd}"]
+        run_cmd = ["bash", "-c", cd_cmd]
 
     try:
         if watch:

@@ -5,8 +5,17 @@ import click
 
 
 def workspace() -> Path:
-    """Return the SPLENT workspace root (WORKING_DIR env var, defaults to /workspace)."""
-    return Path(os.getenv("WORKING_DIR", "/workspace"))
+    """Return the SPLENT workspace root (WORKING_DIR env var)."""
+    path = Path(os.getenv("WORKING_DIR", "/workspace"))
+    if not path.exists():
+        click.secho(
+            f"❌ Workspace not found: {path}\n"
+            f"   Set WORKING_DIR to the correct path"
+            f" or run: source .env",
+            fg="red",
+        )
+        raise SystemExit(1)
+    return path
 
 
 def require_app() -> str:

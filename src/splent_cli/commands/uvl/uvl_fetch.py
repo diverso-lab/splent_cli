@@ -1,5 +1,4 @@
 import os
-import sys
 
 import click
 import requests
@@ -48,7 +47,7 @@ def fetch_uvl(force):
     r = requests.get(url, timeout=20)
     if r.status_code != 200:
         click.echo(f"Error downloading UVL ({r.status_code})", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
 
     with open(target, "w", encoding="utf-8") as f:
         f.write(r.text)

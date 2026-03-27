@@ -74,11 +74,12 @@ def feature_add(full_name):
     os.makedirs(product_features_dir, exist_ok=True)
 
     link_path = os.path.join(product_features_dir, feature_name)
-    if os.path.islink(link_path) or os.path.exists(link_path):
-        os.unlink(link_path)
-
     rel_target = os.path.relpath(feature_dir, product_features_dir)
-    os.symlink(rel_target, link_path)
+    try:
+        os.symlink(rel_target, link_path)
+    except FileExistsError:
+        os.unlink(link_path)
+        os.symlink(rel_target, link_path)
     click.echo(f"🔗 Linked {link_path} → {rel_target}")
 
     # --------------------------

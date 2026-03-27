@@ -28,7 +28,7 @@ def _find_products_using_editable(workspace, feature_name, ns_safe):
         try:
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError):
             continue
 
         features = read_features_from_data(data)
@@ -68,7 +68,7 @@ def feature_discard(feature_name, namespace):
         click.echo(
             f"ℹ️ No editable folder found for {feature_name}. Nothing to discard."
         )
-        raise SystemExit(0)
+        return
 
     click.echo(f"🧩 Editable feature detected at:\n   {editable_path}")
 

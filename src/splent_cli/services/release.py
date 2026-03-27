@@ -48,11 +48,9 @@ def update_version(py_path: str, normalized: str):
 
 
 def commit_local_changes(cwd: str, version: str, subject: str = "bump version"):
-    """Stage, commit, and push all local changes in the repo at cwd."""
     r = subprocess.run(
         ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=cwd
     )
-
     if not r.stdout.strip():
         click.echo("✅ Working tree clean.")
         return
@@ -63,30 +61,61 @@ def commit_local_changes(cwd: str, version: str, subject: str = "bump version"):
     if not click.confirm("Commit and push?", default=True):
         raise SystemExit("🚫 Release cancelled.")
 
-    subprocess.run(["git", "add", "-A"], cwd=cwd)
-    subprocess.run(["git", "commit", "-m", f"chore: {subject} to {version}"], cwd=cwd)
-    subprocess.run(["git", "push", "origin", "main"], cwd=cwd)
+    try:
+        subprocess.run(["git", "add", "-A"], cwd=cwd, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"chore: {subject} to {version}"],
+            cwd=cwd, check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "push", "origin", "main"],
+            cwd=cwd, check=True, capture_output=True,
+        )
+    except subprocess.CalledProcessError as e:
+        click.secho(f"❌ Git operation failed: {e.stderr.strip() if e.stderr else e}", fg="red")
+        click.secho("   The version was bumped in pyproject.toml but not committed.", fg="yellow")
+        click.secho("   Fix the git issue and re-run, or revert manually.", fg="yellow")
+        raise SystemExit(1)
 
     click.echo("☁️ Changes committed and pushed.")
 
 
 def create_and_push_git_tag(cwd: str, version: str):
     """Create an annotated tag and push it to origin."""
-    subprocess.run(["git", "fetch", "origin", "--tags"], cwd=cwd)
-    tags = subprocess.run(
-        ["git", "tag"], capture_output=True, text=True, cwd=cwd
-    ).stdout.splitlines()
-
-    if version not in tags:
+    try:
         subprocess.run(
-            ["git", "tag", "-a", version, "-m", f"Release {version}"], cwd=cwd
+            ["git", "fetch", "origin", "--tags"],
+            cwd=cwd, check=True, capture_output=True,
         )
-        click.echo(f"🏷️ Tag {version} created.")
-    else:
-        click.echo("⚠️ Tag already exists locally.")
+        tags = subprocess.run(
+            ["git", "tag"],
+            capture_output=True, text=True, cwd=cwd, check=True,
+        ).stdout.splitlines()
 
-    subprocess.run(["git", "push", "origin", version], cwd=cwd)
-    click.echo("☁️ Tag pushed.")
+        if version not in tags:
+            subprocess.run(
+                ["git", "tag", "-a", version, "-m", f"Release {version}"],
+                cwd=cwd, check=True, capture_output=True,
+            )
+            click.echo(f"🏷️ Tag {version} created.")
+        else:
+            click.echo("⚠️ Tag already exists locally.")
+
+        subprocess.run(
+            ["git", "push", "origin", version],
+            cwd=cwd, check=True, capture_output=True,
+        )
+        click.echo("☁️ Tag pushed.")
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.strip() if e.stderr else e
+        click.secho(
+            f"❌ Git tag operation failed: {stderr}", fg="red"
+        )
+        click.secho(
+            "   The commit was pushed but the tag may not be on remote.",
+            fg="yellow",
+        )
+        raise SystemExit(1)
 
 
 def create_github_release(repo: str, version: str, token: str | None):
@@ -142,17 +171,37 @@ def create_github_release(repo: str, version: str, token: str | None):
 
 
 def build_and_upload_pypi(path: str):
-    """Build the package and upload it to PyPI, running all commands inside path."""
+    """Build the package and upload it to PyPI."""
     click.echo("📦 Building package...")
     subprocess.run(["rm", "-rf", "dist"], cwd=path)
-    subprocess.run([sys.executable, "-m", "build"], check=True, cwd=path)
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "build"], check=True, cwd=path
+        )
+    except subprocess.CalledProcessError:
+        click.secho(
+            "❌ Package build failed. Check the output above.", fg="red"
+        )
+        raise SystemExit(1)
 
     click.echo("📤 Uploading to PyPI...")
-    subprocess.run(
-        [sys.executable, "-m", "twine", "upload", "dist/*"],
-        env=os.environ.copy(),
-        check=True,
-        cwd=path,
-    )
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "twine", "upload", "dist/*"],
+            env=os.environ.copy(),
+            check=True,
+            cwd=path,
+        )
+    except subprocess.CalledProcessError:
+        click.secho(
+            "❌ PyPI upload failed. Check credentials and network.",
+            fg="red",
+        )
+        click.secho(
+            "   The package was built but not uploaded."
+            " Run manually: twine upload dist/*",
+            fg="yellow",
+        )
+        raise SystemExit(1)
 
     click.echo("✅ PyPI upload complete.")

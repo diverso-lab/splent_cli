@@ -108,7 +108,7 @@ def _scan_feature_imports(
             try:
                 with open(filepath, "r", encoding="utf-8") as fh:
                     content = fh.read()
-            except Exception:
+            except (OSError, PermissionError):
                 continue
 
             # Find imports: from splent_io.splent_feature_X... or import splent_io.splent_feature_X

@@ -41,27 +41,57 @@ def release_docker_image(product, version, docker_dir):
     password = os.getenv("DOCKERHUB_PASSWORD")
 
     click.echo("🐳 Logging into Docker Hub...")
-    subprocess.run(["docker", "login", "-u", username, "-p", password], check=True)
+    try:
+        subprocess.run(
+            ["docker", "login", "-u", username, "--password-stdin"],
+            input=password,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError:
+        click.secho(
+            "❌ Docker Hub login failed."
+            " Check DOCKERHUB_USERNAME and DOCKERHUB_PASSWORD.",
+            fg="red",
+        )
+        raise SystemExit(1)
 
     image_name = f"{username}/{product}"
 
     click.echo("🐳 Building Docker image...")
-    subprocess.run(
-        [
-            "docker",
-            "build",
-            "-t",
-            f"{image_name}:{version}",
-            "-t",
-            f"{image_name}:latest",
-            docker_dir,
-        ],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "docker",
+                "build",
+                "-t",
+                f"{image_name}:{version}",
+                "-t",
+                f"{image_name}:latest",
+                docker_dir,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        click.secho("❌ Docker image build failed.", fg="red")
+        raise SystemExit(1)
 
     click.echo("📤 Pushing Docker images...")
-    subprocess.run(["docker", "push", f"{image_name}:{version}"], check=True)
-    subprocess.run(["docker", "push", f"{image_name}:latest"], check=True)
+    try:
+        subprocess.run(
+            ["docker", "push", f"{image_name}:{version}"], check=True
+        )
+        subprocess.run(
+            ["docker", "push", f"{image_name}:latest"], check=True
+        )
+    except subprocess.CalledProcessError:
+        click.secho(
+            "❌ Docker image push failed."
+            " Check network and DockerHub permissions.",
+            fg="red",
+        )
+        raise SystemExit(1)
 
     click.echo("✅ Docker Hub release complete.")
 

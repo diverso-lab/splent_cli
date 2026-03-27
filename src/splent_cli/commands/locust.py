@@ -181,11 +181,17 @@ def stop():
         stop_command = ["docker", "stop", "locust_container"]
         rm_command = ["docker", "rm", "locust_container"]
 
-        # Stop the Locust container if it is running
-        subprocess.run(stop_command)
+        result = subprocess.run(stop_command, capture_output=True)
+        if result.returncode != 0:
+            click.secho(
+                "⚠️  Could not stop Locust container.", fg="yellow"
+            )
 
-        # Remove the Locust container
-        subprocess.run(rm_command)
+        result = subprocess.run(rm_command, capture_output=True)
+        if result.returncode != 0:
+            click.secho(
+                "⚠️  Could not remove Locust container.", fg="yellow"
+            )
 
     if working_dir == "/workspace/":
         stop_docker_locust()

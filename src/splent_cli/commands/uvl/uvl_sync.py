@@ -66,9 +66,11 @@ def _parse_feature_metadata_from_uvl_text(uvl_text: str) -> dict[str, dict]:
         body = m.group(2)
 
         fields = {}
-        # capture key 'value' (single quotes), allow commas/spaces
-        for kv in re.finditer(r"([A-Za-z_][A-Za-z0-9_]*)\s*'([^']*)'\s*", body):
-            fields[kv.group(1)] = kv.group(2)
+        # capture key 'value' or key "value" (single or double quotes)
+        for kv in re.finditer(
+            r"""([A-Za-z_][A-Za-z0-9_]*)\s*(?:'([^']*)'|"([^"]*)")\s*""", body
+        ):
+            fields[kv.group(1)] = kv.group(2) if kv.group(2) is not None else kv.group(3)
 
         if fields:
             meta[fname] = fields

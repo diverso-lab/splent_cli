@@ -70,7 +70,10 @@ def _load(product_path: str) -> dict:
     if not p.exists():
         return {"schema_version": SCHEMA_VERSION, "features": {}}
     with open(p, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    if not isinstance(data.get("features"), dict):
+        data["features"] = {}
+    return data
 
 
 def _save(product_path: str, product_name: str, data: dict) -> None:
@@ -190,7 +193,7 @@ def get_dependents(product_path: str, feature_name: str) -> list[str]:
             )
             if feature_name in requires:
                 dependents.append(name)
-        except Exception:
+        except (tomllib.TOMLDecodeError, OSError):
             continue
 
     return dependents

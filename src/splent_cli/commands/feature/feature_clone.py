@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import requests
 import click
@@ -22,7 +23,7 @@ def _get_latest_tag(namespace, repo) -> str | None:
         r.raise_for_status()
         tags = r.json()
         return tags[0]["name"] if tags else None
-    except Exception:
+    except (requests.RequestException, KeyError, IndexError, ValueError):
         return None
 
 
@@ -33,20 +34,26 @@ def _build_repo_url(namespace, repo):
       1. If SPLENT_USE_SSH=true → SSH
       2. Else if GITHUB_TOKEN exists → HTTPS with token
       3. Else → HTTPS read-only
+
+    Returns a tuple (real_url, display_url) where display_url never contains a token.
     """
     use_ssh = os.getenv("SPLENT_USE_SSH", "false").lower() == "true"
     token = os.getenv("GITHUB_TOKEN")
 
     if use_ssh:
         click.secho("🔐 SSH mode enabled (SPLENT_USE_SSH=true)", fg="cyan")
-        return f"git@github.com:{namespace}/{repo}.git"
+        url = f"git@github.com:{namespace}/{repo}.git"
+        return url, url
 
     if token:
         click.secho("🌐 HTTPS with token (SPLENT_USE_SSH not true)", fg="cyan")
-        return f"https://{token}@github.com/{namespace}/{repo}.git"
+        real_url = f"https://{token}@github.com/{namespace}/{repo}.git"
+        display_url = f"https://github.com/{namespace}/{repo}.git"
+        return real_url, display_url
 
     click.secho("🌍 HTTPS read-only (no token, no SSH)", fg="yellow")
-    return f"https://github.com/{namespace}/{repo}.git"
+    url = f"https://github.com/{namespace}/{repo}.git"
+    return url, url
 
 
 def _parse_full_name(full_name: str):
@@ -65,6 +72,11 @@ def _parse_full_name(full_name: str):
         version = None
 
     return namespace, repo, version
+
+
+def _validate_identifier_part(value: str, label: str):
+    if not re.fullmatch(r'[a-zA-Z0-9_\-\.]+', value):
+        raise SystemExit(f"❌ Invalid {label}: '{value}'. Only letters, digits, - _ . allowed.")
 
 
 # =====================================================================
@@ -88,6 +100,11 @@ def feature_clone(full_name):
 
     namespace, repo, version = _parse_full_name(full_name)
 
+    _validate_identifier_part(namespace, "namespace")
+    _validate_identifier_part(repo, "repo")
+    if version:
+        _validate_identifier_part(version, "version")
+
     if not version:
         click.echo(
             f"🔍 No version provided → fetching latest tag for {namespace}/{repo}..."
@@ -101,7 +118,7 @@ def feature_clone(full_name):
             raise SystemExit(1)
 
     # Build Git URL based on your ownership
-    fork_url = _build_repo_url(namespace, repo)
+    fork_url, display_url = _build_repo_url(namespace, repo)
 
     # Local destination
     namespace_safe = namespace.replace("-", "_").replace(".", "_")
@@ -115,7 +132,7 @@ def feature_clone(full_name):
         click.secho(f"⚠️ Folder already exists: {local_path}", fg="yellow")
         return
 
-    click.secho(f"⬇️ Cloning {fork_url}@{version}", fg="cyan")
+    click.secho(f"⬇️ Cloning {display_url}@{version}", fg="cyan")
 
     # Try clone specific tag/branch (suppress git noise)
     try:
@@ -138,6 +155,8 @@ def feature_clone(full_name):
             text=True,
         )
     except subprocess.CalledProcessError:
+        import shutil
+        shutil.rmtree(local_path, ignore_errors=True)
         click.secho(
             f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow"
         )
@@ -149,6 +168,7 @@ def feature_clone(full_name):
                 text=True,
             )
         except subprocess.CalledProcessError:
+            shutil.rmtree(local_path, ignore_errors=True)
             click.secho(
                 f"❌ Repository '{namespace}/{repo}' not found or not accessible.",
                 fg="red",
