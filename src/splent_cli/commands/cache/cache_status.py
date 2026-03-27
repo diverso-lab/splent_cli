@@ -30,12 +30,17 @@ def _get_workspace_root_features(workspace: Path) -> dict:
     for entry in sorted(workspace.iterdir()):
         if not entry.is_dir() or not entry.name.startswith("splent_feature_"):
             continue
-        # Detect namespace from the feature's src/ structure
+        # Must have pyproject.toml to be a real feature
+        if not (entry / "pyproject.toml").exists():
+            continue
         src = entry / "src"
         if not src.is_dir():
             continue
         for ns_dir in src.iterdir():
-            if ns_dir.is_dir() and not ns_dir.name.startswith("_"):
+            if (ns_dir.is_dir()
+                    and not ns_dir.name.startswith(("_", "."))
+                    and "." not in ns_dir.name
+                    and (ns_dir / entry.name).is_dir()):
                 grouped[f"{ns_dir.name}/{entry.name}"].append("workspace")
                 break
     return grouped

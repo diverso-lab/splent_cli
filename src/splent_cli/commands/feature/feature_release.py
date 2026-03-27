@@ -359,8 +359,9 @@ def _semver_wizard(ns_github: str, feature_name: str) -> str:
 # =====================================================================
 def create_versioned_snapshot(namespace, feature_name, version, workspace):
     org_github = namespace.replace("_", "-")
+    namespace_fs = namespace.replace("-", "_").replace(".", "_")
 
-    cache_root = os.path.join(workspace, ".splent_cache", "features", namespace)
+    cache_root = os.path.join(workspace, ".splent_cache", "features", namespace_fs)
     snapshot_path = os.path.join(cache_root, f"{feature_name}@{version}")
 
     token = os.getenv("GITHUB_TOKEN")
