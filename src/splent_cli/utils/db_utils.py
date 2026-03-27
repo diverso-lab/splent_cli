@@ -11,6 +11,7 @@ def check_db_connection(app) -> bool:
     """
     try:
         from splent_framework.db import db
+
         with app.app_context():
             with db.engine.connect():
                 pass
@@ -18,7 +19,9 @@ def check_db_connection(app) -> bool:
     except Exception as e:
         click.echo()
         click.secho("❌ Cannot connect to the database.", fg="red", bold=True)
-        click.secho(f"   {e.__class__.__name__}: {e.args[0] if e.args else e}", fg="red")
+        click.secho(
+            f"   {e.__class__.__name__}: {e.args[0] if e.args else e}", fg="red"
+        )
         click.echo()
         click.secho(
             "   Make sure the product is running: splent product:up --dev",

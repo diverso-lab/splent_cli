@@ -21,9 +21,7 @@ def _resolve_cache_path(
     Return (cache_path, org_safe, feature_name) for a feature identifier,
     or None if not found.
     """
-    _, ns_github, ns_fs, rest = compose.parse_feature_identifier(
-        feature_identifier
-    )
+    _, ns_github, ns_fs, rest = compose.parse_feature_identifier(feature_identifier)
     feature_name = rest.split("@")[0]
     cache_root = workspace / ".splent_cache" / "features"
 
@@ -63,7 +61,8 @@ def _print_diff_lines(diff: list[str]) -> None:
 )
 @click.argument("feature_identifier")
 @click.option(
-    "--verbose", "-v",
+    "--verbose",
+    "-v",
     is_flag=True,
     help="Show full unified diff for changed files.",
 )
@@ -82,9 +81,7 @@ def feature_drift(feature_identifier, verbose):
     workspace = context.workspace()
     result = _resolve_cache_path(feature_identifier, workspace)
     if result is None:
-        click.secho(
-            f"❌ Feature '{feature_identifier}' not found in cache.", fg="red"
-        )
+        click.secho(f"❌ Feature '{feature_identifier}' not found in cache.", fg="red")
         raise SystemExit(1)
 
     cache_path, org_safe, feature_name = result

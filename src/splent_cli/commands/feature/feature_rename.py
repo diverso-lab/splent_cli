@@ -4,7 +4,10 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import write_features_to_data
+from splent_cli.utils.feature_utils import (
+    read_features_from_data,
+    write_features_to_data,
+)
 
 
 @click.command(

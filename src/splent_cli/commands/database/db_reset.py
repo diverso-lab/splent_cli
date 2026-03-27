@@ -92,7 +92,11 @@ def db_reset(yes):
     if not dirs:
         click.echo(click.style("⚠️  No feature migrations found.", fg="yellow"))
     else:
-        click.echo(click.style(f"⬆️  Applying migrations for {len(dirs)} features...", fg="cyan"))
+        click.echo(
+            click.style(
+                f"⬆️  Applying migrations for {len(dirs)} features...", fg="cyan"
+            )
+        )
         for feat, mdir in dirs.items():
             try:
                 alembic_upgrade(directory=mdir)
@@ -109,8 +113,13 @@ def db_reset(yes):
                 if info:
                     key, ns, name, version = info
                     advance_state(
-                        product_path, product_name, key,
-                        to="migrated", namespace=ns, name=name, version=version,
+                        product_path,
+                        product_name,
+                        key,
+                        to="migrated",
+                        namespace=ns,
+                        name=name,
+                        version=version,
                     )
             except Exception as e:
                 click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))

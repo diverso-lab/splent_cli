@@ -1,6 +1,7 @@
 """
 check:features — Validate feature cache, symlinks, pip install, and git state.
 """
+
 import os
 import subprocess
 import importlib.metadata
@@ -20,7 +21,9 @@ def _pkg_installed(name: str) -> bool:
         return False
 
 
-@click.command("check:features", short_help="Validate feature cache, symlinks, and install state.")
+@click.command(
+    "check:features", short_help="Validate feature cache, symlinks, and install state."
+)
 def check_features():
     """Check every declared feature: cache entry, symlink, pip install, git state."""
     workspace = str(context.workspace())
@@ -31,15 +34,18 @@ def check_features():
     ok = fail = warn = 0
 
     def _ok(msg):
-        nonlocal ok; ok += 1
+        nonlocal ok
+        ok += 1
         click.echo(click.style("  [✔] ", fg="green") + msg)
 
     def _fail(msg):
-        nonlocal fail; fail += 1
+        nonlocal fail
+        fail += 1
         click.echo(click.style("  [✖] ", fg="red") + msg)
 
     def _warn(msg):
-        nonlocal warn; warn += 1
+        nonlocal warn
+        warn += 1
         click.echo(click.style("  [⚠] ", fg="yellow") + msg)
 
     click.echo()
@@ -102,7 +108,7 @@ def check_features():
             if os.path.exists(link_path):
                 target = os.readlink(link_path)
                 if os.path.isabs(target):
-                    _warn(f"Symlink uses absolute path (should be relative)")
+                    _warn("Symlink uses absolute path (should be relative)")
                 else:
                     _ok("Symlink OK (relative)")
             else:
@@ -123,7 +129,9 @@ def check_features():
             try:
                 r = subprocess.run(
                     ["git", "-C", feature_dir, "status", "--porcelain"],
-                    capture_output=True, text=True, timeout=5,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
                 )
                 if r.returncode != 0:
                     _warn("Not a git repo")

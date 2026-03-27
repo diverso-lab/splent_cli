@@ -49,8 +49,13 @@ def db_rollback(feature, steps):
             if name == feature:
                 target = "installed" if revision is None else "migrated"
                 advance_state(
-                    product_path, product_name, key,
-                    to=target, namespace=ns, name=name, version=version,
+                    product_path,
+                    product_name,
+                    key,
+                    to=target,
+                    namespace=ns,
+                    name=name,
+                    version=version,
                 )
                 break
     except Exception as e:

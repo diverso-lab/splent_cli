@@ -37,10 +37,12 @@ def _get_workspace_root_features(workspace: Path) -> dict:
         if not src.is_dir():
             continue
         for ns_dir in src.iterdir():
-            if (ns_dir.is_dir()
-                    and not ns_dir.name.startswith(("_", "."))
-                    and "." not in ns_dir.name
-                    and (ns_dir / entry.name).is_dir()):
+            if (
+                ns_dir.is_dir()
+                and not ns_dir.name.startswith(("_", "."))
+                and "." not in ns_dir.name
+                and (ns_dir / entry.name).is_dir()
+            ):
                 grouped[f"{ns_dir.name}/{entry.name}"].append("workspace")
                 break
     return grouped
@@ -75,11 +77,20 @@ def cache_status():
         for i, v in enumerate(sorted_versions):
             connector = "└──" if i == len(sorted_versions) - 1 else "├──"
             if v == "workspace":
-                click.echo(f"    {connector} " + click.style("editable (workspace root)", fg="magenta"))
+                click.echo(
+                    f"    {connector} "
+                    + click.style("editable (workspace root)", fg="magenta")
+                )
             elif v is None:
-                click.echo(f"    {connector} " + click.style("editable (cache)", fg="blue"))
+                click.echo(
+                    f"    {connector} " + click.style("editable (cache)", fg="blue")
+                )
             else:
-                click.echo(f"    {connector} " + click.style(f"@{v}", fg="green") + click.style(" (pinned)", fg="bright_black"))
+                click.echo(
+                    f"    {connector} "
+                    + click.style(f"@{v}", fg="green")
+                    + click.style(" (pinned)", fg="bright_black")
+                )
         click.echo()
 
 

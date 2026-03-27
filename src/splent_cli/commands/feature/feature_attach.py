@@ -125,7 +125,10 @@ def feature_attach(feature_identifier, version):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    from splent_cli.utils.feature_utils import read_features_from_data, write_features_to_data
+    from splent_cli.utils.feature_utils import (
+        read_features_from_data,
+        write_features_to_data,
+    )
 
     features = read_features_from_data(data)
 
@@ -134,8 +137,7 @@ def feature_attach(feature_identifier, version):
     else:
         # Replace bare entry (added by uvl:sync) or old versioned entry if present
         features = [
-            f for f in features
-            if f != bare_name and not f.startswith(f"{bare_name}@")
+            f for f in features if f != bare_name and not f.startswith(f"{bare_name}@")
         ]
         features.append(full_name)
         write_features_to_data(data, features)
@@ -158,8 +160,14 @@ def feature_attach(feature_identifier, version):
     # --- 5️⃣ Update manifest ------------------------------------------------
     key = feature_key(namespace_fs, feature_name, version)
     set_feature_state(
-        product_path, product, key, "declared",
-        namespace=namespace_fs, name=feature_name, version=version, mode="pinned",
+        product_path,
+        product,
+        key,
+        "declared",
+        namespace=namespace_fs,
+        name=feature_name,
+        version=version,
+        mode="pinned",
     )
 
     click.echo("🎯 Feature successfully attached.")

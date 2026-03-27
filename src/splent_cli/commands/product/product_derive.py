@@ -49,7 +49,7 @@ def product_derive(mode):
         raise SystemExit(0)
 
     workspace = str(context.workspace())
-    product   = context.require_app()
+    product = context.require_app()
     product_dir = os.path.join(workspace, product)
 
     click.echo(click.style("\n🧬 SPL Product Derivation — dev\n", fg="cyan", bold=True))
@@ -74,7 +74,7 @@ def product_derive(mode):
     # [pre 2/2] feature:diff --all
     click.echo(click.style("  [2/2] feature:diff --all", fg="bright_black"))
     findings = run_all_product_check(workspace, product_dir)
-    errors   = [f for f in findings if f["severity"] == "error"]
+    errors = [f for f in findings if f["severity"] == "error"]
     warnings = [f for f in findings if f["severity"] == "warning"]
 
     if not errors:
@@ -88,9 +88,7 @@ def product_derive(mode):
             click.secho("        ✅ No conflicts detected.", fg="green")
     else:
         for err in errors:
-            click.secho(
-                f"        🚨 [{err['field']}] {err['message']}", fg="red"
-            )
+            click.secho(f"        🚨 [{err['field']}] {err['message']}", fg="red")
         click.secho("        → Run: splent feature:diff --all", fg="yellow")
         preflight_failed = True
     click.echo()

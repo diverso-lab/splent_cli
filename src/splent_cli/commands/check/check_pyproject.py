@@ -1,6 +1,7 @@
 """
 check:pyproject — Validate the active product's pyproject.toml.
 """
+
 import os
 import re
 
@@ -13,6 +14,7 @@ from splent_cli.utils.feature_utils import read_features_from_data
 
 def _find_missing_pkgs(deps: list) -> list:
     import importlib.metadata
+
     missing = []
     for dep in deps:
         pkg = re.split(r"[=<>!~\[]", dep)[0].strip()
@@ -24,7 +26,9 @@ def _find_missing_pkgs(deps: list) -> list:
     return missing
 
 
-@click.command("check:pyproject", short_help="Validate pyproject.toml and dependencies.")
+@click.command(
+    "check:pyproject", short_help="Validate pyproject.toml and dependencies."
+)
 def check_pyproject():
     """Parse pyproject.toml, check dependencies, and validate feature declarations."""
     workspace = str(context.workspace())
@@ -34,15 +38,18 @@ def check_pyproject():
     ok = fail = warn = 0
 
     def _ok(msg):
-        nonlocal ok; ok += 1
+        nonlocal ok
+        ok += 1
         click.echo(click.style("  [✔] ", fg="green") + msg)
 
     def _fail(msg):
-        nonlocal fail; fail += 1
+        nonlocal fail
+        fail += 1
         click.echo(click.style("  [✖] ", fg="red") + msg)
 
     def _warn(msg):
-        nonlocal warn; warn += 1
+        nonlocal warn
+        warn += 1
         click.echo(click.style("  [⚠] ", fg="yellow") + msg)
 
     click.echo()

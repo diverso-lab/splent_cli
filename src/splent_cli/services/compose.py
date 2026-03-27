@@ -91,7 +91,9 @@ def parse_feature_identifier(identifier: str) -> tuple[str, str, str, str]:
     return namespace, namespace_github, namespace_fs, feature_name
 
 
-def find_main_container(project_name: str, compose_file: str, docker_dir: str) -> str | None:
+def find_main_container(
+    project_name: str, compose_file: str, docker_dir: str
+) -> str | None:
     """Find the main container for a product — the one with /workspace mounted."""
     result = subprocess.run(
         ["docker", "compose", "-p", project_name, "-f", compose_file, "ps", "-q"],
@@ -104,7 +106,13 @@ def find_main_container(project_name: str, compose_file: str, docker_dir: str) -
     for cid in container_ids:
         mounts = (
             subprocess.run(
-                ["docker", "inspect", "-f", "{{ range .Mounts }}{{ .Destination }} {{ end }}", cid],
+                [
+                    "docker",
+                    "inspect",
+                    "-f",
+                    "{{ range .Mounts }}{{ .Destination }} {{ end }}",
+                    cid,
+                ],
                 capture_output=True,
                 text=True,
             )

@@ -2,6 +2,7 @@
 Shared utilities for template drift detection and sync (product:drift,
 product:sync-template, feature:drift, feature:sync-template).
 """
+
 import difflib
 import zlib
 from pathlib import Path
@@ -10,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 try:
     from importlib.metadata import version as _pkg_version
+
     CLI_VERSION = _pkg_version("splent_cli")
 except Exception:
     CLI_VERSION = "dev"
@@ -17,16 +19,16 @@ except Exception:
 
 # ── Jinja helpers ─────────────────────────────────────────────────────────────
 
+
 def _pascalcase(s: str) -> str:
     return "".join(word.capitalize() for word in s.split("_"))
 
 
 def setup_jinja_env() -> Environment:
     from splent_cli.utils.path_utils import PathUtils
+
     env = Environment(
-        loader=FileSystemLoader(
-            searchpath=PathUtils.get_splent_cli_templates_dir()
-        ),
+        loader=FileSystemLoader(searchpath=PathUtils.get_splent_cli_templates_dir()),
         autoescape=select_autoescape(["html", "xml", "j2"]),
     )
     env.filters["pascalcase"] = _pascalcase
@@ -40,6 +42,7 @@ def render_template(template_name: str, ctx: dict) -> str:
 
 
 # ── Template context builders ─────────────────────────────────────────────────
+
 
 def product_ctx(product_name: str) -> dict:
     offset = zlib.crc32(product_name.encode("utf-8")) % 1000
@@ -64,6 +67,7 @@ def feature_ctx(org_safe: str, feature_name: str) -> dict:
 
 # ── Diff helper ───────────────────────────────────────────────────────────────
 
+
 def file_diff(path: Path, expected: str) -> list[str] | None:
     """Return unified diff lines if file differs from expected, else None."""
     if not path.exists():
@@ -71,27 +75,34 @@ def file_diff(path: Path, expected: str) -> list[str] | None:
     current = path.read_text(encoding="utf-8", errors="replace")
     if current == expected:
         return None
-    return list(difflib.unified_diff(
-        current.splitlines(keepends=True),
-        expected.splitlines(keepends=True),
-        fromfile=f"{path.name} (current)",
-        tofile=f"{path.name} (template)",
-    ))
+    return list(
+        difflib.unified_diff(
+            current.splitlines(keepends=True),
+            expected.splitlines(keepends=True),
+            fromfile=f"{path.name} (current)",
+            tofile=f"{path.name} (template)",
+        )
+    )
 
 
 def count_changed_lines(diff: list[str]) -> int:
-    return len([
-        l for l in diff
-        if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))
-    ])
+    return len(
+        [
+            line
+            for line in diff
+            if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+        ]
+    )
 
 
 # ── Stored version reader ─────────────────────────────────────────────────────
+
 
 def get_stored_cli_version(pyproject_path: Path) -> str | None:
     """Read the cli_version stored in [tool.splent] from a pyproject.toml."""
     try:
         import tomllib
+
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
         return data.get("tool", {}).get("splent", {}).get("cli_version")
@@ -105,42 +116,26 @@ def get_stored_cli_version(pyproject_path: Path) -> str | None:
 
 PRODUCT_GROUPS: dict[str, dict[str, str]] = {
     "scripts": {
-        "scripts/00_core_requirements_dev.sh":
-            "product/product_00_core_requirements_dev.sh.j2",
-        "scripts/00_install_features.sh":
-            "product/product_00_install_features.sh.j2",
-        "scripts/01_compile_assets.sh":
-            "product/product_01_compile_assets.sh.j2",
-        "scripts/02_0_db_wait_connection.sh":
-            "product/product_02_0_db_wait_connection.sh.j2",
-        "scripts/02_1_db_create_db_test.sh":
-            "product/product_02_1_db_create_db_test.sh.j2",
-        "scripts/02_2_db_create_splent_migrations.sh":
-            "product/product_02_2_db_create_splent_migrations.sh.j2",
-        "scripts/03_initialize_migrations.sh":
-            "product/product_03_initialize_migrations.sh.j2",
-        "scripts/04_handle_migrations.sh":
-            "product/product_04_handle_migrations.sh.j2",
-        "scripts/05_0_start_app_dev.sh":
-            "product/product_05_0_start_app_dev.sh.j2",
-        "scripts/05_1_start_app_prod.sh":
-            "product/product_05_1_start_app_prod.sh.j2",
+        "scripts/00_core_requirements_dev.sh": "product/product_00_core_requirements_dev.sh.j2",
+        "scripts/00_install_features.sh": "product/product_00_install_features.sh.j2",
+        "scripts/01_compile_assets.sh": "product/product_01_compile_assets.sh.j2",
+        "scripts/02_0_db_wait_connection.sh": "product/product_02_0_db_wait_connection.sh.j2",
+        "scripts/02_1_db_create_db_test.sh": "product/product_02_1_db_create_db_test.sh.j2",
+        "scripts/02_2_db_create_splent_migrations.sh": "product/product_02_2_db_create_splent_migrations.sh.j2",
+        "scripts/03_initialize_migrations.sh": "product/product_03_initialize_migrations.sh.j2",
+        "scripts/04_handle_migrations.sh": "product/product_04_handle_migrations.sh.j2",
+        "scripts/05_0_start_app_dev.sh": "product/product_05_0_start_app_dev.sh.j2",
+        "scripts/05_1_start_app_prod.sh": "product/product_05_1_start_app_prod.sh.j2",
     },
     "entrypoints": {
-        "entrypoints/entrypoint.dev.sh":
-            "product/product_entrypoint.dev.sh.j2",
-        "entrypoints/entrypoint.prod.sh":
-            "product/product_entrypoint.prod.sh.j2",
+        "entrypoints/entrypoint.dev.sh": "product/product_entrypoint.dev.sh.j2",
+        "entrypoints/entrypoint.prod.sh": "product/product_entrypoint.prod.sh.j2",
     },
     "docker": {
-        "docker/Dockerfile.{name}.dev":
-            "product/product_Dockerfile.dev.j2",
-        "docker/Dockerfile.{name}.prod":
-            "product/product_Dockerfile.prod.j2",
-        "docker/.env.dev.example":
-            "product/product_.env.dev.example.j2",
-        "docker/.env.prod.example":
-            "product/product_.env.prod.example.j2",
+        "docker/Dockerfile.{name}.dev": "product/product_Dockerfile.dev.j2",
+        "docker/Dockerfile.{name}.prod": "product/product_Dockerfile.prod.j2",
+        "docker/.env.dev.example": "product/product_.env.dev.example.j2",
+        "docker/.env.prod.example": "product/product_.env.prod.example.j2",
     },
 }
 
@@ -160,12 +155,9 @@ def resolve_product_rel(rel_tpl: str, product_name: str) -> str:
 # {org} and {name} are replaced at runtime.
 
 FEATURE_FILES: dict[str, str] = {
-    ".gitignore":
-        "feature/feature_.gitignore.j2",
-    "MANIFEST.in":
-        "feature/feature_MANIFEST.in.j2",
-    "src/{org}/{name}/assets/js/webpack.config.js":
-        "feature/feature_webpack.config.js.j2",
+    ".gitignore": "feature/feature_.gitignore.j2",
+    "MANIFEST.in": "feature/feature_MANIFEST.in.j2",
+    "src/{org}/{name}/assets/js/webpack.config.js": "feature/feature_webpack.config.js.j2",
 }
 
 

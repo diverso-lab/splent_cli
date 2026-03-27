@@ -39,9 +39,7 @@ def feature_sync_template(feature_identifier, dry_run, yes):
     workspace = context.workspace()
     result = _resolve_cache_path(feature_identifier, workspace)
     if result is None:
-        click.secho(
-            f"❌ Feature '{feature_identifier}' not found in cache.", fg="red"
-        )
+        click.secho(f"❌ Feature '{feature_identifier}' not found in cache.", fg="red")
         raise SystemExit(1)
 
     cache_path, org_safe, feature_name = result
@@ -60,16 +58,12 @@ def feature_sync_template(feature_identifier, dry_run, yes):
 
     if not changes:
         click.echo()
-        click.secho(
-            "  ✅ All SPLENT-owned files are already up to date.", fg="green"
-        )
+        click.secho("  ✅ All SPLENT-owned files are already up to date.", fg="green")
         click.echo()
         return
 
     click.echo()
-    click.echo(
-        click.style(f"  Files to update ({len(changes)}):\n", fg="cyan")
-    )
+    click.echo(click.style(f"  Files to update ({len(changes)}):\n", fg="cyan"))
     for rel_path, (_, _, n) in changes.items():
         click.echo(f"    {rel_path}  ({n} line(s) changed)")
     click.echo()

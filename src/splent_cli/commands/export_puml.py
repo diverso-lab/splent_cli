@@ -25,6 +25,7 @@ from splent_framework.utils.pyproject_reader import PyprojectReader
 # UVL parser
 # ---------------------------------------------------------------------------
 
+
 def _parse_uvl(uvl_path: str) -> dict:
     """Return {features: [{name, package, org, cardinality}], constraints: [str]}."""
     with open(uvl_path, "r", encoding="utf-8") as f:
@@ -55,12 +56,14 @@ def _parse_uvl(uvl_path: str) -> dict:
                 attrs = m.group(2)
                 org_m = re.search(r"org\s+'([^']+)'", attrs)
                 pkg_m = re.search(r"package\s+'([^']+)'", attrs)
-                features.append({
-                    "name": m.group(1),
-                    "package": pkg_m.group(1) if pkg_m else "",
-                    "org": org_m.group(1) if org_m else "",
-                    "cardinality": current_cardinality,
-                })
+                features.append(
+                    {
+                        "name": m.group(1),
+                        "package": pkg_m.group(1) if pkg_m else "",
+                        "org": org_m.group(1) if org_m else "",
+                        "cardinality": current_cardinality,
+                    }
+                )
 
         if in_constraints and "=>" in stripped:
             constraints.append(stripped)
@@ -72,6 +75,7 @@ def _parse_uvl(uvl_path: str) -> dict:
 # Contract reader
 # ---------------------------------------------------------------------------
 
+
 def _read_contract(feature_path: str) -> dict | None:
     pyproject = os.path.join(feature_path, "pyproject.toml")
     if not os.path.isfile(pyproject):
@@ -81,7 +85,9 @@ def _read_contract(feature_path: str) -> dict | None:
     return data.get("tool", {}).get("splent", {}).get("contract")
 
 
-def _resolve_feature_path(workspace: str, product: str, org: str, package: str) -> str | None:
+def _resolve_feature_path(
+    workspace: str, product: str, org: str, package: str
+) -> str | None:
     org_safe = org.replace("-", "_").replace(".", "_")
     features_dir = os.path.join(workspace, product, "features", org_safe)
     if not os.path.isdir(features_dir):
@@ -127,8 +133,15 @@ def _parse_models(models_path: str) -> list[dict]:
     # so multi-line db.Column(...) definitions become single lines
     joined_lines = []
     for line in text.splitlines():
-        if joined_lines and line and line[0] in (" ", "\t") and not line.strip().startswith(("class ", "def ", "@", "#")):
-            if "=" not in line.lstrip() or joined_lines[-1].rstrip().endswith((",", "(")):
+        if (
+            joined_lines
+            and line
+            and line[0] in (" ", "\t")
+            and not line.strip().startswith(("class ", "def ", "@", "#"))
+        ):
+            if "=" not in line.lstrip() or joined_lines[-1].rstrip().endswith(
+                (",", "(")
+            ):
                 joined_lines[-1] += " " + line.strip()
                 continue
         joined_lines.append(line)
@@ -172,22 +185,26 @@ def _parse_models(models_path: str) -> list[dict]:
                 nullable = "nullable=False" not in col_args and not pk
                 unique = "unique=True" in col_args
 
-                attributes.append({
-                    "name": attr_name,
-                    "type": attr_type,
-                    "pk": pk,
-                    "nullable": nullable,
-                    "unique": unique,
-                })
+                attributes.append(
+                    {
+                        "name": attr_name,
+                        "type": attr_type,
+                        "pk": pk,
+                        "nullable": nullable,
+                        "unique": unique,
+                    }
+                )
 
                 # Foreign key
                 fk_m = re.search(r'db\.ForeignKey\(["\'](\w+)\.(\w+)["\']\)', col_args)
                 if fk_m:
-                    fks.append({
-                        "column": attr_name,
-                        "target_table": fk_m.group(1),
-                        "target_col": fk_m.group(2),
-                    })
+                    fks.append(
+                        {
+                            "column": attr_name,
+                            "target_table": fk_m.group(1),
+                            "target_col": fk_m.group(2),
+                        }
+                    )
                 continue
 
             # db.relationship(...)
@@ -198,11 +215,13 @@ def _parse_models(models_path: str) -> list[dict]:
                 target_m = re.match(r"(\w+)", rel_args)
                 target = target_m.group(1) if target_m else "?"
                 uselist = "uselist=False" not in rel_args
-                relationships.append({
-                    "name": rel_name,
-                    "target": target,
-                    "uselist": uselist,
-                })
+                relationships.append(
+                    {
+                        "name": rel_name,
+                        "target": target,
+                        "uselist": uselist,
+                    }
+                )
                 continue
 
             # Methods (def ...)
@@ -212,13 +231,15 @@ def _parse_models(models_path: str) -> list[dict]:
                 if not mname.startswith("_"):
                     methods.append(mname)
 
-        classes.append({
-            "name": class_name,
-            "attributes": attributes,
-            "methods": methods,
-            "fks": fks,
-            "relationships": relationships,
-        })
+        classes.append(
+            {
+                "name": class_name,
+                "attributes": attributes,
+                "methods": methods,
+                "fks": fks,
+                "relationships": relationships,
+            }
+        )
 
     return classes
 
@@ -226,6 +247,7 @@ def _parse_models(models_path: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # PlantUML generators
 # ---------------------------------------------------------------------------
+
 
 def _generate_feature_puml(product_name: str, uvl_data: dict, contracts: dict) -> str:
     """Feature model component diagram."""
@@ -253,9 +275,14 @@ def _generate_feature_puml(product_name: str, uvl_data: dict, contracts: dict) -
         if contract:
             provides = contract.get("provides", {})
             requires = contract.get("requires", {})
-            for label, key in [("Models", "models"), ("Routes", "routes"),
-                               ("Blueprints", "blueprints"), ("Services", "services"),
-                               ("Hooks", "hooks"), ("Docker", "docker")]:
+            for label, key in [
+                ("Models", "models"),
+                ("Routes", "routes"),
+                ("Blueprints", "blueprints"),
+                ("Services", "services"),
+                ("Hooks", "hooks"),
+                ("Docker", "docker"),
+            ]:
                 vals = provides.get(key, [])
                 if vals:
                     details.append(f"**{label}**: {', '.join(vals)}")
@@ -268,7 +295,9 @@ def _generate_feature_puml(product_name: str, uvl_data: dict, contracts: dict) -
 
         detail_block = "\\n".join(details) if details else ""
         description = contract.get("description", "") if contract else ""
-        lines.append(f'  component "{name}\\n{stereotype}\\n---\\n{description}\\n{detail_block}" as {name}')
+        lines.append(
+            f'  component "{name}\\n{stereotype}\\n---\\n{description}\\n{detail_block}" as {name}'
+        )
 
     lines.append("}")
     lines.append("")
@@ -284,8 +313,9 @@ def _generate_feature_puml(product_name: str, uvl_data: dict, contracts: dict) -
     return "\n".join(lines)
 
 
-def _generate_class_puml(product_name: str, all_models: dict[str, list[dict]],
-                         uvl_data: dict) -> str:
+def _generate_class_puml(
+    product_name: str, all_models: dict[str, list[dict]], uvl_data: dict
+) -> str:
     """UML class diagram from parsed SQLAlchemy models."""
     lines = [
         "@startuml",
@@ -339,7 +369,9 @@ def _generate_class_puml(product_name: str, all_models: dict[str, list[dict]],
                     stereo = " <<unique>>"
 
                 nullable = "" if not attr["nullable"] else "?"
-                lines.append(f"    {visibility} {attr['name']} : {attr['type']}{nullable}{stereo}")
+                lines.append(
+                    f"    {visibility} {attr['name']} : {attr['type']}{nullable}{stereo}"
+                )
 
             # Separator if there are methods
             if model["methods"]:
@@ -355,7 +387,9 @@ def _generate_class_puml(product_name: str, all_models: dict[str, list[dict]],
     # Relationships — deduplicate by class pair
     drawn_pairs: set[frozenset] = set()
     # Collect all FK and relationship info first
-    all_rels: list[tuple[str, str, str, str]] = []  # (source, target, label, cardinality)
+    all_rels: list[
+        tuple[str, str, str, str]
+    ] = []  # (source, target, label, cardinality)
 
     for feat_name, models in all_models.items():
         for model in models:
@@ -379,7 +413,7 @@ def _generate_class_puml(product_name: str, all_models: dict[str, list[dict]],
         if pair in drawn_pairs:
             continue
         drawn_pairs.add(pair)
-        lines.append(f'{source} {card} {target} : {label}')
+        lines.append(f"{source} {card} {target} : {label}")
 
     lines.extend(["", "@enduml"])
     return "\n".join(lines)
@@ -388,6 +422,7 @@ def _generate_class_puml(product_name: str, all_models: dict[str, list[dict]],
 # ---------------------------------------------------------------------------
 # Dependency graph generator
 # ---------------------------------------------------------------------------
+
 
 def _generate_deps_puml(product_name: str, uvl_data: dict) -> str:
     """Clean dependency graph — just nodes and arrows."""
@@ -407,7 +442,7 @@ def _generate_deps_puml(product_name: str, uvl_data: dict) -> str:
         name = feat["name"]
         card = feat["cardinality"]
         color = "#2E86C1" if card == "mandatory" else "#AED6F1"
-        lines.append(f'[{name}] as {name} {color}')
+        lines.append(f"[{name}] as {name} {color}")
 
     lines.append("")
 
@@ -434,16 +469,23 @@ def _generate_deps_puml(product_name: str, uvl_data: dict) -> str:
 # Deployment diagram generator
 # ---------------------------------------------------------------------------
 
+
 def _parse_compose(compose_path: str) -> dict:
     """Parse a docker-compose YAML and return service info."""
     import yaml
+
     with open(compose_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return data.get("services", {})
 
 
-def _generate_deployment_puml(product_name: str, workspace: str, product_dir: str,
-                              uvl_data: dict, feature_paths: dict[str, str]) -> str:
+def _generate_deployment_puml(
+    product_name: str,
+    workspace: str,
+    product_dir: str,
+    uvl_data: dict,
+    feature_paths: dict[str, str],
+) -> str:
     """Deployment diagram from docker-compose files."""
     lines = [
         "@startuml",
@@ -465,15 +507,17 @@ def _generate_deployment_puml(product_name: str, workspace: str, product_dir: st
     if os.path.isfile(product_compose):
         services = _parse_compose(product_compose)
         for svc_name, svc_cfg in services.items():
-            all_services.append({
-                "name": svc_name,
-                "source": product_name,
-                "image": svc_cfg.get("image", "Dockerfile"),
-                "ports": svc_cfg.get("ports", []),
-                "depends_on": svc_cfg.get("depends_on", []),
-                "volumes": svc_cfg.get("volumes", []),
-                "container_name": svc_cfg.get("container_name", svc_name),
-            })
+            all_services.append(
+                {
+                    "name": svc_name,
+                    "source": product_name,
+                    "image": svc_cfg.get("image", "Dockerfile"),
+                    "ports": svc_cfg.get("ports", []),
+                    "depends_on": svc_cfg.get("depends_on", []),
+                    "volumes": svc_cfg.get("volumes", []),
+                    "container_name": svc_cfg.get("container_name", svc_name),
+                }
+            )
 
     # Feature docker-compose files
     for feat in uvl_data["features"]:
@@ -484,20 +528,22 @@ def _generate_deployment_puml(product_name: str, workspace: str, product_dir: st
         if not os.path.isdir(docker_dir):
             continue
         # Try dev first, then generic
-        for fname in (f"docker-compose.dev.yml", "docker-compose.yml"):
+        for fname in ("docker-compose.dev.yml", "docker-compose.yml"):
             compose_f = os.path.join(docker_dir, fname)
             if os.path.isfile(compose_f):
                 services = _parse_compose(compose_f)
                 for svc_name, svc_cfg in services.items():
-                    all_services.append({
-                        "name": svc_name,
-                        "source": feat["name"],
-                        "image": svc_cfg.get("image", "Dockerfile"),
-                        "ports": svc_cfg.get("ports", []),
-                        "depends_on": svc_cfg.get("depends_on", []),
-                        "volumes": svc_cfg.get("volumes", []),
-                        "container_name": svc_cfg.get("container_name", svc_name),
-                    })
+                    all_services.append(
+                        {
+                            "name": svc_name,
+                            "source": feat["name"],
+                            "image": svc_cfg.get("image", "Dockerfile"),
+                            "ports": svc_cfg.get("ports", []),
+                            "depends_on": svc_cfg.get("depends_on", []),
+                            "volumes": svc_cfg.get("volumes", []),
+                            "container_name": svc_cfg.get("container_name", svc_name),
+                        }
+                    )
                 break
 
     # CLI container
@@ -505,15 +551,17 @@ def _generate_deployment_puml(product_name: str, workspace: str, product_dir: st
     if os.path.isfile(cli_compose):
         services = _parse_compose(cli_compose)
         for svc_name, svc_cfg in services.items():
-            all_services.append({
-                "name": svc_name,
-                "source": "splent_cli",
-                "image": svc_cfg.get("image", "Dockerfile"),
-                "ports": svc_cfg.get("ports", []),
-                "depends_on": svc_cfg.get("depends_on", []),
-                "volumes": svc_cfg.get("volumes", []),
-                "container_name": svc_cfg.get("container_name", svc_name),
-            })
+            all_services.append(
+                {
+                    "name": svc_name,
+                    "source": "splent_cli",
+                    "image": svc_cfg.get("image", "Dockerfile"),
+                    "ports": svc_cfg.get("ports", []),
+                    "depends_on": svc_cfg.get("depends_on", []),
+                    "volumes": svc_cfg.get("volumes", []),
+                    "container_name": svc_cfg.get("container_name", svc_name),
+                }
+            )
 
     # Draw
     lines.append('cloud "splent_network" {')
@@ -534,13 +582,21 @@ def _generate_deployment_puml(product_name: str, workspace: str, product_dir: st
 
         # Icon based on type
         if "mariadb" in image or "mysql" in image or "postgres" in image:
-            lines.append(f'  database "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}')
+            lines.append(
+                f'  database "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}'
+            )
         elif "redis" in image:
-            lines.append(f'  storage "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}')
+            lines.append(
+                f'  storage "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}'
+            )
         elif "mailhog" in image or "mail" in image:
-            lines.append(f'  collections "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}')
+            lines.append(
+                f'  collections "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}'
+            )
         else:
-            lines.append(f'  node "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}')
+            lines.append(
+                f'  node "{cname}\\n<size:9>{image}</size>{port_str}" as {safe_id}'
+            )
 
     lines.append("}")
     lines.append("")
@@ -585,8 +641,10 @@ def _generate_deployment_puml(product_name: str, workspace: str, product_dir: st
 # Render helper
 # ---------------------------------------------------------------------------
 
-def _render_exports(puml_path: str, base: str, export_pdf: bool,
-                    export_png: bool, export_svg: bool) -> None:
+
+def _render_exports(
+    puml_path: str, base: str, export_pdf: bool, export_png: bool, export_svg: bool
+) -> None:
     """Generate SVG/PDF/PNG from a .puml file."""
     plantuml_bin = "plantuml"
 
@@ -594,8 +652,7 @@ def _render_exports(puml_path: str, base: str, export_pdf: bool,
         subprocess.run([plantuml_bin, "-version"], capture_output=True, check=True)
     except (FileNotFoundError, subprocess.CalledProcessError):
         click.secho(
-            "❌ PlantUML not found. Rebuild the CLI container:\n"
-            "   make setup-rebuild",
+            "❌ PlantUML not found. Rebuild the CLI container:\n   make setup-rebuild",
             fg="red",
         )
         raise SystemExit(1)
@@ -616,19 +673,33 @@ def _render_exports(puml_path: str, base: str, export_pdf: bool,
             )
             click.secho(f"✅ PDF exported: {base}.pdf", fg="green")
         except FileNotFoundError:
-            click.secho("❌ rsvg-convert not found. Rebuild: make setup-rebuild", fg="red")
+            click.secho(
+                "❌ rsvg-convert not found. Rebuild: make setup-rebuild", fg="red"
+            )
 
     if export_png:
         click.echo("🖼️  Converting to PNG...")
         try:
             subprocess.run(
-                ["rsvg-convert", "-f", "png", "--dpi-x", "150", "--dpi-y", "150",
-                 "-o", f"{base}.png", svg_path],
+                [
+                    "rsvg-convert",
+                    "-f",
+                    "png",
+                    "--dpi-x",
+                    "150",
+                    "--dpi-y",
+                    "150",
+                    "-o",
+                    f"{base}.png",
+                    svg_path,
+                ],
                 check=True,
             )
             click.secho(f"✅ PNG exported: {base}.png", fg="green")
         except FileNotFoundError:
-            click.secho("❌ rsvg-convert not found. Rebuild: make setup-rebuild", fg="red")
+            click.secho(
+                "❌ rsvg-convert not found. Rebuild: make setup-rebuild", fg="red"
+            )
 
     if not export_svg and os.path.exists(svg_path):
         os.remove(svg_path)
@@ -638,23 +709,38 @@ def _render_exports(puml_path: str, base: str, export_pdf: bool,
 # Command
 # ---------------------------------------------------------------------------
 
+
 @click.command(
     "export:puml",
     short_help="Export the product feature model as a PlantUML diagram.",
 )
-@click.option("--classes", "mode_classes", is_flag=True,
-              help="UML class diagram (models, attributes, FKs, cardinalities).")
-@click.option("--deps", "mode_deps", is_flag=True,
-              help="Feature dependency graph (clean nodes + arrows).")
-@click.option("--deployment", "mode_deployment", is_flag=True,
-              help="Docker deployment diagram (containers, ports, networks).")
+@click.option(
+    "--classes",
+    "mode_classes",
+    is_flag=True,
+    help="UML class diagram (models, attributes, FKs, cardinalities).",
+)
+@click.option(
+    "--deps",
+    "mode_deps",
+    is_flag=True,
+    help="Feature dependency graph (clean nodes + arrows).",
+)
+@click.option(
+    "--deployment",
+    "mode_deployment",
+    is_flag=True,
+    help="Docker deployment diagram (containers, ports, networks).",
+)
 @click.option("--pdf", "export_pdf", is_flag=True, help="Also export as PDF.")
 @click.option("--png", "export_png", is_flag=True, help="Also export as PNG.")
 @click.option("--svg", "export_svg", is_flag=True, help="Also export as SVG.")
-@click.option("-o", "--output", default=None,
-              help="Output filename (without extension).")
-def export_puml(mode_classes, mode_deps, mode_deployment,
-                export_pdf, export_png, export_svg, output):
+@click.option(
+    "-o", "--output", default=None, help="Output filename (without extension)."
+)
+def export_puml(
+    mode_classes, mode_deps, mode_deployment, export_pdf, export_png, export_svg, output
+):
     """
     Generate PlantUML diagrams from the active product.
 
@@ -732,7 +818,9 @@ def export_puml(mode_classes, mode_deps, mode_deployment,
                     if parsed:
                         all_models[package] = parsed
                     break
-        click.echo(f"📋 Parsed models from {len(all_models)}/{len(feature_paths)} features.")
+        click.echo(
+            f"📋 Parsed models from {len(all_models)}/{len(feature_paths)} features."
+        )
         puml_src = _generate_class_puml(product, all_models, uvl_data)
 
     elif mode_deps:
@@ -751,7 +839,9 @@ def export_puml(mode_classes, mode_deps, mode_deployment,
                 contract = _read_contract(fpath)
                 if contract:
                     contracts[feat["package"]] = contract
-        click.echo(f"📋 Loaded contracts for {len(contracts)}/{len(uvl_data['features'])} features.")
+        click.echo(
+            f"📋 Loaded contracts for {len(contracts)}/{len(uvl_data['features'])} features."
+        )
         puml_src = _generate_feature_puml(product, uvl_data, contracts)
 
     # Write .puml

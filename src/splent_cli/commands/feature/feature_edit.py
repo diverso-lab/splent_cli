@@ -107,7 +107,9 @@ def _hot_reinstall(workspace: str, product_path: str, editable_path: str, name: 
 
     # 1. pip install -e from the new path
     click.echo(f"     🔄 Reinstalling {name} in web container...")
-    pip_cmd = f"pip install --no-cache-dir --root-user-action=ignore -q -e /workspace/{name}"
+    pip_cmd = (
+        f"pip install --no-cache-dir --root-user-action=ignore -q -e /workspace/{name}"
+    )
     subprocess.run(
         ["docker", "exec", container_id, "bash", "-c", pip_cmd],
         capture_output=True,
@@ -124,7 +126,14 @@ def _hot_reinstall(workspace: str, product_path: str, editable_path: str, name: 
 # =====================================================================
 # CORE LOGIC (single feature)
 # =====================================================================
-def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str, *, force: bool = False):
+def _edit_one(
+    workspace: str,
+    product_path: str,
+    pyproject_path: str,
+    match: str,
+    *,
+    force: bool = False,
+):
     """Convert one pyproject feature entry to editable. Returns True on success."""
     from splent_cli.utils.lifecycle import require_state, resolve_feature_key_from_entry
 
@@ -181,7 +190,7 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
     # Flask process picks up the new location without a manual restart.
     _hot_reinstall(workspace, product_path, editable_path, name)
 
-    click.secho(f"     ✔  ready for editing.", fg="green")
+    click.secho("     ✔  ready for editing.", fg="green")
     return True
 
 
@@ -193,7 +202,12 @@ def _edit_one(workspace: str, product_path: str, pyproject_path: str, match: str
     short_help="Convert a released feature into a local editable version.",
 )
 @click.argument("feature_name", required=False, default=None)
-@click.option("--all", "edit_all", is_flag=True, help="Convert all versioned features to editable.")
+@click.option(
+    "--all",
+    "edit_all",
+    is_flag=True,
+    help="Convert all versioned features to editable.",
+)
 @click.option("--force", is_flag=True, help="Bypass lifecycle state checks.")
 def feature_edit(feature_name, edit_all, force):
     workspace = str(context.workspace())
@@ -258,5 +272,8 @@ def feature_edit(feature_name, edit_all, force):
             ok += 1
         click.echo()
 
-    click.secho(f"  {ok}/{len(versioned)} feature(s) converted.", fg="green" if ok == len(versioned) else "yellow")
+    click.secho(
+        f"  {ok}/{len(versioned)} feature(s) converted.",
+        fg="green" if ok == len(versioned) else "yellow",
+    )
     click.echo()

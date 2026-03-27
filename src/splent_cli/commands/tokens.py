@@ -12,9 +12,7 @@ def tokens():
     """
     click.echo()
     click.secho("  Required tokens for SPLENT", bold=True)
-    click.echo(
-        click.style(f"  {'─' * 56}", fg="bright_black")
-    )
+    click.echo(click.style(f"  {'─' * 56}", fg="bright_black"))
 
     # ── GitHub ────────────────────────────────────────────────────────
     click.echo()

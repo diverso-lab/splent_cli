@@ -20,7 +20,10 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str, str | None]:
+
+def _resolve_feature(
+    feature_ref: str, workspace: str
+) -> tuple[Path, str, str, str | None]:
     """
     Resolve a feature_ref to (cache_path, ns, name, version).
 
@@ -83,6 +86,7 @@ def _parse_hooks(hooks_path: Path) -> list[dict]:
 # Command
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @click.command(
     "feature:hooks",
     short_help="List template hooks registered by a feature.",
@@ -127,7 +131,6 @@ def feature_hooks(feature_ref, as_json):
         click.echo(f"  {'Slot':<42} Function")
         click.echo(click.style(f"  {'─' * 60}", fg="bright_black"))
         for h in hooks:
-            slot_label = click.style(h["slot"], fg="cyan")
             click.echo(f"  {h['slot']:<42} {h['function']}")
 
     click.echo()

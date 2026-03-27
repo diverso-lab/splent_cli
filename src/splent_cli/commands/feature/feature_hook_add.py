@@ -21,6 +21,7 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _resolve_editable(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
     """Resolve an editable (non-versioned) feature from the cache."""
     base, _, version = feature_ref.partition("@")
@@ -130,6 +131,7 @@ def _update_contract(pyproject_path: Path, slot: str) -> None:
 # Command
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @click.command(
     "feature:hook:add",
     short_help="Add a new template hook to a feature's hooks.py.",
@@ -189,7 +191,7 @@ def feature_hook_add(feature_ref, slot, function_name):
     click.secho("✅ Contract updated in pyproject.toml.", fg="green")
 
     click.echo()
-    click.echo(f"  Implement your hook at:")
+    click.echo("  Implement your hook at:")
     click.echo(f"  {hooks_path}")
     click.echo()
 

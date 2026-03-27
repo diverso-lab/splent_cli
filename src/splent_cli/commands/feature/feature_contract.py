@@ -28,6 +28,7 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # Public API — used by feature:release and others
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def update_contract(feature_path: str, namespace: str, feature_name: str) -> dict:
     """Infer the contract from source code and write it to pyproject.toml.
 
@@ -42,6 +43,7 @@ def update_contract(feature_path: str, namespace: str, feature_name: str) -> dic
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
     """Resolve a feature from the cache (editable or versioned)."""
@@ -83,22 +85,22 @@ def _read_current_contract(pyproject_path: Path) -> dict:
         data = tomllib.load(f)
     raw = data.get("tool", {}).get("splent", {}).get("contract", {})
     return {
-        "routes":     raw.get("provides", {}).get("routes", []),
+        "routes": raw.get("provides", {}).get("routes", []),
         "blueprints": raw.get("provides", {}).get("blueprints", []),
-        "models":     raw.get("provides", {}).get("models", []),
-        "commands":   raw.get("provides", {}).get("commands", []),
-        "hooks":      raw.get("provides", {}).get("hooks", []),
-        "services":   raw.get("provides", {}).get("services", []),
-        "docker":     raw.get("provides", {}).get("docker", []),
+        "models": raw.get("provides", {}).get("models", []),
+        "commands": raw.get("provides", {}).get("commands", []),
+        "hooks": raw.get("provides", {}).get("hooks", []),
+        "services": raw.get("provides", {}).get("services", []),
+        "docker": raw.get("provides", {}).get("docker", []),
         "requires_features": raw.get("requires", {}).get("features", []),
-        "env_vars":          raw.get("requires", {}).get("env_vars", []),
+        "env_vars": raw.get("requires", {}).get("env_vars", []),
     }
 
 
 def _diff_field(label: str, old: list, new: list) -> list[str]:
     """Return lines describing added/removed items in a contract field."""
     lines = []
-    added   = sorted(set(new) - set(old))
+    added = sorted(set(new) - set(old))
     removed = sorted(set(old) - set(new))
     for item in added:
         lines.append(click.style(f"    + {label}: {item}", fg="green"))
@@ -109,6 +111,7 @@ def _diff_field(label: str, old: list, new: list) -> list[str]:
 
 def _print_contract(contract: dict, feature_name: str) -> None:
     """Pretty-print an inferred contract dict."""
+
     def _fmt(items: list) -> str:
         if not items:
             return "[]"
@@ -136,20 +139,22 @@ def _print_diff(current: dict, inferred: dict) -> bool:
     Returns True if there are any changes.
     """
     FIELDS = [
-        ("routes",            "routes"),
-        ("blueprints",        "blueprints"),
-        ("models",            "models"),
-        ("commands",          "commands"),
-        ("hooks",             "hooks"),
-        ("services",          "services"),
-        ("docker",            "docker"),
+        ("routes", "routes"),
+        ("blueprints", "blueprints"),
+        ("models", "models"),
+        ("commands", "commands"),
+        ("hooks", "hooks"),
+        ("services", "services"),
+        ("docker", "docker"),
         ("requires_features", "requires.features"),
-        ("env_vars",          "requires.env_vars"),
+        ("env_vars", "requires.env_vars"),
     ]
 
     diff_lines = []
     for key, label in FIELDS:
-        diff_lines.extend(_diff_field(label, current.get(key, []), inferred.get(key, [])))
+        diff_lines.extend(
+            _diff_field(label, current.get(key, []), inferred.get(key, []))
+        )
 
     if not diff_lines:
         return False
@@ -165,6 +170,7 @@ def _print_diff(current: dict, inferred: dict) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 # Command
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @click.command(
     "feature:contract",
@@ -204,7 +210,7 @@ def feature_contract(feature_ref, write):
     click.echo(click.style(f"  {'─' * 60}", fg="bright_black"))
 
     # Infer contract from source
-    click.echo(f"  🔍 Scanning source code…")
+    click.echo("  🔍 Scanning source code…")
     inferred = infer_contract(str(cache_path), ns, name)
 
     # Show inferred contract

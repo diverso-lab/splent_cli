@@ -15,6 +15,7 @@ from splent_cli.utils.feature_utils import read_features_from_data
 
 # ── GitHub helpers ────────────────────────────────────────────────────────────
 
+
 def _github_headers(token: str | None) -> dict:
     h = {
         "Accept": "application/vnd.github+json",
@@ -46,6 +47,7 @@ def _latest_remote_version(org: str, repo: str, token: str | None) -> str | None
 
 # ── Pyproject helpers ─────────────────────────────────────────────────────────
 
+
 def _read_features(pyproject_path: Path) -> list[dict]:
     """Return list of {name, version, ns_github, ns_fs} from the product's pyproject."""
     if not pyproject_path.exists():
@@ -67,21 +69,28 @@ def _read_features(pyproject_path: Path) -> list[dict]:
             name, version = rest.split("@", 1)
         else:
             name, version = rest, None
-        result.append({"name": name, "version": version, "ns_github": ns_github, "ns_fs": ns_fs})
+        result.append(
+            {"name": name, "version": version, "ns_github": ns_github, "ns_fs": ns_fs}
+        )
     return result
 
 
-def _update_pyproject(pyproject_path: Path, ns_github: str, name: str, old_ver: str | None, new_ver: str):
+def _update_pyproject(
+    pyproject_path: Path, ns_github: str, name: str, old_ver: str | None, new_ver: str
+):
     content = pyproject_path.read_text()
     if old_ver:
         content = content.replace(f"{name}@{old_ver}", f"{name}@{new_ver}")
     else:
         # editable entry: append version
-        content = content.replace(f"{ns_github}/{name}", f"{ns_github}/{name}@{new_ver}")
+        content = content.replace(
+            f"{ns_github}/{name}", f"{ns_github}/{name}@{new_ver}"
+        )
     pyproject_path.write_text(content)
 
 
 # ── Cache / clone helpers ─────────────────────────────────────────────────────
+
 
 def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
     target = cache_root / ns_fs / f"{name}@{version}"
@@ -102,10 +111,18 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
         stderr=subprocess.PIPE,
     )
     from splent_cli.utils.cache_utils import make_feature_readonly
+
     make_feature_readonly(str(target))
 
 
-def _update_symlink(product_path: Path, ns_fs: str, name: str, old_ver: str | None, new_ver: str, cache_root: Path):
+def _update_symlink(
+    product_path: Path,
+    ns_fs: str,
+    name: str,
+    old_ver: str | None,
+    new_ver: str,
+    cache_root: Path,
+):
     features_dir = product_path / "features" / ns_fs
     features_dir.mkdir(parents=True, exist_ok=True)
     if old_ver:
@@ -121,6 +138,7 @@ def _update_symlink(product_path: Path, ns_fs: str, name: str, old_ver: str | No
 
 
 # ── Command ───────────────────────────────────────────────────────────────────
+
 
 @click.command(
     "feature:upgrade",
@@ -201,7 +219,7 @@ def feature_upgrade(feature_ref, yes):
         raise SystemExit(0)
 
     click.echo()
-    from splent_cli.utils.lifecycle import require_state, resolve_feature_key_from_entry
+    from splent_cli.utils.lifecycle import require_state
     from splent_cli.utils.manifest import feature_key
 
     for u in upgrades:
@@ -214,14 +232,25 @@ def feature_upgrade(feature_ref, yes):
 
         try:
             _clone_if_missing(u["ns_fs"], u["name"], u["latest"], cache_root)
-            _update_pyproject(pyproject_path, u["ns_github"], u["name"], u["version"], u["latest"])
-            _update_symlink(product_path, u["ns_fs"], u["name"], u["version"], u["latest"], cache_root)
+            _update_pyproject(
+                pyproject_path, u["ns_github"], u["name"], u["version"], u["latest"]
+            )
+            _update_symlink(
+                product_path,
+                u["ns_fs"],
+                u["name"],
+                u["version"],
+                u["latest"],
+                cache_root,
+            )
             click.secho(f"  ✔  {u['ns_fs']}/{u['name']} → {u['latest']}", fg="green")
         except Exception as e:
             click.secho(f"  ✖  {u['ns_fs']}/{u['name']}: {e}", fg="red")
 
     click.echo()
-    click.secho("  Done. Run 'splent product:sync' to reinstall pip dependencies.", fg="cyan")
+    click.secho(
+        "  Done. Run 'splent product:sync' to reinstall pip dependencies.", fg="cyan"
+    )
     click.echo()
 
     if not token:

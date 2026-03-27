@@ -26,9 +26,19 @@ def _status_color(state: str) -> str:
 def _get_containers(project_name: str, compose_file: str) -> list[dict]:
     """Run docker compose ps and return parsed container list."""
     result = subprocess.run(
-        ["docker", "compose", "-p", project_name, "-f", compose_file,
-         "ps", "--format", "json"],
-        capture_output=True, text=True,
+        [
+            "docker",
+            "compose",
+            "-p",
+            project_name,
+            "-f",
+            compose_file,
+            "ps",
+            "--format",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0 or not result.stdout.strip():
         return []
@@ -49,13 +59,15 @@ def _format_ports(ports) -> str:
     if isinstance(ports, list):
         return ", ".join(
             f"{p.get('PublishedPort', '')}→{p.get('TargetPort', '')}"
-            for p in ports if p.get("PublishedPort")
+            for p in ports
+            if p.get("PublishedPort")
         )
     return str(ports) if ports else "—"
 
 
 @click.command(
-    "product:status", short_help="Show Docker container status for the active product and its features."
+    "product:status",
+    short_help="Show Docker container status for the active product and its features.",
 )
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")
@@ -84,7 +96,11 @@ def product_status(env_dev, env_prod):
             docker_dir = compose.feature_docker_dir(workspace, clean)
             compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
             compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
-            compose_file = compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+            compose_file = (
+                compose_preferred
+                if os.path.exists(compose_preferred)
+                else compose_fallback
+            )
 
             if not os.path.exists(compose_file):
                 continue
@@ -103,7 +119,9 @@ def product_status(env_dev, env_prod):
             all_containers.append((product, c))
 
     if not all_containers:
-        click.secho(f"ℹ️  No containers found for {product} ({env}). Is it up?", fg="yellow")
+        click.secho(
+            f"ℹ️  No containers found for {product} ({env}). Is it up?", fg="yellow"
+        )
         return
 
     click.secho(f"\n{product}  [{env}]\n", bold=True)
@@ -123,7 +141,9 @@ def product_status(env_dev, env_prod):
         ports = _format_ports(c.get("Publishers") or c.get("Ports", ""))
 
         source_styled = click.style(f"{source:<{col_source}}", fg="bright_black")
-        click.echo(f"  {source_styled} {name:<{col_name}} {_status_color(state):<{col_state}} {ports}")
+        click.echo(
+            f"  {source_styled} {name:<{col_name}} {_status_color(state):<{col_state}} {ports}"
+        )
 
     click.echo()
 

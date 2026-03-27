@@ -82,7 +82,9 @@ def _feature_location(workspace: str, ref: str) -> str:
         # Editable: check workspace root first, then cache
         if os.path.isdir(os.path.join(workspace, rest)):
             return "workspace"
-        if os.path.isdir(os.path.join(workspace, ".splent_cache", "features", ns_fs, rest)):
+        if os.path.isdir(
+            os.path.join(workspace, ".splent_cache", "features", ns_fs, rest)
+        ):
             return "cache"
         return "missing"
 

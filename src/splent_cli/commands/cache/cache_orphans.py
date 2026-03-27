@@ -40,6 +40,7 @@ def _get_cache_entries(cache_root: Path) -> list:
 def _get_all_product_refs(workspace: Path) -> set:
     """Returns set of 'name' and 'name@version' (no namespace) from all products' pyproject.toml."""
     import tomllib
+
     refs = set()
     for product_dir in sorted(workspace.iterdir()):
         if not product_dir.is_dir() or product_dir.name.startswith("."):

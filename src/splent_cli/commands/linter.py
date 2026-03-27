@@ -19,16 +19,16 @@ def _resolve_directories(targets: tuple[str, ...]) -> list[str]:
     if "app" in active:
         dirs.append(PathUtils.get_app_dir())
     if "features" in active:
-        # features/ contains symlinks to the cache — resolve each one so ruff
-        # sees real directories instead of symlinks it cannot traverse
-        features_root = os.path.join(PathUtils.get_app_base_dir(), "features")
-        if os.path.isdir(features_root):
-            for org_dir in os.scandir(features_root):
-                if not org_dir.is_dir(follow_symlinks=True):
-                    continue
-                for feat_dir in os.scandir(org_dir.path):
-                    if feat_dir.is_dir(follow_symlinks=True):
-                        dirs.append(os.path.realpath(feat_dir.path))
+        # Only lint editable features (workspace root).
+        # Pinned features in .splent_cache are read-only — never lint them.
+        workspace = PathUtils.get_working_dir()
+        for entry in os.scandir(workspace):
+            if (
+                entry.is_dir(follow_symlinks=False)
+                and entry.name.startswith("splent_feature_")
+                and os.path.exists(os.path.join(entry.path, "pyproject.toml"))
+            ):
+                dirs.append(entry.path)
     return [d for d in dirs if os.path.isdir(d)]
 
 

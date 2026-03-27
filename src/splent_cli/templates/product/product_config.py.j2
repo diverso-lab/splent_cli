@@ -6,7 +6,10 @@ SPLENT will always use this file, falling back to the framework
 only if you remove a config class.
 """
 
-from splent_framework.configuration.default_config import Config as BaseConfig, _build_db_uri
+from splent_framework.configuration.default_config import (
+    Config as BaseConfig,
+    _build_db_uri,
+)
 
 
 class DevelopmentConfig(BaseConfig):
@@ -26,7 +29,9 @@ class TestingConfig(BaseConfig):
 
     def __init__(self):
         super().__init__()
-        self.SQLALCHEMY_DATABASE_URI = _build_db_uri("MARIADB_TEST_DATABASE", "default_test_db")
+        self.SQLALCHEMY_DATABASE_URI = _build_db_uri(
+            "MARIADB_TEST_DATABASE", "default_test_db"
+        )
 
 
 class ProductionConfig(BaseConfig):

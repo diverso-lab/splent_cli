@@ -4,6 +4,7 @@ splent doctor — Orchestrates all diagnostic checks.
 Runs each check/info command in sequence and reports a final summary.
 Each phase is a standalone command that can also be run independently.
 """
+
 import click
 
 from splent_cli.commands.check.check_env import check_env
@@ -21,17 +22,17 @@ from splent_cli.commands.product.product_status import product_status
 
 # (name, command, requires_db, network_only)
 CHECKS = [
-    ("version",          version_cmd,    False, False),
-    ("check:env",        check_env,      False, False),
-    ("check:pyproject",  check_pyproject, False, False),
-    ("check:features",   check_features, False, False),
-    ("check:deps",       check_deps,     False, False),
-    ("feature:status",   feature_status, False, False),
-    ("check:docker",     check_docker,   False, False),
-    ("product:status",   product_status, False, False),
-    ("db:status",        db_status,      True,  False),
-    ("check:github",     check_github,   False, True),
-    ("check:pypi",       check_pypi,     False, True),
+    ("version", version_cmd, False, False),
+    ("check:env", check_env, False, False),
+    ("check:pyproject", check_pyproject, False, False),
+    ("check:features", check_features, False, False),
+    ("check:deps", check_deps, False, False),
+    ("feature:status", feature_status, False, False),
+    ("check:docker", check_docker, False, False),
+    ("product:status", product_status, False, False),
+    ("db:status", db_status, True, False),
+    ("check:github", check_github, False, True),
+    ("check:pypi", check_pypi, False, True),
 ]
 
 
@@ -77,8 +78,10 @@ def doctor(fast):
 
     for name, cmd, requires_db_flag, network_flag in CHECKS:
         if name in skip:
-            click.echo(click.style(f"━━ {name}", fg="bright_black") +
-                       click.style(" (skipped)", fg="bright_black"))
+            click.echo(
+                click.style(f"━━ {name}", fg="bright_black")
+                + click.style(" (skipped)", fg="bright_black")
+            )
             skipped += 1
             click.echo()
             continue
@@ -89,6 +92,7 @@ def doctor(fast):
             ctx = click.Context(cmd, info_name=name, parent=click.get_current_context())
             if requires_db_flag:
                 from splent_cli.utils.dynamic_imports import get_app
+
                 app = get_app()
                 with app.app_context():
                     ctx.invoke(cmd)

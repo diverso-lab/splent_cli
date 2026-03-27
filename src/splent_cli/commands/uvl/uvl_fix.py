@@ -18,6 +18,7 @@ from splent_framework.utils.pyproject_reader import PyprojectReader
 # UVL parser
 # ---------------------------------------------------------------------------
 
+
 def _parse_uvl(uvl_path: str) -> tuple[dict[str, str], list[str], str]:
     """Return (package_map, existing_constraints, raw_text)."""
     with open(uvl_path, "r", encoding="utf-8") as f:
@@ -59,7 +60,10 @@ def _parse_constraint(c: str) -> tuple[str, str]:
 # Source scanner
 # ---------------------------------------------------------------------------
 
-def _scan_imports(feature_path: str, feature_name: str, all_packages: set[str]) -> set[str]:
+
+def _scan_imports(
+    feature_path: str, feature_name: str, all_packages: set[str]
+) -> set[str]:
     """Return set of other feature packages imported by this feature."""
     imported: set[str] = set()
     src_dir = None
@@ -80,7 +84,9 @@ def _scan_imports(feature_path: str, feature_name: str, all_packages: set[str]) 
                     content = fh.read()
             except Exception:
                 continue
-            for match in re.findall(r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content):
+            for match in re.findall(
+                r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content
+            ):
                 if match != feature_name and match in all_packages:
                     imported.add(match)
 
@@ -108,7 +114,10 @@ def _resolve_feature_paths(workspace: str, product: str) -> dict[str, str]:
 # UVL writer
 # ---------------------------------------------------------------------------
 
-def _write_constraints(uvl_path: str, raw_text: str, new_constraints: list[str]) -> None:
+
+def _write_constraints(
+    uvl_path: str, raw_text: str, new_constraints: list[str]
+) -> None:
     """Append new constraints to the UVL file."""
     lines = raw_text.rstrip().splitlines()
 
@@ -130,6 +139,7 @@ def _write_constraints(uvl_path: str, raw_text: str, new_constraints: list[str])
 # ---------------------------------------------------------------------------
 # Command
 # ---------------------------------------------------------------------------
+
 
 @click.command(
     "uvl:fix",
@@ -204,13 +214,17 @@ def uvl_fix():
 
     if not missing:
         click.echo()
-        click.secho("  ✅ All cross-feature imports have matching UVL constraints.", fg="green")
+        click.secho(
+            "  ✅ All cross-feature imports have matching UVL constraints.", fg="green"
+        )
         click.echo()
         return
 
     # Interactive wizard
     click.echo()
-    click.secho(f"  Found {len(missing)} missing constraint(s):\n", fg="cyan", bold=True)
+    click.secho(
+        f"  Found {len(missing)} missing constraint(s):\n", fg="cyan", bold=True
+    )
 
     to_add: list[str] = []
     inversions: list[tuple[str, str]] = []
@@ -218,7 +232,9 @@ def uvl_fix():
     for importer, imported, issue_type in missing:
         if issue_type == "inverted":
             icon = click.style("⚠ INVERTED", fg="red")
-            detail = f"UVL has {imported} => {importer}, but {importer} imports {imported}"
+            detail = (
+                f"UVL has {imported} => {importer}, but {importer} imports {imported}"
+            )
         else:
             icon = click.style("? UNDECLARED", fg="yellow")
             detail = f"{importer} imports {imported}, no UVL constraint exists"
@@ -226,7 +242,9 @@ def uvl_fix():
         click.echo(f"  {icon}")
         click.echo(f"    {detail}")
         click.echo()
-        click.echo(f"    Suggested constraint: {click.style(f'{importer} => {imported}', bold=True)}")
+        click.echo(
+            f"    Suggested constraint: {click.style(f'{importer} => {imported}', bold=True)}"
+        )
         click.echo()
 
         choice = click.prompt(
@@ -241,7 +259,10 @@ def uvl_fix():
             click.secho(f"    ✔ Will add: {importer} => {imported}", fg="green")
         elif choice == "invert":
             inversions.append((importer, imported))
-            click.secho(f"    📝 Marked as inversion — needs code refactoring in {importer}", fg="yellow")
+            click.secho(
+                f"    📝 Marked as inversion — needs code refactoring in {importer}",
+                fg="yellow",
+            )
         else:
             click.secho("    ⏩ Skipped", fg="bright_black")
 
@@ -266,10 +287,14 @@ def uvl_fix():
 
     if inversions:
         click.echo()
-        click.secho("  ⚠ Inversions that need code refactoring:", fg="yellow", bold=True)
+        click.secho(
+            "  ⚠ Inversions that need code refactoring:", fg="yellow", bold=True
+        )
         for importer, imported in inversions:
             click.echo(f"    - {importer} should NOT import from {imported}")
-            click.echo(f"      → Move the dependency to {imported}'s side, or remove the import")
+            click.echo(
+                f"      → Move the dependency to {imported}'s side, or remove the import"
+            )
         click.echo()
 
     click.echo()

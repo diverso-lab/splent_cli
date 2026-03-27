@@ -17,7 +17,8 @@ from splent_cli.utils.manifest import (
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)
 @click.option(
-    "--force", is_flag=True,
+    "--force",
+    is_flag=True,
     help="Skip dependency and migration-state checks (use with care).",
 )
 def feature_detach(feature_identifier, version, force):

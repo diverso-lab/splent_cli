@@ -28,8 +28,6 @@ import click
 
 from splent_cli.utils.manifest import (
     STATES,
-    VALID_STATES,
-    STATE_COLORS,
     get_feature_state,
     set_feature_state,
     read_manifest,
@@ -42,7 +40,9 @@ from splent_cli.utils.manifest import (
 # ---------------------------------------------------------------------------
 
 _STATE_RANK: dict[str, int] = {s: i for i, s in enumerate(STATES)}
-_STATE_RANK["disabled"] = _STATE_RANK["active"]  # disabled ≈ active (installed + migrated)
+_STATE_RANK["disabled"] = _STATE_RANK[
+    "active"
+]  # disabled ≈ active (installed + migrated)
 
 
 def state_rank(state: str | None) -> int:
@@ -59,26 +59,26 @@ def state_rank(state: str | None) -> int:
 # For each target state, what is the minimum required current state?
 # None means "any state is fine" (initial declaration).
 REQUIRED_MIN_STATE: dict[str, str | None] = {
-    "declared": None,           # feature:add / feature:attach
-    "installed": "declared",    # pip install
-    "migrated": "installed",    # db:upgrade / db:migrate
-    "active": "migrated",      # Flask startup
-    "disabled": "installed",    # can disable if at least installed
+    "declared": None,  # feature:add / feature:attach
+    "installed": "declared",  # pip install
+    "migrated": "installed",  # db:upgrade / db:migrate
+    "active": "migrated",  # Flask startup
+    "disabled": "installed",  # can disable if at least installed
 }
 
 # States that block certain operations (command → blocked states)
 BLOCKED_STATES: dict[str, set[str]] = {
-    "feature:add": set(),                      # always ok
-    "feature:attach": set(),                   # always ok
+    "feature:add": set(),  # always ok
+    "feature:attach": set(),  # always ok
     "feature:remove": {"migrated", "active"},  # must rollback first
     "feature:detach": {"migrated", "active"},  # must rollback first
-    "feature:edit": {"migrated", "active"},    # must rollback first
-    "feature:upgrade": {"migrated", "active"}, # must rollback first
+    "feature:edit": {"migrated", "active"},  # must rollback first
+    "feature:upgrade": {"migrated", "active"},  # must rollback first
     "feature:rename": {"migrated", "active"},  # must rollback first
-    "db:migrate": set(),                       # needs "installed" min (handled by require_state)
-    "db:upgrade": set(),                       # needs "installed" min
-    "db:rollback": set(),                      # needs "migrated" min
-    "db:seed": set(),                          # needs "migrated" min
+    "db:migrate": set(),  # needs "installed" min (handled by require_state)
+    "db:upgrade": set(),  # needs "installed" min
+    "db:rollback": set(),  # needs "migrated" min
+    "db:seed": set(),  # needs "migrated" min
 }
 
 # Guidance messages for blocked states
@@ -91,6 +91,7 @@ BLOCKED_GUIDANCE: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def require_state(
     product_path: str,
@@ -121,10 +122,7 @@ def require_state(
     blocked = BLOCKED_STATES.get(command, set())
     if current in blocked:
         guidance = BLOCKED_GUIDANCE.get(current, "")
-        msg = (
-            f"Feature '{key}' is in state '{current}' — "
-            f"cannot run '{command}'."
-        )
+        msg = f"Feature '{key}' is in state '{current}' — cannot run '{command}'."
         if guidance:
             msg += f"\n   {guidance}"
 
@@ -179,7 +177,11 @@ def advance_state(
         mode = entry.get("mode", "pinned" if version else "editable")
 
     # Only advance forward (higher rank), or allow explicit regression for rollback/disable
-    if to in ("declared", "disabled") or current is None or state_rank(to) > state_rank(current):
+    if (
+        to in ("declared", "disabled")
+        or current is None
+        or state_rank(to) > state_rank(current)
+    ):
         set_feature_state(
             product_path,
             product_name,

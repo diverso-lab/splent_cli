@@ -34,6 +34,7 @@ def _read_pyproject_features(product_path: str) -> list[str]:
     with open(pyproject, "rb") as f:
         data = tomllib.load(f)
     from splent_cli.utils.feature_utils import read_features_from_data
+
     env = os.getenv("SPLENT_ENV")
     return read_features_from_data(data, env)
 
@@ -51,7 +52,9 @@ def _progress_bar(state: str) -> str:
         if i < idx:
             parts.append(click.style("●", fg="green"))
         elif i == idx:
-            parts.append(click.style("●", fg=STATE_COLORS.get(state, "white"), bold=True))
+            parts.append(
+                click.style("●", fg=STATE_COLORS.get(state, "white"), bold=True)
+            )
         else:
             parts.append(click.style("○", fg="bright_black"))
     return "─".join(parts)
@@ -78,6 +81,7 @@ def feature_status(as_json):
 
     if as_json:
         import json
+
         click.echo(json.dumps(read_manifest(product_path), indent=2))
         return
 
@@ -91,6 +95,7 @@ def feature_status(as_json):
 
         # Filter: only show features declared in pyproject.toml
         from splent_cli.utils.lifecycle import resolve_feature_key_from_entry
+
         pyproject_entries = _read_pyproject_features(product_path)
         active_keys = set()
         for entry in pyproject_entries:
@@ -134,14 +139,19 @@ def feature_status(as_json):
         # Legend
         click.echo()
         click.echo(click.style(f"  {'─' * total_w}", fg="bright_black"))
-        click.echo(click.style("  Progress: ", fg="bright_black") +
-                   " → ".join(
-                       click.style(s, fg=STATE_COLORS.get(s, "white"))
-                       for s in STATES
-                   ))
-        click.echo(click.style("  Modes:    ", fg="bright_black") +
-                   click.style("pinned", fg="cyan") + " = versioned release   " +
-                   click.style("editable", fg="magenta") + " = local development")
+        click.echo(
+            click.style("  Progress: ", fg="bright_black")
+            + " → ".join(
+                click.style(s, fg=STATE_COLORS.get(s, "white")) for s in STATES
+            )
+        )
+        click.echo(
+            click.style("  Modes:    ", fg="bright_black")
+            + click.style("pinned", fg="cyan")
+            + " = versioned release   "
+            + click.style("editable", fg="magenta")
+            + " = local development"
+        )
 
         click.echo()
         updated = manifest.get("updated_at", "—")
@@ -150,10 +160,12 @@ def feature_status(as_json):
         # Report stale entries
         stale = len(all_features) - len(features)
         if stale > 0:
-            click.echo(click.style(
-                f"  ({stale} stale entries hidden — run 'splent product:sync' to clean up)",
-                fg="bright_black",
-            ))
+            click.echo(
+                click.style(
+                    f"  ({stale} stale entries hidden — run 'splent product:sync' to clean up)",
+                    fg="bright_black",
+                )
+            )
 
     else:
         # No manifest — fallback to pyproject.toml

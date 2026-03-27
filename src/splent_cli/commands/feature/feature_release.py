@@ -99,6 +99,7 @@ def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
 # CONTRACT AUTO-INFERENCE
 # =====================================================================
 
+
 def _extract_routes(routes_path: Path) -> list[str]:
     """Extract route paths from routes.py via regex."""
     if not routes_path.exists():
@@ -112,7 +113,9 @@ def _extract_blueprints(init_path: Path) -> list[str]:
     if not init_path.exists():
         return []
     text = init_path.read_text()
-    return sorted(set(re.findall(r"""(\w+)\s*=\s*(?:BaseBlueprint|Blueprint)\s*\(""", text)))
+    return sorted(
+        set(re.findall(r"""(\w+)\s*=\s*(?:BaseBlueprint|Blueprint)\s*\(""", text))
+    )
 
 
 def _extract_models(models_path: Path) -> list[str]:
@@ -128,9 +131,9 @@ def _extract_hooks(hooks_path: Path) -> list[str]:
     if not hooks_path.exists():
         return []
     text = hooks_path.read_text()
-    return sorted(set(re.findall(
-        r"""register_template_hook\s*\(\s*['"]([^'"]+)['"]""", text
-    )))
+    return sorted(
+        set(re.findall(r"""register_template_hook\s*\(\s*['"]([^'"]+)['"]""", text))
+    )
 
 
 def _extract_services(services_path: Path) -> list[str]:
@@ -138,9 +141,13 @@ def _extract_services(services_path: Path) -> list[str]:
     if not services_path.exists():
         return []
     text = services_path.read_text()
-    return sorted(set(re.findall(
-        r"""class\s+(\w+)\s*\([^)]*(?:BaseService|Service)[^)]*\)""", text
-    )))
+    return sorted(
+        set(
+            re.findall(
+                r"""class\s+(\w+)\s*\([^)]*(?:BaseService|Service)[^)]*\)""", text
+            )
+        )
+    )
 
 
 def _extract_docker(feature_root: Path) -> list[str]:
@@ -151,7 +158,9 @@ def _extract_docker(feature_root: Path) -> list[str]:
     return sorted(found)
 
 
-def _scan_dependencies(src_dir: Path, own_feature_name: str) -> tuple[list[str], list[str]]:
+def _scan_dependencies(
+    src_dir: Path, own_feature_name: str
+) -> tuple[list[str], list[str]]:
     """
     Scan all .py files under src_dir for:
     - imports of other splent features  → requires.features
@@ -171,7 +180,9 @@ def _scan_dependencies(src_dir: Path, own_feature_name: str) -> tuple[list[str],
             r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z][A-Z0-9_]+)['"]""", text
         ):
             env_vars.add(var)
-        for var in re.findall(r"""os\.environ\s*\[\s*['"]([A-Z][A-Z0-9_]+)['"]""", text):
+        for var in re.findall(
+            r"""os\.environ\s*\[\s*['"]([A-Z][A-Z0-9_]+)['"]""", text
+        ):
             env_vars.add(var)
 
     return sorted(required_features), sorted(env_vars)
@@ -268,6 +279,7 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
 # SEMVER WIZARD
 # =====================================================================
 
+
 def _fetch_latest_tag(ns_github: str, feature_name: str) -> str | None:
     """Return the latest GitHub tag for this feature, or None."""
     token = os.getenv("GITHUB_TOKEN")
@@ -347,9 +359,7 @@ def _semver_wizard(ns_github: str, feature_name: str) -> str:
     chosen = {"1": patch_v, "2": minor_v, "3": major_v}[choice]
 
     click.echo()
-    click.echo(
-        f"  Will release as {click.style(chosen, fg='cyan', bold=True)}"
-    )
+    click.echo(f"  Will release as {click.style(chosen, fg='cyan', bold=True)}")
     click.confirm("  Proceed?", abort=True)
     return chosen
 
@@ -382,6 +392,7 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
     )
 
     from splent_cli.utils.cache_utils import make_feature_readonly
+
     make_feature_readonly(snapshot_path)
 
     click.echo("🔒 Snapshot created (read-only).")
@@ -419,6 +430,7 @@ def feature_release(feature_ref, version, attach):
 
     click.echo("🔍 Updating feature contract from source code...")
     from splent_cli.commands.feature.feature_contract import update_contract
+
     update_contract(feature_path, namespace, feature_name)
     click.echo("✅ Contract written to pyproject.toml.")
 

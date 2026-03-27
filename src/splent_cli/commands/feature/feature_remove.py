@@ -3,7 +3,10 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data, write_features_to_data
+from splent_cli.utils.feature_utils import (
+    read_features_from_data,
+    write_features_to_data,
+)
 from splent_cli.utils.manifest import (
     feature_key,
     remove_feature,
@@ -21,7 +24,8 @@ from splent_cli.utils.manifest import (
     "--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io')."
 )
 @click.option(
-    "--force", is_flag=True,
+    "--force",
+    is_flag=True,
     help="Skip dependency and migration-state checks (use with care).",
 )
 def feature_remove(feature_name, namespace, force):

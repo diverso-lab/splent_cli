@@ -84,7 +84,6 @@ def get_installed_seeders(specific_module=None):
 
 def _truncate_data():
     """Delete all row data from feature tables, preserving schema and migrations."""
-    from flask import current_app
     from splent_framework.db import db
     from sqlalchemy import text, MetaData
     from splent_framework.managers.migration_manager import SPLENT_MIGRATIONS_TABLE
@@ -110,13 +109,20 @@ def _truncate_data():
 @click.command(
     "db:seed", short_help="Populate the database using feature-level seeders."
 )
-@click.option("--reset", is_flag=True, help="Clear all data before seeding (keeps schema and migrations).")
+@click.option(
+    "--reset",
+    is_flag=True,
+    help="Clear all data before seeding (keeps schema and migrations).",
+)
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
 @click.argument("module", required=False)
 def db_seed(reset, yes, module):
     if reset:
         if yes or click.confirm(
-            click.style("⚠️  This will delete all data (tables and migrations are preserved). Continue?", fg="red"),
+            click.style(
+                "⚠️  This will delete all data (tables and migrations are preserved). Continue?",
+                fg="red",
+            ),
             abort=True,
         ):
             click.echo(click.style("🔄 Clearing data...", fg="yellow"))
@@ -158,7 +164,9 @@ def db_seed(reset, yes, module):
                 )
             else:
                 click.echo(
-                    click.style(f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red")
+                    click.style(
+                        f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red"
+                    )
                 )
             success = False
             break

@@ -96,16 +96,12 @@ def product_sync_template(
 
     if not changes:
         click.echo()
-        click.secho(
-            "  ✅ All SPLENT-owned files are already up to date.", fg="green"
-        )
+        click.secho("  ✅ All SPLENT-owned files are already up to date.", fg="green")
         click.echo()
         return
 
     click.echo()
-    click.echo(
-        click.style(f"  Files to update ({len(changes)}):\n", fg="cyan")
-    )
+    click.echo(click.style(f"  Files to update ({len(changes)}):\n", fg="cyan"))
     for rel_path, (_, _, n) in changes.items():
         click.echo(f"    {rel_path}  ({n} line(s) changed)")
     click.echo()

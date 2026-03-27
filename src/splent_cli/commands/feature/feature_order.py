@@ -44,8 +44,10 @@ def _build_requires_map(uvl: str | None) -> dict[str, list[str]]:
         return {}
 
     text = Path(uvl).read_text(encoding="utf-8", errors="replace")
-    pkg_map = FeatureLoadOrderResolver._parse_package_map(text)   # {short → pkg}
-    constraints = FeatureLoadOrderResolver._parse_constraints(text)  # [(requirer_short, required_short)]
+    pkg_map = FeatureLoadOrderResolver._parse_package_map(text)  # {short → pkg}
+    constraints = FeatureLoadOrderResolver._parse_constraints(
+        text
+    )  # [(requirer_short, required_short)]
 
     result: dict[str, list[str]] = {}
     for requirer_short, required_short in constraints:
@@ -73,9 +75,24 @@ def _parse_entry(entry: str) -> tuple[str, str, str | None]:
     short_help="Show the topological load order of features in the active product.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON array.")
-@click.option("--no-namespace", is_flag=True, default=False, help="Hide namespace prefix from feature names.")
-@click.option("--no-version", is_flag=True, default=False, help="Hide version suffix from feature names.")
-@click.option("--short", is_flag=True, default=False, help="Shorthand for --no-namespace --no-version.")
+@click.option(
+    "--no-namespace",
+    is_flag=True,
+    default=False,
+    help="Hide namespace prefix from feature names.",
+)
+@click.option(
+    "--no-version",
+    is_flag=True,
+    default=False,
+    help="Hide version suffix from feature names.",
+)
+@click.option(
+    "--short",
+    is_flag=True,
+    default=False,
+    help="Shorthand for --no-namespace --no-version.",
+)
 def feature_order(as_json, no_namespace, no_version, short):
     no_namespace = no_namespace or short
     no_version = no_version or short
@@ -109,14 +126,16 @@ def feature_order(as_json, no_namespace, no_version, short):
     for i, entry in enumerate(ordered, start=1):
         namespace, name, version = _parse_entry(entry)
         requires = requires_map.get(name, [])
-        rows.append({
-            "position": i,
-            "feature": entry,
-            "namespace": namespace,
-            "name": name,
-            "version": version,
-            "requires": requires,
-        })
+        rows.append(
+            {
+                "position": i,
+                "feature": entry,
+                "namespace": namespace,
+                "name": name,
+                "version": version,
+                "requires": requires,
+            }
+        )
 
     if as_json:
         click.echo(json.dumps(rows, indent=2))
@@ -125,7 +144,9 @@ def feature_order(as_json, no_namespace, no_version, short):
     uvl_note = (
         click.style(f"  UVL: {os.path.basename(uvl)}", fg="bright_black")
         if uvl and os.path.isfile(uvl)
-        else click.style("  No UVL found — preserving pyproject.toml order", fg="yellow")
+        else click.style(
+            "  No UVL found — preserving pyproject.toml order", fg="yellow"
+        )
     )
 
     def _format_feature(row: dict) -> str:
@@ -148,7 +169,11 @@ def feature_order(as_json, no_namespace, no_version, short):
     for row in rows:
         pos = click.style(f"{row['position']:<4}", fg="bright_black")
         feature_label = _format_feature(row)
-        requires_label = ", ".join(row["requires"]) if row["requires"] else click.style("—", fg="bright_black")
+        requires_label = (
+            ", ".join(row["requires"])
+            if row["requires"]
+            else click.style("—", fg="bright_black")
+        )
         click.echo(f"  {pos} {feature_label:<{col_w}} {requires_label}")
 
     click.echo()

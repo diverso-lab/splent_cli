@@ -56,6 +56,7 @@ STATE_COLORS = {
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -84,6 +85,7 @@ def _save(product_path: str, product_name: str, data: dict) -> None:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def feature_key(namespace: str, name: str, version: str | None = None) -> str:
     """Build the canonical manifest key for a feature."""
@@ -201,7 +203,9 @@ def get_feature_state(product_path: str, key: str) -> str | None:
     return entry.get("state") if entry else None
 
 
-def cleanup_stale_entries(product_path: str, product_name: str, active_keys: set[str]) -> int:
+def cleanup_stale_entries(
+    product_path: str, product_name: str, active_keys: set[str]
+) -> int:
     """Remove manifest entries whose keys are not in active_keys.
 
     Returns the number of entries removed.

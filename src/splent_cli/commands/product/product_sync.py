@@ -5,7 +5,7 @@ import click
 from splent_cli.services import context
 from splent_cli.commands.feature.feature_clone import feature_clone
 from splent_cli.utils.feature_utils import read_features_from_data
-from splent_cli.utils.cache_utils import make_feature_writable, make_feature_readonly
+from splent_cli.utils.cache_utils import make_feature_writable
 
 
 @click.command(
@@ -41,7 +41,10 @@ def product_sync(ctx, force):
     local_features = [f for f in features if "@" not in f]
 
     if local_features:
-        click.secho(f"🧱 Syncing {len(local_features)} local features (workspace root)...", fg="cyan")
+        click.secho(
+            f"🧱 Syncing {len(local_features)} local features (workspace root)...",
+            fg="cyan",
+        )
         for entry in local_features:
             if "/" in entry:
                 ns_raw, name = entry.split("/", 1)
@@ -52,7 +55,9 @@ def product_sync(ctx, force):
 
             feature_root = os.path.join(workspace, name)
             if not os.path.exists(feature_root):
-                click.secho(f"  ⚠️  {name} not found at workspace root — skipping.", fg="yellow")
+                click.secho(
+                    f"  ⚠️  {name} not found at workspace root — skipping.", fg="yellow"
+                )
                 continue
 
             product_features_dir = os.path.join(workspace, product, "features", ns_safe)
@@ -127,8 +132,13 @@ def product_sync(ctx, force):
         key, ns, name, version = resolve_feature_key_from_entry(entry)
         if get_feature_state(product_path, key) is None:
             advance_state(
-                product_path, product, key,
-                to="declared", namespace=ns, name=name, version=version,
+                product_path,
+                product,
+                key,
+                to="declared",
+                namespace=ns,
+                name=name,
+                version=version,
             )
 
     click.secho("\n✅ Product synced successfully.", fg="green")

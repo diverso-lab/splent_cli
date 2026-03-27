@@ -1,6 +1,7 @@
 """
 check:env — Validate workspace environment variables and tool versions.
 """
+
 import os
 import sys
 
@@ -15,21 +16,26 @@ def _pkg_version(name: str) -> str | None:
         return None
 
 
-@click.command("check:env", short_help="Validate workspace environment and tool versions.")
+@click.command(
+    "check:env", short_help="Validate workspace environment and tool versions."
+)
 def check_env():
     """Check Python version, SPLENT env vars, CLI/framework compatibility."""
     ok = fail = warn = 0
 
     def _ok(msg):
-        nonlocal ok; ok += 1
+        nonlocal ok
+        ok += 1
         click.echo(click.style("  [✔] ", fg="green") + msg)
 
     def _fail(msg):
-        nonlocal fail; fail += 1
+        nonlocal fail
+        fail += 1
         click.echo(click.style("  [✖] ", fg="red") + msg)
 
     def _warn(msg):
-        nonlocal warn; warn += 1
+        nonlocal warn
+        warn += 1
         click.echo(click.style("  [⚠] ", fg="yellow") + msg)
 
     click.echo()
@@ -78,7 +84,9 @@ def check_env():
         else:
             _fail(f"CLI {cli_v} / Framework {fw_v} — major version mismatch")
     else:
-        _fail(f"CLI={'?' if not cli_v else cli_v} / Framework={'?' if not fw_v else fw_v}")
+        _fail(
+            f"CLI={'?' if not cli_v else cli_v} / Framework={'?' if not fw_v else fw_v}"
+        )
 
     # Credentials
     if os.getenv("GITHUB_TOKEN"):

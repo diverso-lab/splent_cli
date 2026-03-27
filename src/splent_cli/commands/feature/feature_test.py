@@ -173,13 +173,16 @@ def _run_pytest(
 
             env = os.environ.copy()
             existing = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = all_src_dirs + (os.pathsep + existing if existing else "")
+            env["PYTHONPATH"] = all_src_dirs + (
+                os.pathsep + existing if existing else ""
+            )
 
             cmd = [
                 "pytest",
                 str(level_dir),
                 "--rootdir=.",
-                "-W", "ignore::DeprecationWarning",
+                "-W",
+                "ignore::DeprecationWarning",
             ]
             if verbose:
                 cmd.append("-v")
@@ -225,14 +228,18 @@ def _run_pytest(
     short_help="Run pytest on one or all features of the active product.",
 )
 @click.argument("feature_ref", required=False, metavar="FEATURE_REF")
-@click.option("-k", "keyword", help="Only run tests matching this keyword (passed to pytest).")
+@click.option(
+    "-k", "keyword", help="Only run tests matching this keyword (passed to pytest)."
+)
 @click.option("-v", "verbose", is_flag=True, help="Verbose pytest output.")
 @click.option("--unit", is_flag=True, help="Run only unit tests.")
 @click.option("--integration", is_flag=True, help="Run only integration tests.")
 @click.option("--functional", is_flag=True, help="Run only functional tests.")
 @click.option("--e2e", is_flag=True, help="Run only end-to-end (Selenium) tests.")
 @click.option("--load", is_flag=True, help="Run only load (Locust) tests.")
-def feature_test(feature_ref, keyword, verbose, unit, integration, functional, e2e, load):
+def feature_test(
+    feature_ref, keyword, verbose, unit, integration, functional, e2e, load
+):
     """
     Run the test suite for features declared in the active product.
 

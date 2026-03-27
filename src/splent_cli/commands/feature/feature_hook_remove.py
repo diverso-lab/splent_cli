@@ -22,6 +22,7 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _resolve_editable(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
     """Resolve an editable (non-versioned) feature from the cache."""
     base, _, version = feature_ref.partition("@")
@@ -122,6 +123,7 @@ def _update_contract(pyproject_path: Path, slot: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Command
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @click.command(
     "feature:hook:remove",

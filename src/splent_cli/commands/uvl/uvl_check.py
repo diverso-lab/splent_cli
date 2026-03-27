@@ -31,20 +31,26 @@ def run_uvl_check(workspace: str) -> tuple[bool, str]:
         data = _load_pyproject(pyproject_path)
         uvl_cfg = _get_uvl_cfg(data)
         mirror = uvl_cfg.get("mirror")
-        doi    = uvl_cfg.get("doi")
-        file   = uvl_cfg.get("file")
+        doi = uvl_cfg.get("doi")
+        file = uvl_cfg.get("file")
         if not mirror or not doi or not file:
             return False, "Missing mirror, doi, or file in [tool.splent.uvl]."
         local_uvl = os.path.join(product_path, "uvl", file)
         if not os.path.exists(local_uvl):
-            return False, f"UVL not downloaded: {local_uvl}\n           Run: splent uvl:fetch"
+            return (
+                False,
+                f"UVL not downloaded: {local_uvl}\n           Run: splent uvl:fetch",
+            )
         universe, root_name = _list_all_features_from_uvl(local_uvl)
         deps = _get_feature_deps(data)
         selected = {_normalize_feature_name(d) for d in deps}
         selected.add(root_name)
         unknown = sorted(f for f in selected if f not in universe)
         if unknown:
-            return False, f"pyproject contains features not in UVL: {', '.join(unknown)}"
+            return (
+                False,
+                f"pyproject contains features not in UVL: {', '.join(unknown)}",
+            )
         conf_path = _write_csvconf_full(universe, selected)
         try:
             fm = FLAMAFeatureModel(local_uvl)

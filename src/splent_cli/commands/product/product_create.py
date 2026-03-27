@@ -11,6 +11,7 @@ from splent_cli.services import context
 
 try:
     from importlib.metadata import version as _pkg_version
+
     _CLI_VERSION = _pkg_version("splent_cli")
 except Exception:
     _CLI_VERSION = "dev"

@@ -156,7 +156,9 @@ def extract_implications_from_uvl_text(uvl_text: str) -> list[tuple[str, str]]:
     return pairs
 
 
-def print_uvl_header(command: str, app_name: str, local_uvl: str, n_features: int) -> None:
+def print_uvl_header(
+    command: str, app_name: str, local_uvl: str, n_features: int
+) -> None:
     """Print the standard UVL command header."""
     click.echo()
     click.echo(f"UVL {command}")

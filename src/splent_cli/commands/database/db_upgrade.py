@@ -12,6 +12,7 @@ from splent_framework.utils.path_utils import PathUtils
 def _resolve_product():
     """Return (product_path, product_name) from env."""
     import os
+
     product = os.getenv("SPLENT_APP", "")
     product_path = PathUtils.get_app_base_dir()
     return product_path, product
@@ -54,6 +55,7 @@ def db_upgrade(feature):
 
     # Suppress Alembic's verbose INFO output
     import logging
+
     logging.getLogger("alembic").setLevel(logging.WARNING)
 
     for feat, mdir in dirs.items():
@@ -70,8 +72,13 @@ def db_upgrade(feature):
             if info:
                 key, ns, name, version = info
                 advance_state(
-                    product_path, product_name, key,
-                    to="migrated", namespace=ns, name=name, version=version,
+                    product_path,
+                    product_name,
+                    key,
+                    to="migrated",
+                    namespace=ns,
+                    name=name,
+                    version=version,
                 )
         except Exception as e:
             click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))

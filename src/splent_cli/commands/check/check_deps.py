@@ -16,13 +16,13 @@ import re
 import click
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
 from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
 # ---------------------------------------------------------------------------
 # UVL parser — extract dependency graph
 # ---------------------------------------------------------------------------
+
 
 def _parse_uvl_deps(uvl_path: str) -> tuple[dict[str, str], dict[str, set[str]]]:
     """Parse UVL file and return (package_map, allowed_deps).
@@ -82,7 +82,10 @@ def _parse_uvl_deps(uvl_path: str) -> tuple[dict[str, str], dict[str, set[str]]]
 # Source code scanner — find actual imports of other features
 # ---------------------------------------------------------------------------
 
-def _scan_feature_imports(feature_path: str, feature_name: str, all_packages: set[str]) -> set[str]:
+
+def _scan_feature_imports(
+    feature_path: str, feature_name: str, all_packages: set[str]
+) -> set[str]:
     """Scan all .py files in a feature and return set of other feature packages imported."""
     imported: set[str] = set()
 
@@ -109,7 +112,9 @@ def _scan_feature_imports(feature_path: str, feature_name: str, all_packages: se
                 continue
 
             # Find imports: from splent_io.splent_feature_X... or import splent_io.splent_feature_X
-            for match in re.findall(r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content):
+            for match in re.findall(
+                r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content
+            ):
                 if match != feature_name and match in all_packages:
                     imported.add(match)
 
@@ -120,7 +125,10 @@ def _scan_feature_imports(feature_path: str, feature_name: str, all_packages: se
 # Feature path resolver
 # ---------------------------------------------------------------------------
 
-def _resolve_feature_paths(workspace: str, product: str, features: list[str]) -> dict[str, str]:
+
+def _resolve_feature_paths(
+    workspace: str, product: str, features: list[str]
+) -> dict[str, str]:
     """Return {package_name: feature_path} for each declared feature."""
     result = {}
     features_dir = os.path.join(workspace, product, "features")
@@ -143,6 +151,7 @@ def _resolve_feature_paths(workspace: str, product: str, features: list[str]) ->
 # ---------------------------------------------------------------------------
 # Command
 # ---------------------------------------------------------------------------
+
 
 @click.command(
     "check:deps",
@@ -202,17 +211,21 @@ def check_deps():
         fpath = feature_paths.get(pkg_name)
 
         if not fpath:
-            click.echo(click.style(f"  {short}", bold=True) +
-                       click.style("  (not in cache, skipped)", fg="bright_black"))
+            click.echo(
+                click.style(f"  {short}", bold=True)
+                + click.style("  (not in cache, skipped)", fg="bright_black")
+            )
             continue
 
         actual_imports = _scan_feature_imports(fpath, pkg_name, all_packages)
         allowed = allowed_deps.get(pkg_name, set())
 
         if not actual_imports:
-            click.echo(click.style("  [✔] ", fg="green") +
-                       click.style(f"{short}", bold=True) +
-                       " — no cross-feature imports")
+            click.echo(
+                click.style("  [✔] ", fg="green")
+                + click.style(f"{short}", bold=True)
+                + " — no cross-feature imports"
+            )
             ok += 1
             continue
 
@@ -221,24 +234,38 @@ def check_deps():
             imp_short = pkg_to_short.get(imp, imp)
 
             if imp in allowed:
-                click.echo(click.style("  [✔] ", fg="green") +
-                           click.style(f"{short}", bold=True) +
-                           f" imports {imp_short}" +
-                           click.style(f"  (allowed: {short} => {imp_short})", fg="bright_black"))
+                click.echo(
+                    click.style("  [✔] ", fg="green")
+                    + click.style(f"{short}", bold=True)
+                    + f" imports {imp_short}"
+                    + click.style(
+                        f"  (allowed: {short} => {imp_short})", fg="bright_black"
+                    )
+                )
                 ok += 1
             else:
                 # Check if the reverse is declared (inverted dependency)
                 reverse_allowed = allowed_deps.get(imp, set())
                 if pkg_name in reverse_allowed:
-                    click.echo(click.style("  [✖] ", fg="red") +
-                               click.style(f"{short}", bold=True) +
-                               f" imports {imp_short}" +
-                               click.style(f"  INVERTED — UVL says {imp_short} => {short}, not the reverse", fg="red"))
+                    click.echo(
+                        click.style("  [✖] ", fg="red")
+                        + click.style(f"{short}", bold=True)
+                        + f" imports {imp_short}"
+                        + click.style(
+                            f"  INVERTED — UVL says {imp_short} => {short}, not the reverse",
+                            fg="red",
+                        )
+                    )
                 else:
-                    click.echo(click.style("  [✖] ", fg="red") +
-                               click.style(f"{short}", bold=True) +
-                               f" imports {imp_short}" +
-                               click.style(f"  UNDECLARED — no UVL constraint between {short} and {imp_short}", fg="red"))
+                    click.echo(
+                        click.style("  [✖] ", fg="red")
+                        + click.style(f"{short}", bold=True)
+                        + f" imports {imp_short}"
+                        + click.style(
+                            f"  UNDECLARED — no UVL constraint between {short} and {imp_short}",
+                            fg="red",
+                        )
+                    )
                 violations += 1
                 has_violation = True
 
@@ -247,10 +274,16 @@ def check_deps():
 
     click.echo()
     if violations:
-        click.secho(f"  {violations} violation(s) found. Fix the code or update the UVL.", fg="red")
+        click.secho(
+            f"  {violations} violation(s) found. Fix the code or update the UVL.",
+            fg="red",
+        )
         raise SystemExit(1)
     else:
-        click.secho(f"  ✅ All cross-feature imports are consistent with UVL ({ok} checks passed).", fg="green")
+        click.secho(
+            f"  ✅ All cross-feature imports are consistent with UVL ({ok} checks passed).",
+            fg="green",
+        )
     click.echo()
 
 

@@ -75,7 +75,8 @@ def _check_group(
 )
 @click.argument("product_name", required=False)
 @click.option(
-    "--verbose", "-v",
+    "--verbose",
+    "-v",
     is_flag=True,
     help="Show full unified diff for changed files.",
 )

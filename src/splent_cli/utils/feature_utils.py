@@ -13,7 +13,9 @@ def _read_list(data: dict, key: str) -> list[str]:
     raw = data.get("tool", {}).get("splent", {}).get(key)
     # Legacy fallback only for the base "features" key
     if raw is None and key == "features":
-        raw = data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        raw = (
+            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+        )
     if not isinstance(raw, (list, type(None))):
         return []
     return [x.strip() for x in (raw or []) if isinstance(x, str) and x.strip()]

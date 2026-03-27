@@ -120,9 +120,22 @@ def feature_clone(full_name):
     # Try clone specific tag/branch (suppress git noise)
     try:
         subprocess.run(
-            ["git", "-c", "advice.detachedHead=false", "clone", "--depth", "1",
-             "--branch", version, "--quiet", fork_url, local_path],
-            check=True, capture_output=True, text=True,
+            [
+                "git",
+                "-c",
+                "advice.detachedHead=false",
+                "clone",
+                "--depth",
+                "1",
+                "--branch",
+                version,
+                "--quiet",
+                fork_url,
+                local_path,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
         )
     except subprocess.CalledProcessError:
         click.secho(
@@ -130,7 +143,9 @@ def feature_clone(full_name):
         )
         subprocess.run(
             ["git", "clone", "--depth", "1", "--quiet", fork_url, local_path],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         )
 
     # Lock files as read-only to prevent accidental edits on pinned features

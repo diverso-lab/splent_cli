@@ -38,7 +38,11 @@ def feature_list():
 
     for key, entries, label in groups:
         if entries:
-            click.echo(click.style(f"  {label} — [tool.splent.{key}] ({len(entries)}):", bold=True))
+            click.echo(
+                click.style(
+                    f"  {label} — [tool.splent.{key}] ({len(entries)}):", bold=True
+                )
+            )
             for entry in entries:
                 click.echo(f"    - {entry}")
             click.echo()

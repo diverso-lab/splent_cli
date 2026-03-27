@@ -1,4 +1,6 @@
-from {{ feature_import }}.repositories import {{ feature_name | pascalcase }}Repository
+from {{ feature_import }}.repositories import (
+    {{ feature_name | pascalcase }}Repository,
+)
 from splent_framework.services.BaseService import BaseService
 
 

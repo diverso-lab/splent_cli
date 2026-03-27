@@ -24,7 +24,9 @@ def _get_filesystem_head(mdir: str) -> str | None:
             with open(path, "r", encoding="utf-8") as fh:
                 content = fh.read()
             rev_m = re.search(r"^revision\s*=\s*['\"](\w+)['\"]", content, re.MULTILINE)
-            down_m = re.search(r"^down_revision\s*=\s*['\"](\w+)['\"]", content, re.MULTILINE)
+            down_m = re.search(
+                r"^down_revision\s*=\s*['\"](\w+)['\"]", content, re.MULTILINE
+            )
             if rev_m:
                 revisions[rev_m.group(1)] = down_m.group(1) if down_m else None
         except Exception:
@@ -72,7 +74,9 @@ def db_status():
     col_feat = max(col_feat, len("Feature"))
     col_rev = 14
 
-    click.echo(f"  {'Feature':<{col_feat}}  {'Applied':<{col_rev}}  {'Latest':<{col_rev}}  Status")
+    click.echo(
+        f"  {'Feature':<{col_feat}}  {'Applied':<{col_rev}}  {'Latest':<{col_rev}}  Status"
+    )
     click.echo(f"  {'-' * col_feat}  {'-' * col_rev}  {'-' * col_rev}  {'-' * 12}")
 
     issues = 0
@@ -98,11 +102,16 @@ def db_status():
         else:
             status = click.style("— none", fg="bright_black")
 
-        click.echo(f"  {feat:<{col_feat}}  {db_display:<{col_rev}}  {fs_display:<{col_rev}}  {status}")
+        click.echo(
+            f"  {feat:<{col_feat}}  {db_display:<{col_rev}}  {fs_display:<{col_rev}}  {status}"
+        )
 
     click.echo()
     if issues:
-        click.secho(f"  {issues} feature(s) out of sync. Run 'splent db:upgrade' to apply pending migrations.", fg="yellow")
+        click.secho(
+            f"  {issues} feature(s) out of sync. Run 'splent db:upgrade' to apply pending migrations.",
+            fg="yellow",
+        )
         click.echo()
 
 

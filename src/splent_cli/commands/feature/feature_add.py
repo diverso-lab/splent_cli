@@ -51,7 +51,10 @@ def feature_add(full_name):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    from splent_cli.utils.feature_utils import read_features_from_data, write_features_to_data
+    from splent_cli.utils.feature_utils import (
+        read_features_from_data,
+        write_features_to_data,
+    )
 
     features = read_features_from_data(data)
 
@@ -84,8 +87,14 @@ def feature_add(full_name):
     product_path = os.path.join(workspace, product)
     key = feature_key(namespace, feature_name)
     set_feature_state(
-        product_path, product, key, "declared",
-        namespace=namespace, name=feature_name, version=None, mode="editable",
+        product_path,
+        product,
+        key,
+        "declared",
+        namespace=namespace,
+        name=feature_name,
+        version=None,
+        mode="editable",
     )
 
     click.echo(f"✅ Feature '{full_name}' added successfully to product '{product}'.")

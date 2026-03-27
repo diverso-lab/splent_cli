@@ -12,6 +12,7 @@ from splent_cli.utils.feature_utils import read_features_from_data
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
+
 def _github_headers(token: str | None) -> dict:
     h = {
         "Accept": "application/vnd.github+json",
@@ -39,16 +40,14 @@ def _get_json(url: str, headers: dict) -> list | dict | None:
 
 # ── Source fetchers ───────────────────────────────────────────────────────────
 
+
 def _github_versions(org: str, repo: str, token: str | None) -> list[str]:
     """Return all tag names from the GitHub repo, newest first."""
     headers = _github_headers(token)
     tags = []
     page = 1
     while True:
-        url = (
-            f"https://api.github.com/repos/{org}/{repo}/tags"
-            f"?per_page=100&page={page}"
-        )
+        url = f"https://api.github.com/repos/{org}/{repo}/tags?per_page=100&page={page}"
         batch = _get_json(url, headers)
         if not batch:
             break
@@ -67,11 +66,13 @@ def _pypi_versions(package: str) -> list[str]:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
         versions = list(data.get("releases", {}).keys())
+
         def _latest_upload(v):
             files = data["releases"][v]
             if not files:
                 return ""
             return max(f.get("upload_time", "") for f in files)
+
         return sorted(versions, key=_latest_upload, reverse=True)
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -82,6 +83,7 @@ def _pypi_versions(package: str) -> list[str]:
 
 
 # ── Version helpers ───────────────────────────────────────────────────────────
+
 
 def _strip_v(v: str) -> str:
     return v.lstrip("v")
@@ -112,10 +114,12 @@ def _status_label(declared: str | None, gh_versions: list[str]) -> tuple[str, st
 
 # ── Pyproject helpers ─────────────────────────────────────────────────────────
 
+
 def _read_product_features() -> list[str]:
     """Return raw feature entries from the active product's pyproject.toml."""
     try:
         from splent_cli.services import context
+
         workspace = str(context.workspace())
         product = context.require_app()
     except SystemExit:
@@ -140,6 +144,7 @@ def _declared_version(features: list[str], feature_name: str) -> str | None:
 
 
 # ── Diff helper ───────────────────────────────────────────────────────────────
+
 
 def _pypi_version_exists(package: str, version: str) -> bool:
     """Check if a specific version exists on PyPI via the per-version endpoint.
@@ -190,9 +195,7 @@ def _print_diff_table(
         + click.style(f"{'PyPI':<{COL_SRC}}", bold=True, fg="magenta")
     )
     click.echo(
-        click.style(
-            f"  {'─' * (COL_VER + COL_SRC * 2 + 10)}", fg="bright_black"
-        )
+        click.style(f"  {'─' * (COL_VER + COL_SRC * 2 + 10)}", fg="bright_black")
     )
 
     all_in_sync = True
@@ -246,18 +249,59 @@ def _print_diff_table(
 
 # ── Command ───────────────────────────────────────────────────────────────────
 
+
 @click.command(
     "feature:versions",
     short_help="List all available versions of a feature on GitHub and PyPI.",
 )
 @click.argument("feature_identifier", required=False, default=None)
-@click.option("--github", "only_github", is_flag=True, default=False, help="Show only GitHub tags.")
-@click.option("--pypi", "only_pypi", is_flag=True, default=False, help="Show only PyPI releases.")
-@click.option("--diff", "show_diff", is_flag=True, default=False, help="Show versions missing from one source or the other.")
-@click.option("--latest", "show_latest", is_flag=True, default=False, help="Show only the latest available version.")
-@click.option("--status", "show_status", is_flag=True, default=False, help="Compare declared version in pyproject against the latest on GitHub.")
-@click.option("--all", "show_all", is_flag=True, default=False, help="Check all features declared in the active product.")
-def feature_versions(feature_identifier, only_github, only_pypi, show_diff, show_latest, show_status, show_all):
+@click.option(
+    "--github",
+    "only_github",
+    is_flag=True,
+    default=False,
+    help="Show only GitHub tags.",
+)
+@click.option(
+    "--pypi", "only_pypi", is_flag=True, default=False, help="Show only PyPI releases."
+)
+@click.option(
+    "--diff",
+    "show_diff",
+    is_flag=True,
+    default=False,
+    help="Show versions missing from one source or the other.",
+)
+@click.option(
+    "--latest",
+    "show_latest",
+    is_flag=True,
+    default=False,
+    help="Show only the latest available version.",
+)
+@click.option(
+    "--status",
+    "show_status",
+    is_flag=True,
+    default=False,
+    help="Compare declared version in pyproject against the latest on GitHub.",
+)
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    default=False,
+    help="Check all features declared in the active product.",
+)
+def feature_versions(
+    feature_identifier,
+    only_github,
+    only_pypi,
+    show_diff,
+    show_latest,
+    show_status,
+    show_all,
+):
     """
     List all released versions of a feature from GitHub tags and PyPI.
 
@@ -281,19 +325,29 @@ def feature_versions(feature_identifier, only_github, only_pypi, show_diff, show
         return
 
     if not feature_identifier:
-        raise click.UsageError("Missing argument '<feature_name>'. Use --all to check all features.")
+        raise click.UsageError(
+            "Missing argument '<feature_name>'. Use --all to check all features."
+        )
 
-    _, namespace_github, _, feature_name = compose.parse_feature_identifier(feature_identifier)
+    _, namespace_github, _, feature_name = compose.parse_feature_identifier(
+        feature_identifier
+    )
     feature_name = feature_name.split("@")[0]
 
     show_github = not only_pypi
     show_pypi = not only_github
 
     click.echo()
-    click.echo(click.style(f"  Versions for {namespace_github}/{feature_name}", bold=True))
+    click.echo(
+        click.style(f"  Versions for {namespace_github}/{feature_name}", bold=True)
+    )
     click.echo(click.style(f"  {'─' * 50}", fg="bright_black"))
 
-    gh_versions = _github_versions(namespace_github, feature_name, token) if (show_github or show_diff or show_status) else []
+    gh_versions = (
+        _github_versions(namespace_github, feature_name, token)
+        if (show_github or show_diff or show_status)
+        else []
+    )
     pypi_versions = _pypi_versions(feature_name) if (show_pypi or show_diff) else []
 
     # ── Latest ────────────────────────────────────────────────────────────────
@@ -315,8 +369,12 @@ def feature_versions(feature_identifier, only_github, only_pypi, show_diff, show
         latest_gh = gh_versions[0] if gh_versions else None
         label, color = _status_label(declared, gh_versions)
         click.echo()
-        click.echo(f"  {'Declared:':12} {click.style(declared or '(editable)', fg='bright_white')}")
-        click.echo(f"  {'Latest (GH):':12} {click.style(latest_gh or '(none)', fg='cyan')}")
+        click.echo(
+            f"  {'Declared:':12} {click.style(declared or '(editable)', fg='bright_white')}"
+        )
+        click.echo(
+            f"  {'Latest (GH):':12} {click.style(latest_gh or '(none)', fg='cyan')}"
+        )
         click.echo(f"  {'Status:':12} {click.style(label, fg=color)}")
         click.echo()
         if not token:
@@ -328,9 +386,7 @@ def feature_versions(feature_identifier, only_github, only_pypi, show_diff, show
     if show_diff:
         _print_diff_table(gh_versions, pypi_versions, feature_name)
         if not token:
-            click.secho(
-                "  💡 Set GITHUB_TOKEN to avoid rate limits.", fg="yellow"
-            )
+            click.secho("  💡 Set GITHUB_TOKEN to avoid rate limits.", fg="yellow")
             click.echo()
         return
 
@@ -360,10 +416,14 @@ def feature_versions(feature_identifier, only_github, only_pypi, show_diff, show
 
 # ── --all table ───────────────────────────────────────────────────────────────
 
+
 def _cmd_all(token: str | None, show_status: bool) -> None:
     features = _read_product_features()
     if not features:
-        click.secho("❌ No features found. Make sure a product is selected and pyproject.toml exists.", fg="red")
+        click.secho(
+            "❌ No features found. Make sure a product is selected and pyproject.toml exists.",
+            fg="red",
+        )
         raise SystemExit(1)
 
     COL_NAME = 38
@@ -379,7 +439,12 @@ def _cmd_all(token: str | None, show_status: bool) -> None:
         f"{'Status':<{COL_STATUS}}"
     )
     click.echo(click.style(header, bold=True))
-    click.echo(click.style(f"  {'─' * (COL_NAME + COL_DECLARED + COL_LATEST + COL_STATUS)}", fg="bright_black"))
+    click.echo(
+        click.style(
+            f"  {'─' * (COL_NAME + COL_DECLARED + COL_LATEST + COL_STATUS)}",
+            fg="bright_black",
+        )
+    )
 
     for entry in features:
         bare = entry.split("@")[0].split("/")[-1]
@@ -395,10 +460,7 @@ def _cmd_all(token: str | None, show_status: bool) -> None:
         col_latest = f"{(latest_gh or '(none)'):<{COL_LATEST}}"
 
         click.echo(
-            f"  {col_name}"
-            f"{col_declared}"
-            f"{col_latest}"
-            + click.style(label, fg=color)
+            f"  {col_name}{col_declared}{col_latest}" + click.style(label, fg=color)
         )
 
     click.echo()
