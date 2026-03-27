@@ -2,9 +2,36 @@ import os
 import subprocess
 import tomllib
 import click
+import requests
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.utils.cache_utils import make_feature_writable
+
+
+# =====================================================================
+# GITHUB WRITE ACCESS CHECK
+# =====================================================================
+def _has_write_access(ns_git: str, name: str) -> bool:
+    """Return True if the authenticated user has push access to ns_git/name."""
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return False
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"token {token}",
+        "User-Agent": "splent-cli",
+    }
+    try:
+        resp = requests.get(
+            f"https://api.github.com/repos/{ns_git}/{name}",
+            headers=headers,
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("permissions", {}).get("push", False)
+    except requests.RequestException:
+        pass
+    return False
 
 
 # =====================================================================
@@ -146,6 +173,16 @@ def _edit_one(
     if not version:
         click.echo(f"  ℹ️  {match} — already editable, skipping.")
         return True
+
+    # Guard: require write access to the GitHub repo
+    if not _has_write_access(ns_git, name):
+        click.secho(
+            f"  ❌ No write access to {ns_git}/{name}.\n"
+            f"     You cannot edit a feature you don't own.\n"
+            f"     To work on your own copy, use: splent feature:fork {ns_git}/{name}",
+            fg="red",
+        )
+        return False
 
     # Guard: cannot edit a feature with applied migrations
     key, _, _, _ = resolve_feature_key_from_entry(match)

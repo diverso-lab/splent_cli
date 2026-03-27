@@ -141,12 +141,19 @@ def feature_clone(full_name):
         click.secho(
             f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow"
         )
-        subprocess.run(
-            ["git", "clone", "--depth", "1", "--quiet", fork_url, local_path],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "--quiet", fork_url, local_path],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError:
+            click.secho(
+                f"❌ Repository '{namespace}/{repo}' not found or not accessible.",
+                fg="red",
+            )
+            raise SystemExit(1)
 
     # Lock files as read-only to prevent accidental edits on pinned features
     make_feature_readonly(local_path)

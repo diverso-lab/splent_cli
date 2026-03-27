@@ -1,8 +1,12 @@
+import json
 import os
+import subprocess
+import tomllib
 
 import click
 
-from splent_cli.services import context
+from splent_cli.services import context, compose
+from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.commands.uvl.uvl_check import run_uvl_check
 from splent_cli.commands.feature.feature_diff import run_all_product_check
 from splent_cli.commands.product.product_sync import product_sync
@@ -10,6 +14,91 @@ from splent_cli.commands.product.product_env import product_env
 from splent_cli.commands.product.product_up import product_up
 from splent_cli.commands.product.product_run import product_runc
 from splent_cli.commands.product.product_port import product_port
+
+
+# ── Port conflict helpers ──────────────────────────────────────────────────────
+
+def _extract_host_ports(compose_file: str) -> list[tuple[int, str]]:
+    """Return [(host_port, service_name)] declared in a docker-compose file."""
+    result = subprocess.run(
+        ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    try:
+        config = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+    ports = []
+    for svc_name, svc in config.get("services", {}).items():
+        for port in svc.get("ports", []):
+            published = port.get("published") if isinstance(port, dict) else None
+            if published:
+                try:
+                    ports.append((int(published), svc_name))
+                except (ValueError, TypeError):
+                    pass
+    return ports
+
+
+def _containers_using_port(host_port: int) -> list[tuple[str, str]]:
+    """Return [(container_id, container_name)] of running containers bound to host_port."""
+    result = subprocess.run(
+        ["docker", "ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Ports}}"],
+        capture_output=True,
+        text=True,
+    )
+    conflicts = []
+    for line in result.stdout.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) < 3:
+            continue
+        cid, name, ports_str = parts
+        if f":{host_port}->" in ports_str:
+            conflicts.append((cid, name))
+    return conflicts
+
+
+def _run_port_check(workspace: str, product: str, product_path: str, features: list, env: str) -> list[dict]:
+    """
+    Scan all compose files that product:up will start and find port conflicts.
+    Returns list of dicts: {port, service, containers: [(id, name)]}
+    """
+    conflicts = []
+    seen_ports: set[int] = set()
+
+    def check_file(label, compose_file):
+        for host_port, svc_name in _extract_host_ports(compose_file):
+            if host_port in seen_ports:
+                continue
+            seen_ports.add(host_port)
+            blocking = _containers_using_port(host_port)
+            if blocking:
+                conflicts.append({
+                    "port": host_port,
+                    "service": f"{label}/{svc_name}",
+                    "containers": blocking,
+                })
+
+    for feat in features:
+        clean = compose.normalize_feature_ref(feat)
+        docker_dir = compose.feature_docker_dir(workspace, clean)
+        for fname in [f"docker-compose.{env}.yml", "docker-compose.yml"]:
+            cf = os.path.join(docker_dir, fname)
+            if os.path.exists(cf):
+                check_file(clean, cf)
+                break
+
+    for fname in [f"docker-compose.{env}.yml", "docker-compose.yml"]:
+        cf = os.path.join(os.path.join(product_path, "docker"), fname)
+        if os.path.exists(cf):
+            check_file(product, cf)
+            break
+
+    return conflicts
 
 
 @click.command(
@@ -23,9 +112,10 @@ def product_derive(mode):
     Full SPL product derivation pipeline.
 
     \b
-    Runs two pre-flight checks before the pipeline:
-      1. uvl:check  — feature selection must be satisfiable under the UVL model.
-      2. feature:diff --all  — no ERROR-level conflicts between feature contracts.
+    Runs three pre-flight checks before the pipeline:
+      1. uvl:check       — feature selection must be satisfiable under the UVL model.
+      2. feature:diff    — no ERROR-level conflicts between feature contracts.
+      3. port conflicts  — no running containers occupying required host ports.
 
     \b
     --dev runs (after pre-flight):
@@ -60,8 +150,8 @@ def product_derive(mode):
 
     preflight_failed = False
 
-    # [pre 1/2] uvl:check
-    click.echo(click.style("  [1/2] uvl:check", fg="bright_black"))
+    # [pre 1/3] uvl:check
+    click.echo(click.style("  [1/3] uvl:check", fg="bright_black"))
     uvl_ok, uvl_msg = run_uvl_check(workspace)
     if uvl_ok:
         click.secho("        ✅ UVL configuration is satisfiable.", fg="green")
@@ -71,8 +161,8 @@ def product_derive(mode):
         preflight_failed = True
     click.echo()
 
-    # [pre 2/2] feature:diff --all
-    click.echo(click.style("  [2/2] feature:diff --all", fg="bright_black"))
+    # [pre 2/3] feature:diff --all
+    click.echo(click.style("  [2/3] feature:diff --all", fg="bright_black"))
     findings = run_all_product_check(workspace, product_dir)
     errors = [f for f in findings if f["severity"] == "error"]
     warnings = [f for f in findings if f["severity"] == "warning"]
@@ -91,6 +181,51 @@ def product_derive(mode):
             click.secho(f"        🚨 [{err['field']}] {err['message']}", fg="red")
         click.secho("        → Run: splent feature:diff --all", fg="yellow")
         preflight_failed = True
+    click.echo()
+
+    # [pre 3/3] port conflict check
+    click.echo(click.style("  [3/3] port conflicts", fg="bright_black"))
+    pyproject_path = os.path.join(product_dir, "pyproject.toml")
+    features = []
+    if os.path.exists(pyproject_path):
+        with open(pyproject_path, "rb") as f:
+            features = read_features_from_data(tomllib.load(f), mode)
+
+    port_conflicts = _run_port_check(workspace, product, product_dir, features, mode)
+
+    if not port_conflicts:
+        click.secho("        ✅ No port conflicts detected.", fg="green")
+    else:
+        click.secho(
+            f"        ⚠️  {len(port_conflicts)} port conflict(s) found:\n", fg="yellow"
+        )
+        all_containers: dict[str, str] = {}  # id → name
+        for conflict in port_conflicts:
+            for cid, cname in conflict["containers"]:
+                all_containers[cid] = cname
+            container_list = ", ".join(n for _, n in conflict["containers"])
+            click.secho(
+                f"          port {conflict['port']:>5}  ←  {conflict['service']}"
+                f"  (blocked by: {container_list})",
+                fg="yellow",
+            )
+
+        click.echo()
+        stop_them = click.confirm(
+            "        Stop and remove the conflicting containers?", default=False
+        )
+        if stop_them:
+            for cid, cname in all_containers.items():
+                click.echo(f"        🛑 Stopping {cname}...")
+                subprocess.run(["docker", "stop", cid], capture_output=True)
+                subprocess.run(["docker", "rm", cid], capture_output=True)
+            click.secho("        ✅ Conflicting containers removed.", fg="green")
+        else:
+            click.secho(
+                "        ❌ Cannot proceed with port conflicts unresolved.",
+                fg="red",
+            )
+            preflight_failed = True
     click.echo()
 
     if preflight_failed:

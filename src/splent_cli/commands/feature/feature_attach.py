@@ -1,28 +1,26 @@
 import os
 import tomllib
 import tomli_w
-import subprocess
 import click
-import requests
 from splent_cli.services import context, compose
 from splent_cli.utils.manifest import feature_key, set_feature_state
-from splent_cli.utils.cache_utils import make_feature_readonly
 
 
 @click.command(
     "feature:attach",
-    short_help="Attach a released feature version to the current product.",
+    short_help="Attach a cached feature version to the current product.",
 )
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)
 def feature_attach(feature_identifier, version):
     """
-    Attach a released feature version to the current product.
+    Attach a cached feature version to the current product.
 
-    - Verifies that the GitHub tag exists.
-    - Clones the feature version into the cache if missing.
+    - Requires the feature to already be in the local cache.
+      If not, run: splent feature:clone <namespace>/<feature>@<version>
     - Updates pyproject.toml referencing feature@version.
     - Creates/updates the versioned symlink in features/<namespace>/.
+    - Updates the manifest state to 'declared'.
     """
     product = context.require_app()
     ws = context.workspace()
@@ -40,85 +38,19 @@ def feature_attach(feature_identifier, version):
         click.echo("❌ pyproject.toml not found in product.")
         raise SystemExit(1)
 
-    # --- 1️⃣ Verify GitHub tag ----------------------------------------------
-    click.echo(f"🔍 Checking GitHub for {namespace_github}/{feature_name}@{version}...")
-
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "splent-cli"}
-    token = os.getenv("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"token {token}"
-
-    tag_api_urls = [
-        f"https://api.github.com/repos/{namespace_github}/{feature_name}/git/refs/tags/{version}",
-        f"https://api.github.com/repos/{namespace_github}/{feature_name}/releases/tags/{version}",
-    ]
-    html_url = (
-        f"https://github.com/{namespace_github}/{feature_name}/releases/tag/{version}"
-    )
-
-    exists = False
-    for url in tag_api_urls:
-        try:
-            resp = requests.get(url, headers=headers, timeout=5)
-            if resp.status_code == 200:
-                exists = True
-                break
-        except requests.RequestException:
-            pass
-
-    if not exists:
-        try:
-            resp = requests.get(html_url, headers=headers, timeout=5)
-            if resp.status_code == 200:
-                exists = True
-        except requests.RequestException:
-            pass
-
-    if not exists:
-        click.echo(f"❌ Tag {version} not found for {namespace_github}/{feature_name}.")
-        raise SystemExit(1)
-
-    click.echo("✅ GitHub tag exists.")
-
-    # --- 2️⃣ Clone into cache if needed -------------------------------------
+    # --- 1️⃣ Verify feature exists in cache ---------------------------------
     versioned_dir = os.path.join(cache_base, f"{feature_name}@{version}")
 
     if not os.path.exists(versioned_dir):
-        click.echo(f"⬇️  Cloning {namespace_github}/{feature_name}@{version}...")
-
-        use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
-        url = (
-            f"git@github.com:{namespace_github}/{feature_name}.git"
-            if use_ssh
-            else f"https://github.com/{namespace_github}/{feature_name}.git"
+        click.echo(
+            f"❌ Feature '{namespace}/{feature_name}@{version}' not found in cache.\n"
+            f"   Run first: splent feature:clone {namespace}/{feature_name}@{version}"
         )
+        raise SystemExit(1)
 
-        try:
-            subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--branch",
-                    version,
-                    "--depth",
-                    "1",
-                    url,
-                    versioned_dir,
-                ],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            make_feature_readonly(versioned_dir)
-            click.echo(f"🔒 Feature cloned (read-only) → {versioned_dir}")
-        except subprocess.CalledProcessError as e:
-            click.echo(f"❌ Failed to clone: {e.stderr.strip()}")
-            raise SystemExit(1)
-    else:
-        click.echo(f"✅ Cache exists → {versioned_dir}")
+    click.echo(f"✅ Cache found → {versioned_dir}")
 
-    # --- 3️⃣ Update pyproject.toml ------------------------------------------
+    # --- 2️⃣ Update pyproject.toml ------------------------------------------
     full_name = f"{namespace}/{feature_name}@{version}"
     bare_name = f"{namespace}/{feature_name}"
 
@@ -145,7 +77,7 @@ def feature_attach(feature_identifier, version):
             tomli_w.dump(data, f)
         click.echo(f"🧩 Updated pyproject.toml → {full_name}")
 
-    # --- 4️⃣ Create/update symlink ------------------------------------------
+    # --- 3️⃣ Create/update symlink ------------------------------------------
     product_features_dir = os.path.join(product_path, "features", namespace_fs)
     os.makedirs(product_features_dir, exist_ok=True)
 
@@ -157,7 +89,7 @@ def feature_attach(feature_identifier, version):
 
     click.echo(f"🔗 Linked {new_link} → {rel_target}")
 
-    # --- 5️⃣ Update manifest ------------------------------------------------
+    # --- 4️⃣ Update manifest ------------------------------------------------
     key = feature_key(namespace_fs, feature_name, version)
     set_feature_state(
         product_path,

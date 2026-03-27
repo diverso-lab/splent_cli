@@ -18,11 +18,11 @@ class TestProductEnvMergeOrgNormalization:
         pyproject.write_text(
             '[project]\nname = "test_app"\nversion = "1.0.0"\n'
             '[project.optional-dependencies]\n'
-            'features = ["splent-io/splent_feature_redis@v1.2.1"]\n'
+            'features = ["splent-io/splent_feature_redis@v1.2.7"]\n'
         )
 
         # Create cache with underscore org (real filesystem)
-        cache_docker = ws / ".splent_cache" / "features" / "splent_io" / "splent_feature_redis@v1.2.1" / "docker"
+        cache_docker = ws / ".splent_cache" / "features" / "splent_io" / "splent_feature_redis@v1.2.7" / "docker"
         cache_docker.mkdir(parents=True)
         (cache_docker / ".env.example").write_text("REDIS_PORT=6380\n")
 
@@ -32,7 +32,7 @@ class TestProductEnvMergeOrgNormalization:
         assert expected.exists()
 
         # Verify the WRONG path does NOT exist
-        wrong_path = ws / ".splent_cache" / "features" / "splent-io" / "splent_feature_redis@v1.2.1" / "docker"
+        wrong_path = ws / ".splent_cache" / "features" / "splent-io" / "splent_feature_redis@v1.2.7" / "docker"
         assert not wrong_path.exists()
 
 

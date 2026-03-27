@@ -86,9 +86,9 @@ def set_developer_interactive():
     answer = click.prompt("(y/n)", type=click.Choice(["y", "n"], case_sensitive=False))
     enabled = "true" if answer == "y" else "false"
 
-    set_var("SPLENT_DEVELOPER_SSH", enabled)
+    set_var("SPLENT_USE_SSH", enabled)
 
-    click.secho(f"✔ SPLENT_DEVELOPER_SSH set to {enabled}", fg="green")
+    click.secho(f"✔ SPLENT_USE_SSH set to {enabled}", fg="green")
     remind_source()
 
 

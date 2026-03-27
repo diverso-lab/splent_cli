@@ -30,7 +30,7 @@ echo "📃 Features parsed:"
 echo "$features"
 
 for feature in $features; do
-    # Parse "splent-io/splent_feature_auth@v1.2.1" → name_ver="splent_feature_auth@v1.2.1"
+    # Parse "splent-io/splent_feature_auth@v1.2.7" → name_ver="splent_feature_auth@v1.2.7"
     if echo "$feature" | grep -q '/'; then
         name_ver="${feature#*/}"
     else
