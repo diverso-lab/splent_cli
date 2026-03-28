@@ -36,6 +36,10 @@ def product_sync(ctx, force):
         click.secho("ℹ️ No features declared.", fg="yellow")
         return
 
+    # Clean stale symlinks: remove any symlink not matching a declared feature
+    features_dir = os.path.join(workspace, product, "features")
+    _clean_stale_symlinks(features_dir, features)
+
     # Only remote features have a version
     remote_features = [f for f in features if "@" in f]
     local_features = [f for f in features if "@" not in f]
@@ -142,6 +146,47 @@ def product_sync(ctx, force):
             )
 
     click.secho("\n✅ Product synced successfully.", fg="green")
+
+
+def _clean_stale_symlinks(features_dir: str, declared: list[str]) -> None:
+    """Remove symlinks in features/ that don't match any declared feature.
+
+    This prevents accumulation of old version symlinks (e.g. @v1.2.5, @v1.2.7)
+    when the pyproject now declares @v1.2.8.
+    """
+    if not os.path.isdir(features_dir):
+        return
+
+    # Build set of expected symlink names from declared features
+    expected: set[str] = set()
+    for entry in declared:
+        if "/" in entry:
+            ns_raw, rest = entry.split("/", 1)
+        else:
+            ns_raw, rest = "splent-io", entry
+        ns_safe = ns_raw.replace("-", "_").replace(".", "_")
+
+        name, _, version = rest.partition("@")
+        if version:
+            expected.add(f"{ns_safe}/{name}@{version}")
+        else:
+            expected.add(f"{ns_safe}/{name}")
+
+    # Walk features/<org>/ and remove non-matching symlinks
+    removed = 0
+    for org_dir in os.listdir(features_dir):
+        org_path = os.path.join(features_dir, org_dir)
+        if not os.path.isdir(org_path):
+            continue
+        for entry in os.listdir(org_path):
+            key = f"{org_dir}/{entry}"
+            entry_path = os.path.join(org_path, entry)
+            if os.path.islink(entry_path) and key not in expected:
+                os.unlink(entry_path)
+                removed += 1
+
+    if removed:
+        click.secho(f"🧹 Removed {removed} stale symlink(s) from features/.", fg="yellow")
 
 
 def _create_symlink(cache_dir, product_features_dir, link_path):
