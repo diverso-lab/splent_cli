@@ -46,7 +46,7 @@ class TestCompileInContainerDirect:
              patch("subprocess.Popen") as mock_popen:
             _compile_in_container(
                 container_id=None,
-                feature="splent_io/splent_feature_auth@v1.0.0",
+                feature="splent_io/splent_feature_auth",
                 watch=watch,
                 production=production,
                 workspace="/workspace",
@@ -89,7 +89,7 @@ class TestCompileInContainerViaDocker:
              patch("subprocess.run") as mock_run:
             _compile_in_container(
                 container_id="abc123",
-                feature="splent_io/splent_feature_auth@v1.0.0",
+                feature="splent_io/splent_feature_auth",
                 watch=False,
                 production=False,
                 workspace="/workspace",
@@ -105,7 +105,7 @@ class TestCompileInContainerViaDocker:
              patch("subprocess.run") as mock_run:
             _compile_in_container(
                 container_id="abc123",
-                feature="splent_io/splent_feature_auth@v1.0.0",
+                feature="splent_io/splent_feature_auth",
                 watch=False,
                 production=False,
                 workspace="/workspace",

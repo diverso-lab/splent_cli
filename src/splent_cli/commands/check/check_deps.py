@@ -85,12 +85,15 @@ def _parse_uvl_deps(uvl_path: str) -> tuple[dict[str, str], dict[str, set[str]]]
 
 def _scan_feature_imports(
     feature_path: str, feature_name: str, all_packages: set[str]
-) -> set[str]:
-    """Scan all .py files in a feature and return set of other feature packages imported."""
-    imported: set[str] = set()
+) -> tuple[set[str], set[str]]:
+    """Scan a feature's source code and templates for cross-feature dependencies.
+
+    Returns (python_imports, template_deps) — both sets of package names.
+    """
+    python_imports: set[str] = set()
+    template_deps: set[str] = set()
 
     src_dir = None
-    # Find the src directory
     for org_dir in os.listdir(os.path.join(feature_path, "src")):
         candidate = os.path.join(feature_path, "src", org_dir, feature_name)
         if os.path.isdir(candidate):
@@ -98,27 +101,46 @@ def _scan_feature_imports(
             break
 
     if not src_dir:
-        return imported
+        return python_imports, template_deps
+
+    # Map blueprint names to package names for template dependency detection
+    # Convention: blueprint name is the feature short name (e.g. "auth" for splent_feature_auth)
+    bp_to_pkg = {}
+    for pkg in all_packages:
+        short = pkg.replace("splent_feature_", "")
+        bp_to_pkg[short] = pkg
 
     for root, _, files in os.walk(src_dir):
         for f in files:
-            if not f.endswith(".py"):
-                continue
             filepath = os.path.join(root, f)
-            try:
-                with open(filepath, "r", encoding="utf-8") as fh:
-                    content = fh.read()
-            except (OSError, PermissionError):
-                continue
 
-            # Find imports: from splent_io.splent_feature_X... or import splent_io.splent_feature_X
-            for match in re.findall(
-                r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content
-            ):
-                if match != feature_name and match in all_packages:
-                    imported.add(match)
+            if f.endswith(".py"):
+                try:
+                    with open(filepath, "r", encoding="utf-8") as fh:
+                        content = fh.read()
+                except (OSError, PermissionError):
+                    continue
 
-    return imported
+                for match in re.findall(
+                    r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content
+                ):
+                    if match != feature_name and match in all_packages:
+                        python_imports.add(match)
+
+            elif f.endswith(".html"):
+                try:
+                    with open(filepath, "r", encoding="utf-8") as fh:
+                        content = fh.read()
+                except (OSError, PermissionError):
+                    continue
+
+                # Detect url_for('blueprint.endpoint', ...) references to other features
+                for bp_name in re.findall(r"url_for\s*\(\s*['\"](\w+)\.", content):
+                    pkg = bp_to_pkg.get(bp_name)
+                    if pkg and pkg != feature_name:
+                        template_deps.add(pkg)
+
+    return python_imports, template_deps
 
 
 # ---------------------------------------------------------------------------
@@ -217,40 +239,42 @@ def check_deps():
             )
             continue
 
-        actual_imports = _scan_feature_imports(fpath, pkg_name, all_packages)
+        py_imports, tpl_deps = _scan_feature_imports(fpath, pkg_name, all_packages)
         allowed = allowed_deps.get(pkg_name, set())
+        all_deps = py_imports | tpl_deps
 
-        if not actual_imports:
+        if not all_deps:
             click.echo(
                 click.style("  [✔] ", fg="green")
                 + click.style(f"{short}", bold=True)
-                + " — no cross-feature imports"
+                + " — no cross-feature dependencies"
             )
             ok += 1
             continue
 
         has_violation = False
-        for imp in sorted(actual_imports):
+
+        for imp in sorted(all_deps):
             imp_short = pkg_to_short.get(imp, imp)
+            source = "imports" if imp in py_imports else "references (template)"
 
             if imp in allowed:
                 click.echo(
                     click.style("  [✔] ", fg="green")
                     + click.style(f"{short}", bold=True)
-                    + f" imports {imp_short}"
+                    + f" {source} {imp_short}"
                     + click.style(
                         f"  (allowed: {short} => {imp_short})", fg="bright_black"
                     )
                 )
                 ok += 1
             else:
-                # Check if the reverse is declared (inverted dependency)
                 reverse_allowed = allowed_deps.get(imp, set())
                 if pkg_name in reverse_allowed:
                     click.echo(
                         click.style("  [✖] ", fg="red")
                         + click.style(f"{short}", bold=True)
-                        + f" imports {imp_short}"
+                        + f" {source} {imp_short}"
                         + click.style(
                             f"  INVERTED — UVL says {imp_short} => {short}, not the reverse",
                             fg="red",
@@ -260,7 +284,7 @@ def check_deps():
                     click.echo(
                         click.style("  [✖] ", fg="red")
                         + click.style(f"{short}", bold=True)
-                        + f" imports {imp_short}"
+                        + f" {source} {imp_short}"
                         + click.style(
                             f"  UNDECLARED — no UVL constraint between {short} and {imp_short}",
                             fg="red",
@@ -268,9 +292,6 @@ def check_deps():
                     )
                 violations += 1
                 has_violation = True
-
-        if not has_violation:
-            pass  # all imports were OK, already printed
 
     click.echo()
     if violations:

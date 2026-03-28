@@ -70,39 +70,18 @@ def feature_compile(feature_name, watch, env_dev, env_prod):
 
 
 def _find_webpack(workspace, product, org_safe, base_name, version):
-    """Locate webpack.config.js across all possible feature locations."""
+    """Locate webpack.config.js for an editable feature.
+
+    Only searches workspace root — pinned features are never compiled.
+    """
     rel_path = os.path.join(
         "src", org_safe, base_name, "assets", "js", "webpack.config.js"
     )
 
-    # 1. Workspace root (editable)
+    # Workspace root (editable features live here)
     candidate = os.path.join(workspace, base_name, rel_path)
     if os.path.exists(candidate):
         return candidate
-
-    # 2. Product symlinks (resolves to wherever the symlink points)
-    if version:
-        dir_name = f"{base_name}@{version}"
-    else:
-        dir_name = base_name
-    candidate = os.path.join(
-        workspace, product, "features", org_safe, dir_name, rel_path
-    )
-    if os.path.exists(candidate):
-        return candidate
-
-    # 3. Cache (pinned, versioned)
-    if version:
-        candidate = os.path.join(
-            workspace,
-            ".splent_cache",
-            "features",
-            org_safe,
-            f"{base_name}@{version}",
-            rel_path,
-        )
-        if os.path.exists(candidate):
-            return candidate
 
     return None
 
@@ -117,6 +96,18 @@ def _compile_in_container(container_id, feature, watch, production, workspace, p
 
     base_name, _, version = name_version.partition("@")
     version = version or None
+
+    # Pinned features (with version) must not be compiled — they are immutable.
+    # If the bundle is wrong, edit the feature and re-release.
+    if version:
+        click.echo(
+            click.style(
+                f"⏩ {feature} is pinned ({version}) — skipping. "
+                f"Use 'splent feature:edit {base_name}' to make it editable.",
+                fg="bright_black",
+            )
+        )
+        return
 
     webpack_file = _find_webpack(workspace, product, org_safe, base_name, version)
 
