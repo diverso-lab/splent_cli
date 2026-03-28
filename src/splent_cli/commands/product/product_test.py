@@ -29,23 +29,29 @@ def product_test(product_name, level_unit, level_integration, level_functional, 
     """Run all feature tests for a product.
 
     \b
-    In detached mode (no SPLENT_APP), pass the product name:
+    Requires detached mode (no SPLENT_APP selected):
         splent product:test sample_splent_app --unit
-
-    \b
-    With a product selected:
-        splent product:test --unit
 
     \b
     This is a convenience wrapper around `splent feature:test` that
     tests ALL features declared in the product's pyproject.toml.
+    Designed for batch testing across multiple products.
     """
-    # Resolve product: argument > SPLENT_APP
-    product = product_name or context.active_app()
+    if not context.is_detached():
+        click.secho(
+            f"❌ A product is currently selected: {context.active_app()}\n"
+            f"   product:test requires detached mode.\n"
+            f"   Run: splent product:deselect\n"
+            f"   Or use: splent feature:test --unit",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+    product = product_name
     if not product:
         click.secho(
             "❌ No product specified.\n"
-            "   Pass a product name or select one with: splent product:select <name>",
+            "   Usage: splent product:test <product_name> [--unit|--integration|--functional]",
             fg="red",
         )
         raise SystemExit(1)
