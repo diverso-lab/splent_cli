@@ -1,13 +1,7 @@
 FROM python:3.13
 WORKDIR /workspace
 
-COPY {{ product_name }}/ {{ product_name }}/
-
-ENV PIP_ROOT_USER_ACTION=ignore
-RUN pip install --no-cache-dir ./{{ product_name }}
-RUN pip install --no-cache-dir ./{{ product_name }}[core]
-RUN pip install --no-cache-dir ./{{ product_name }}[features]
-
+# System dependencies (cached layer)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gcc \
@@ -24,5 +18,22 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy product source
+COPY {{ product_name }}/ {{ product_name }}/
+
+ENV PIP_ROOT_USER_ACTION=ignore
+
+# Install product + framework
+RUN pip install --no-cache-dir ./{{ product_name }}
+RUN pip install --no-cache-dir ./{{ product_name }}[core]
+
+# Install SPLENT CLI (needed for feature:pip-install)
+RUN pip install --no-cache-dir splent_cli
+
+# Install all features from PyPI using the CLI
+ENV SPLENT_APP={{ product_name }}
+ENV WORKING_DIR=/workspace
+RUN splent feature:pip-install
 
 EXPOSE 5000
