@@ -44,3 +44,13 @@ commands = []
 features = []
 # Environment variables this feature expects to be set
 env_vars = []
+
+# ── Extension points ──────────────────────────────────────────────────────────
+# Declares what other features can override or extend via refinement.
+# See: splent feature:xray
+[tool.splent.contract.extensible]
+services = []
+templates = []
+models = []
+hooks = []
+routes = false

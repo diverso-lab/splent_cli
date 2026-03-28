@@ -150,6 +150,18 @@ def _extract_services(services_path: Path) -> list[str]:
     )
 
 
+def _extract_templates(src_dir: Path) -> list[str]:
+    """Extract template paths relative to templates/ directory."""
+    templates_dir = src_dir / "templates"
+    if not templates_dir.exists():
+        return []
+    return sorted(
+        str(p.relative_to(templates_dir))
+        for p in templates_dir.rglob("*.html")
+        if not p.name.startswith("_")
+    )
+
+
 def _extract_docker(feature_root: Path) -> list[str]:
     """Find docker-compose files at the feature root."""
     found = []
@@ -202,6 +214,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
     models = _extract_models(src_dir / "models.py")
     hooks = _extract_hooks(src_dir / "hooks.py")
     services = _extract_services(src_dir / "services.py")
+    templates = _extract_templates(src_dir)
     docker = _extract_docker(feature_root)
     req_features, env_vars = _scan_dependencies(src_dir, feature_name)
 
@@ -215,6 +228,12 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
         "docker": docker,
         "requires_features": req_features,
         "env_vars": env_vars,
+        # Extensible: everything a feature provides is extensible by default
+        "extensible_services": services,
+        "extensible_templates": templates,
+        "extensible_models": models,
+        "extensible_hooks": hooks,
+        "extensible_routes": bool(blueprints),
     }
 
 
@@ -226,18 +245,18 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
     path = Path(pyproject_path)
     text = path.read_text()
 
-    # Preserve any existing description the developer may have written
+    # Preserve existing developer-written values
     existing_description = f"{feature_name} feature"
+    existing_extensible = None  # None = use auto-inferred; dict = preserve
     try:
         data = tomllib.loads(text)
-        desc = (
-            data.get("tool", {})
-            .get("splent", {})
-            .get("contract", {})
-            .get("description")
-        )
+        splent_contract = data.get("tool", {}).get("splent", {}).get("contract", {})
+        desc = splent_contract.get("description")
         if desc:
             existing_description = desc
+        ext = splent_contract.get("extensible")
+        if ext:
+            existing_extensible = ext
     except Exception:
         pass
 
@@ -250,6 +269,20 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         if not items:
             return "[]"
         return "[" + ", ".join(f'"{i}"' for i in items) + "]"
+
+    # Use existing extensible if developer customized it, otherwise auto-infer
+    if existing_extensible:
+        ext_services = existing_extensible.get("services", [])
+        ext_templates = existing_extensible.get("templates", [])
+        ext_models = existing_extensible.get("models", [])
+        ext_hooks = existing_extensible.get("hooks", [])
+        ext_routes = existing_extensible.get("routes", False)
+    else:
+        ext_services = contract.get("extensible_services", [])
+        ext_templates = contract.get("extensible_templates", [])
+        ext_models = contract.get("extensible_models", [])
+        ext_hooks = contract.get("extensible_hooks", [])
+        ext_routes = contract.get("extensible_routes", False)
 
     contract_block = (
         "\n\n"
@@ -270,6 +303,13 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         "[tool.splent.contract.requires]\n"
         f"features = {_toml_list(contract['requires_features'])}\n"
         f"env_vars = {_toml_list(contract['env_vars'])}\n"
+        "\n"
+        "[tool.splent.contract.extensible]\n"
+        f"services  = {_toml_list(ext_services)}\n"
+        f"templates = {_toml_list(ext_templates)}\n"
+        f"models    = {_toml_list(ext_models)}\n"
+        f"hooks     = {_toml_list(ext_hooks)}\n"
+        f"routes    = {'true' if ext_routes else 'false'}\n"
     )
 
     path.write_text(text + contract_block)

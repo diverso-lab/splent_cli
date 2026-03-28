@@ -21,17 +21,18 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy product source
+# Copy product source + framework (if available locally)
 COPY {{ product_name }}/ {{ product_name }}/
+COPY splent_framework/ splent_framework/
 
 ENV PIP_ROOT_USER_ACTION=ignore
 
 # Install SPLENT CLI first (needed for feature:pip-install)
 RUN pip install --no-cache-dir splent_cli=={{ cli_version }}
 
-# Install product + framework
+# Install framework from local source (has latest changes), then product
+RUN pip install --no-cache-dir ./splent_framework
 RUN pip install --no-cache-dir ./{{ product_name }}
-RUN pip install --no-cache-dir ./{{ product_name }}[core]
 
 # Install all features from PyPI using the CLI
 ENV SPLENT_APP={{ product_name }}

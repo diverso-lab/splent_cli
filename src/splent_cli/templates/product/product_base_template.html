@@ -28,6 +28,10 @@
 
     <link rel="stylesheet" href="{{ url_for("static", filename="css/own.css") }}">
 
+    {% for hook in get_template_hooks("layout.head.css") %}
+        {{ hook() | safe }}
+    {% endfor %}
+
 </head>
 
 <body>
@@ -68,14 +72,9 @@
                         {{ hook() | safe }}
                     {% endfor %}
 
-                    <li class="sidebar-item {{ 'active' if request.endpoint == 'profile.edit_profile' else '' }}">
-                        <a class="sidebar-link" href="{{ url_for('profile.edit_profile') }}">
-                            <i class="align-middle" data-feather="user"></i> <span
-                                class="align-middle">Edit profile</span>
-                        </a>
-                    </li>
-
-                    
+                    {% for hook in get_template_hooks("layout.sidebar.authenticated.items") %}
+                        {{ hook() | safe }}
+                    {% endfor %}
 
                 {% endif %}
 
@@ -98,21 +97,16 @@
                         </a>
 
                         {% if current_user.is_anonymous %}
-                            <a class="nav-link  d-none d-sm-inline-block" href="{{ url_for('auth.login') }}">Login</a>
-                            <a class="nav-link  d-none d-sm-inline-block" href="{{ url_for('auth.show_signup_form') }}">Sign
-                                up</a>
+
+                            {% for hook in get_template_hooks("layout.navbar.anonymous") %}
+                                {{ hook() | safe }}
+                            {% endfor %}
 
                         {% else %}
 
-                            <a class="nav-link dropdown-toggle d-none d-sm-inline-block" href="#"
-                               data-bs-toggle="dropdown">
-                                <span class="text-dark">{{ current_user.profile.surname }}, {{ current_user.profile.name }}</span>
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-end">
-                                <a class="dropdown-item" href="{{ url_for('auth.logout') }}"> <i
-                                        class="align-middle me-1"
-                                        data-feather="log-out"></i>Log out</a>
-                            </div>
+                            {% for hook in get_template_hooks("layout.navbar.authenticated") %}
+                                {{ hook() | safe }}
+                            {% endfor %}
 
                         {% endif %}
 
@@ -140,12 +134,9 @@
                     </div>
                     <div class="col-6 text-end">
                         <ul class="list-inline">
-                            <li class="list-inline-item">
-                                <a class="text-muted" href="https://github.com/drorganvidez/flask_base"
-                                   target="_blank">
-                                    <i class="align-middle" data-feather="github"></i>
-                                    Repository on GitHub</a>
-                            </li>
+                            {% for hook in get_template_hooks("layout.footer") %}
+                                {{ hook() | safe }}
+                            {% endfor %}
                         </ul>
                     </div>
                 </div>
@@ -171,6 +162,10 @@
     }
 
 </script>
+
+{% for hook in get_template_hooks("layout.scripts") %}
+    {{ hook() | safe }}
+{% endfor %}
 
 {% block scripts %}{% endblock %}
 

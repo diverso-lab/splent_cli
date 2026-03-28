@@ -34,6 +34,21 @@ features_dev = []
 # Features active only in prod (e.g. monitoring, caching)
 features_prod = []
 
+# Layout hooks declared in base_template.html.
+# Features register callbacks to these hooks via register_template_hook().
+[tool.splent.layout]
+base_template = "base_template.html"
+hooks = [
+    "layout.head.css",
+    "layout.anonymous_sidebar",
+    "layout.authenticated_sidebar",
+    "layout.sidebar.authenticated.items",
+    "layout.navbar.anonymous",
+    "layout.navbar.authenticated",
+    "layout.footer",
+    "layout.scripts",
+]
+
 [tool.splent.uvl]
 mirror = "uvlhub.io"
 doi = "10.5281/zenodo.19219696"

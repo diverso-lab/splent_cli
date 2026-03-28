@@ -84,8 +84,8 @@ def feature_xray(feature_ref, filter_cat):
 
     # Build refinement map
     refinement_map = {}  # base_name -> [{refiner, category, target, replacement}]
-    for name, data in feature_data.items():
-        ref = data["refinement"]
+    for name, fdata in feature_data.items():
+        ref = fdata["refinement"]
         if not ref.get("refines"):
             continue
         base = ref["refines"]
@@ -133,10 +133,43 @@ def feature_xray(feature_ref, filter_cat):
             raise SystemExit(1)
         display_features = [target]
 
+    # Read product layout hooks
+    product_splent = data.get("tool", {}).get("splent", {})
+    layout_config = product_splent.get("layout", {})
+    layout_hooks = layout_config.get("hooks", [])
+    layout_template = layout_config.get("base_template", "")
+
+    # Build hook usage map: hook_name -> [features that register it]
+    hook_usage: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        provides_hooks = fdata["contract"].get("provides", {}).get("hooks", [])
+        for h in provides_hooks:
+            hook_usage.setdefault(h, []).append(name)
+
     # Display
     click.echo()
     click.echo(click.style(f"  Feature X-Ray — {product}", bold=True))
     click.echo()
+
+    # Product layout section
+    if layout_hooks and (not filter_cat or filter_cat == "hook"):
+        click.echo(click.style(f"  {product} (product layout)", bold=True))
+        if layout_template:
+            click.echo(f"    {'template':>10}: {layout_template}")
+        for hook_name in layout_hooks:
+            users = hook_usage.get(hook_name, [])
+            if users:
+                user_str = ", ".join(users)
+                click.echo(
+                    f"    {'hook':>10}: {hook_name}"
+                    + click.style(f"  ← {user_str}", fg="green")
+                )
+            else:
+                click.echo(
+                    f"    {'hook':>10}: {hook_name}"
+                    + click.style("  (unused)", fg="bright_black")
+                )
+        click.echo()
 
     for name in display_features:
         data = feature_data[name]
