@@ -5,7 +5,3 @@
 {% raw %}{%{% endraw %} block content {% raw %}%}{% endraw %}
 
 {% raw %}{%{% endraw %} endblock {% raw %}%}{% endraw %}
-
-{% raw %}{%{% endraw %} block scripts {% raw %}%}{% endraw %}
-    {% raw %}<script src="{{ url_for('{% endraw %}{{ feature_name }}{% raw %}.assets', subfolder='dist', filename='{% endraw %}{{ feature_name }}{% raw %}.bundle.js') }}"></script>{% endraw %}
-{% raw %}{%{% endraw %} endblock {% raw %}%}{% endraw %}

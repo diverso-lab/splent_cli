@@ -98,6 +98,7 @@ def make_feature(full_name):
         "services.py": "feature/feature_services.py.j2",
         "forms.py": "feature/feature_forms.py.j2",
         "seeders.py": "feature/feature_seeders.py.j2",
+        "hooks.py": "feature/feature_hooks.py.j2",
         os.path.join(
             "templates", feature_name, "index.html"
         ): "feature/feature_templates_index.html.j2",
