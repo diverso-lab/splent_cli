@@ -12,8 +12,19 @@ class PathUtils(_BasePathUtils):
 
     @staticmethod
     def get_splent_cli_dir():
+        """Return the splent_cli package directory.
+
+        In development (editable install), this is WORKING_DIR/splent_cli/src/splent_cli.
+        In production (pip install from PyPI), this is wherever the package lives
+        in site-packages.  We detect which case applies by checking if the
+        workspace path exists; if not, we fall back to the installed package location.
+        """
         working_dir = _BasePathUtils.get_working_dir()
-        return os.path.join(working_dir, "splent_cli", "src", "splent_cli")
+        dev_path = os.path.join(working_dir, "splent_cli", "src", "splent_cli")
+        if os.path.isdir(dev_path):
+            return dev_path
+        # Fallback: resolve from the installed package itself
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     @staticmethod
     def get_splent_cli_templates_dir():
