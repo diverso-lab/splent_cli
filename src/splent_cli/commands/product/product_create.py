@@ -49,6 +49,7 @@ def copy_raw_file(template_name, filename):
 @click.option(
     "--features-file", type=click.Path(exists=True), help="Path to features.txt"
 )
+@context.requires_detached
 def make_product(name, features_file):
     env = setup_jinja_env()
     offset = zlib.crc32(name.encode("utf-8")) % 1000  # 0–999
