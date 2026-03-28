@@ -178,7 +178,7 @@ def advance_state(
 
     # Only advance forward (higher rank), or allow explicit regression for rollback/disable
     if (
-        to in ("declared", "disabled")
+        to in ("declared", "installed", "disabled")
         or current is None
         or state_rank(to) > state_rank(current)
     ):

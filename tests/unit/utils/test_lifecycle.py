@@ -135,15 +135,26 @@ class TestAdvanceState:
         )
         assert get_feature_state(str(product), key) == "migrated"
 
-    def test_does_not_regress_state(self, product):
-        key = _set(product, "migrated")
+    def test_does_not_regress_to_arbitrary_state(self, product):
+        """advance_state blocks regression to states not in the allow-list."""
+        key = _set(product, "active")
+        advance_state(
+            str(product), "test_app", key,
+            to="migrated", namespace="splent_io",
+            name="splent_feature_auth", version="v1.2.2",
+        )
+        # Should still be "active" — migrated is not an allowed regression target
+        assert get_feature_state(str(product), key) == "active"
+
+    def test_allows_regression_to_installed(self, product):
+        """Rollback to installed is allowed (db:rollback sets this)."""
+        key = _set(product, "active")
         advance_state(
             str(product), "test_app", key,
             to="installed", namespace="splent_io",
             name="splent_feature_auth", version="v1.2.2",
         )
-        # Should still be "migrated" — advance_state doesn't regress
-        assert get_feature_state(str(product), key) == "migrated"
+        assert get_feature_state(str(product), key) == "installed"
 
     def test_allows_regression_to_declared(self, product):
         """Rollback to declared is allowed (explicit regression)."""

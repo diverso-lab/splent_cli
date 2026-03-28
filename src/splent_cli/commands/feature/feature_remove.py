@@ -38,9 +38,12 @@ def feature_remove(feature_name, namespace, force):
     product = context.require_app()
     workspace = str(context.workspace())
 
-    github_user = os.getenv("GITHUB_USER")
-    org = namespace or github_user or "splent-io"
-    org_safe = org.replace("-", "_")
+    # Parse namespace from argument if present (e.g. "splent-io/splent_feature_auth_2fa")
+    if "/" in feature_name and not namespace:
+        namespace, feature_name = feature_name.split("/", 1)
+
+    org = namespace or "splent-io"
+    org_safe = org.replace("-", "_").replace(".", "_")
 
     product_path = os.path.join(workspace, product)
 
@@ -60,10 +63,13 @@ def feature_remove(feature_name, namespace, force):
 
         # --------------------------
         # Guard: migration state
+        # Only block on "migrated" — "active" is set by the running app
+        # and may be stale after a db:rollback. The rollback itself is
+        # what matters, not the manifest state.
         # --------------------------
         key = feature_key(org_safe, feature_name)
         state = get_feature_state(product_path, key)
-        if state in ("migrated", "active"):
+        if state == "migrated":
             click.secho(
                 f"❌ Feature '{feature_name}' has migrations applied (state: {state}).\n"
                 f"   Roll them back first:\n"
@@ -86,8 +92,17 @@ def feature_remove(feature_name, namespace, force):
 
     features = read_features_from_data(data)
 
-    default_orgs = {"splent-io", github_user}
-    entry_name = feature_name if org in default_orgs else f"{org_safe}/{feature_name}"
+    # Try multiple formats to match pyproject entry
+    candidates = [
+        feature_name,
+        f"{org}/{feature_name}",
+        f"{org_safe}/{feature_name}",
+    ]
+    entry_name = feature_name
+    for candidate in candidates:
+        if candidate in features:
+            entry_name = candidate
+            break
 
     if entry_name in features:
         features.remove(entry_name)
