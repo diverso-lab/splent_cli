@@ -4,6 +4,7 @@ product:sync-template, feature:drift, feature:sync-template).
 """
 
 import difflib
+import os
 import zlib
 from pathlib import Path
 
@@ -46,6 +47,22 @@ def render_template(template_name: str, ctx: dict) -> str:
 
 def product_ctx(product_name: str) -> dict:
     offset = zlib.crc32(product_name.encode("utf-8")) % 1000
+
+    # Read spl from product's pyproject if available
+    spl_name = ""
+    try:
+        import tomllib
+
+        pyproject = os.path.join(
+            os.getenv("WORKING_DIR", "/workspace"), product_name, "pyproject.toml"
+        )
+        if os.path.isfile(pyproject):
+            with open(pyproject, "rb") as f:
+                data = tomllib.load(f)
+            spl_name = data.get("tool", {}).get("splent", {}).get("spl", "")
+    except Exception:
+        pass
+
     return {
         "product_name": product_name,
         "pascal_name": _pascalcase(product_name),
@@ -54,6 +71,7 @@ def product_ctx(product_name: str) -> dict:
         "redis_port": 6379 + offset,
         "cli_version": CLI_VERSION,
         "network_name": "splent_network",
+        "spl_name": spl_name,
     }
 
 

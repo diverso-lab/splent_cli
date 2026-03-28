@@ -36,7 +36,7 @@ features_prod = []
 
 # SPL reference — the product derives from this SPL's feature model (UVL).
 # The UVL file lives in splent_catalog/{spl_name}/, not inside the product.
-spl = ""
+spl = "{{ spl_name }}"
 
 # Layout hooks declared in base_template.html.
 # Features register callbacks to these hooks via register_template_hook().

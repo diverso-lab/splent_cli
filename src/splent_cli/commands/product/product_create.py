@@ -46,11 +46,32 @@ def copy_raw_file(template_name, filename):
 
 @click.command("product:create", help="Creates a new product with a given name.")
 @click.argument("name")
+@click.option("--spl", "spl_name", default=None, help="SPL to derive from (from splent_catalog/).")
 @click.option(
     "--features-file", type=click.Path(exists=True), help="Path to features.txt"
 )
 @context.requires_detached
-def make_product(name, features_file):
+def make_product(name, spl_name, features_file):
+    # Resolve SPL: from --spl flag, interactive selection, or empty
+    workspace_path = context.workspace()
+    catalog_dir = workspace_path / "splent_catalog"
+
+    if not spl_name and catalog_dir.is_dir():
+        available = sorted(
+            d.name for d in catalog_dir.iterdir()
+            if d.is_dir() and (d / f"{d.name}.uvl").is_file()
+        )
+        if available:
+            click.echo()
+            click.echo(click.style("  Available SPLs:", bold=True))
+            for i, s in enumerate(available, 1):
+                click.echo(f"    {i}. {s}")
+            click.echo(f"    0. No SPL (empty product)")
+            click.echo()
+            choice = click.prompt("  Select SPL", type=int, default=0)
+            if 1 <= choice <= len(available):
+                spl_name = available[choice - 1]
+
     env = setup_jinja_env()
     offset = zlib.crc32(name.encode("utf-8")) % 1000  # 0–999
     web_port = 5000 + offset
@@ -90,6 +111,7 @@ def make_product(name, features_file):
         "redis_port": redis_port,
         "cli_version": _CLI_VERSION,
         "network_name": "splent_network",
+        "spl_name": spl_name or "",
     }
 
     base_path = str(context.workspace() / name)
