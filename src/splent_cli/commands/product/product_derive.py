@@ -6,9 +6,8 @@ import tomllib
 import click
 
 from splent_cli.services import context, compose
+from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
-from splent_cli.commands.uvl.uvl_check import run_uvl_check
-from splent_cli.commands.feature.feature_diff import run_all_product_check
 from splent_cli.commands.product.product_sync import product_sync
 from splent_cli.commands.product.product_env import product_env
 from splent_cli.commands.product.product_up import product_up
@@ -144,45 +143,9 @@ def product_derive(mode):
     click.echo(click.style(f"\n🧬 SPL Product Derivation — {mode}\n", fg="cyan", bold=True))
 
     # ── Pre-flight checks ──────────────────────────────────────────────────
-    click.echo(click.style("━━ Pre-flight checks", fg="bright_black", bold=True))
-    click.echo()
+    preflight_failed = not run_preflight(interactive=True)
 
-    preflight_failed = False
-
-    # [pre 1/3] uvl:check
-    click.echo(click.style("  [1/3] uvl:check", fg="bright_black"))
-    uvl_ok, uvl_msg = run_uvl_check(workspace)
-    if uvl_ok:
-        click.secho("        ✅ UVL configuration is satisfiable.", fg="green")
-    else:
-        click.secho(f"        🚨 {uvl_msg}", fg="red")
-        click.secho("        → Run: splent uvl:check", fg="yellow")
-        preflight_failed = True
-    click.echo()
-
-    # [pre 2/3] feature:diff --all
-    click.echo(click.style("  [2/3] feature:diff --all", fg="bright_black"))
-    findings = run_all_product_check(workspace, product_dir)
-    errors = [f for f in findings if f["severity"] == "error"]
-    warnings = [f for f in findings if f["severity"] == "warning"]
-
-    if not errors:
-        if warnings:
-            click.secho(
-                f"        ✅ No conflicts. {len(warnings)} warning(s) — "
-                "run 'splent feature:diff --all' to review.",
-                fg="green",
-            )
-        else:
-            click.secho("        ✅ No conflicts detected.", fg="green")
-    else:
-        for err in errors:
-            click.secho(f"        🚨 [{err['field']}] {err['message']}", fg="red")
-        click.secho("        → Run: splent feature:diff --all", fg="yellow")
-        preflight_failed = True
-    click.echo()
-
-    # [pre 3/3] port conflict check
+    # [port conflict check]
     click.echo(click.style("  [3/3] port conflicts", fg="bright_black"))
 
     def _identify_env(container_name: str) -> str:
@@ -311,7 +274,7 @@ def product_derive(mode):
 
     elif mode == "prod":
         click.echo(click.style("━━ [1/2] product:build", fg="bright_black"))
-        ctx.invoke(product_build, no_image=False)
+        ctx.invoke(product_build, no_image=False, skip_preflight=True)
 
         click.echo(click.style("\n━━ [2/2] product:deploy", fg="bright_black"))
         ctx.invoke(product_deploy, down=False)

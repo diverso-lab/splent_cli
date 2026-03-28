@@ -5,6 +5,7 @@ import subprocess
 import yaml
 import click
 from splent_cli.services import context, compose
+from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
@@ -69,7 +70,8 @@ def merge_compose(base, override, label=""):
     short_help="Build deployment artifacts: env, compose, and Docker image.",
 )
 @click.option("--no-image", is_flag=True, help="Skip Docker image build.")
-def product_build(no_image):
+@click.option("--skip-preflight", is_flag=True, hidden=True, help="Skip pre-flight checks (used internally by product:derive).")
+def product_build(no_image, skip_preflight):
     product = context.require_app()
     workspace = str(context.workspace())
     product_path = os.path.join(workspace, product)
@@ -82,6 +84,13 @@ def product_build(no_image):
         raise SystemExit(1)
 
     click.echo(f"🏗️  Building deployment artifacts for product: {product}\n")
+
+    # ---------------------------------------------------------
+    # Pre-flight checks (UVL + feature contracts)
+    # ---------------------------------------------------------
+    if not skip_preflight:
+        if not run_preflight(interactive=True):
+            raise SystemExit(1)
 
     # ---------------------------------------------------------
     # 1) .env.deploy.example (product + features merged)

@@ -126,7 +126,7 @@ class TestProductBuildCommand:
         (docker_dir / ".env.prod.example").write_text("API_KEY=secret\nDB_HOST=localhost\n")
         (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"])
         assert result.exit_code == 0
         env_file = docker_dir / ".env.deploy.example"
         assert env_file.exists()
@@ -138,7 +138,7 @@ class TestProductBuildCommand:
         compose_content = "services:\n  web:\n    image: nginx\n"
         (docker_dir / "docker-compose.prod.yml").write_text(compose_content)
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"])
         assert result.exit_code == 0
         deploy_file = docker_dir / "docker-compose.deploy.yml"
         assert deploy_file.exists()
@@ -151,7 +151,7 @@ class TestProductBuildCommand:
         (docker_dir / ".env.example").write_text("MY_VAR=hello\n")
         (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"])
         assert result.exit_code == 0
         content = (docker_dir / ".env.deploy.example").read_text()
         assert "MY_VAR=hello" in content
@@ -174,7 +174,7 @@ class TestProductBuildCommand:
         (feat_docker / ".env.example").write_text("AUTH_SECRET=abc\n")
         (feat_docker / "docker-compose.prod.yml").write_text("services:\n  auth:\n    image: auth\n")
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"])
         assert result.exit_code == 0
         content = (docker_dir / ".env.deploy.example").read_text()
         assert "AUTH_SECRET=abc" in content
