@@ -1,17 +1,12 @@
-import os
 from collections import defaultdict, deque
 from pathlib import Path
 
 import click
 
-from splent_cli.services import context
+from splent_cli.commands.spl.spl_utils import _resolve_spl
 from splent_cli.commands.uvl.uvl_utils import (
-    read_splent_app as _read_splent_app,
-    load_pyproject as _load_pyproject,
-    resolve_uvl_path as _resolve_uvl_path,
     list_all_features_from_uvl as _list_all_features_from_uvl,
     extract_implications_from_uvl_text as _extract_implications_from_uvl_text,
-    print_uvl_header as _print_uvl_header,
 )
 
 
@@ -37,36 +32,40 @@ def _closure(start: str, graph: dict[str, set[str]]) -> list[str]:
 
 
 @click.command(
-    "uvl:deps",
+    "spl:deps",
     short_help="Show dependencies implied by UVL constraints (A => B) for a feature",
 )
 @click.argument("feature", required=True)
+@click.argument("spl_name", required=False, default=None)
 @click.option(
     "--reverse",
     is_flag=True,
     help="Show reverse dependencies (who requires this feature)",
 )
-@click.option("--pyproject", default=None, help="Override pyproject.toml path")
-def uvl_deps(feature, reverse, pyproject):
-    workspace = str(context.workspace())
-    app_name = _read_splent_app(workspace=workspace)
-    product_path = os.path.join(workspace, app_name)
+def spl_deps(feature, spl_name, reverse):
+    """Show dependency closure for FEATURE in the SPL's UVL model.
 
-    pyproject_path = pyproject or os.path.join(product_path, "pyproject.toml")
-    data = _load_pyproject(pyproject_path)
+    \b
+    If SPL_NAME is given, uses it directly.
+    Otherwise reads [tool.splent].spl from the active product.
+    """
+    name, uvl_path = _resolve_spl(spl_name)
 
-    local_uvl = _resolve_uvl_path(workspace, app_name, data)
+    universe, _ = _list_all_features_from_uvl(uvl_path)
 
-    universe, _ = _list_all_features_from_uvl(local_uvl)
-
-    uvl_text = Path(local_uvl).read_text(encoding="utf-8", errors="replace")
+    uvl_text = Path(uvl_path).read_text(encoding="utf-8", errors="replace")
     pairs = _extract_implications_from_uvl_text(uvl_text)
     req, rreq = _build_graph(pairs)
 
     graph = rreq if reverse else req
     deps = _closure(feature, graph)
 
-    _print_uvl_header("deps", app_name, local_uvl, len(universe))
+    click.echo()
+    click.echo(f"SPL deps")
+    click.echo(f"SPL      : {name}")
+    click.echo(f"UVL      : {uvl_path}")
+    click.echo(f"Features : {len(universe)}")
+    click.echo()
 
     if reverse:
         click.echo(f"Reverse dependencies of '{feature}' (features that require it):")
@@ -82,3 +81,6 @@ def uvl_deps(feature, reverse, pyproject):
         click.echo(f"- {d}")
 
     click.echo()
+
+
+cli_command = spl_deps

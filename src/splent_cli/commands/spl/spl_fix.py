@@ -1,8 +1,7 @@
 """
-uvl:fix — Interactive wizard to add missing UVL constraints based on code analysis.
+spl:fix — Interactive wizard to add missing UVL constraints based on code analysis.
 
-Cross-checks feature imports against existing UVL constraints and offers
-to add the missing ones interactively.
+Requires an active product (for code scanning) AND an SPL (for writing constraints).
 """
 
 import os
@@ -11,10 +10,7 @@ import re
 import click
 
 from splent_cli.services import context
-from splent_cli.commands.uvl.uvl_utils import (
-    load_pyproject as _load_pyproject,
-    resolve_uvl_path as _resolve_uvl_path,
-)
+from splent_cli.commands.spl.spl_utils import _resolve_spl
 
 
 # ---------------------------------------------------------------------------
@@ -145,13 +141,17 @@ def _write_constraints(
 
 
 @click.command(
-    "uvl:fix",
+    "spl:fix",
     short_help="Interactive wizard to add missing UVL constraints from code analysis.",
 )
-def uvl_fix():
+@click.argument("spl_name", required=False, default=None)
+def spl_fix(spl_name):
     """
     Scans feature source code for cross-feature imports, compares with
     existing UVL constraints, and offers to add the missing ones.
+
+    Requires an active product (for code scanning). The SPL can be passed
+    as an argument or read from the product's [tool.splent].spl.
 
     \b
     For each missing constraint, shows:
@@ -163,19 +163,8 @@ def uvl_fix():
     product = context.require_app()
     product_dir = os.path.join(workspace, product)
 
-    # Read UVL
-    pyproject_path = os.path.join(product_dir, "pyproject.toml")
-    try:
-        data = _load_pyproject(pyproject_path)
-    except click.ClickException as e:
-        click.secho(f"Cannot read pyproject.toml: {e.format_message()}", fg="red")
-        raise SystemExit(1)
-
-    try:
-        uvl_path = _resolve_uvl_path(workspace, product, data)
-    except click.ClickException as e:
-        click.secho(f"UVL file not found: {e.format_message()}", fg="red")
-        raise SystemExit(1)
+    # Resolve SPL — uses argument or product's pyproject
+    name, uvl_path = _resolve_spl(spl_name)
 
     package_map, existing_raw, raw_text = _parse_uvl(uvl_path)
     all_packages = set(package_map.values())
@@ -215,7 +204,7 @@ def uvl_fix():
     if not missing:
         click.echo()
         click.secho(
-            "  ✅ All cross-feature imports have matching UVL constraints.", fg="green"
+            "  All cross-feature imports have matching UVL constraints.", fg="green"
         )
         click.echo()
         return
@@ -231,7 +220,7 @@ def uvl_fix():
 
     for importer, imported, issue_type in missing:
         if issue_type == "inverted":
-            icon = click.style("⚠ INVERTED", fg="red")
+            icon = click.style("INVERTED", fg="red")
             detail = (
                 f"UVL has {imported} => {importer}, but {importer} imports {imported}"
             )
@@ -256,21 +245,21 @@ def uvl_fix():
 
         if choice == "add":
             to_add.append(f"{importer} => {imported}")
-            click.secho(f"    ✔ Will add: {importer} => {imported}", fg="green")
+            click.secho(f"    Will add: {importer} => {imported}", fg="green")
         elif choice == "invert":
             inversions.append((importer, imported))
             click.secho(
-                f"    📝 Marked as inversion — needs code refactoring in {importer}",
+                f"    Marked as inversion — needs code refactoring in {importer}",
                 fg="yellow",
             )
         else:
-            click.secho("    ⏩ Skipped", fg="bright_black")
+            click.secho("    Skipped", fg="bright_black")
 
         click.echo()
 
     # Write
     if to_add:
-        click.echo(click.style("  ─" * 30, fg="bright_black"))
+        click.echo(click.style("  ---" * 15, fg="bright_black"))
         click.echo()
         click.echo(f"  Adding {len(to_add)} constraint(s) to {uvl_path}:")
         for c in to_add:
@@ -279,25 +268,25 @@ def uvl_fix():
 
         if click.confirm("  Write to UVL file?", default=True):
             _write_constraints(uvl_path, raw_text, to_add)
-            click.secho(f"  ✅ UVL updated: {uvl_path}", fg="green")
+            click.secho(f"  UVL updated: {uvl_path}", fg="green")
         else:
-            click.secho("  ❎ Cancelled.", fg="yellow")
+            click.secho("  Cancelled.", fg="yellow")
     else:
         click.echo("  No constraints to add.")
 
     if inversions:
         click.echo()
         click.secho(
-            "  ⚠ Inversions that need code refactoring:", fg="yellow", bold=True
+            "  Inversions that need code refactoring:", fg="yellow", bold=True
         )
         for importer, imported in inversions:
             click.echo(f"    - {importer} should NOT import from {imported}")
             click.echo(
-                f"      → Move the dependency to {imported}'s side, or remove the import"
+                f"      -> Move the dependency to {imported}'s side, or remove the import"
             )
         click.echo()
 
     click.echo()
 
 
-cli_command = uvl_fix
+cli_command = spl_fix
