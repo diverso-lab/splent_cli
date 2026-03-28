@@ -25,8 +25,16 @@ from splent_framework.utils.pyproject_reader import PyprojectReader
 
 def _uvl_path(product_dir: str) -> str | None:
     try:
-        uvl_cfg = PyprojectReader.for_product(product_dir).uvl_config
-        uvl_file = uvl_cfg.get("file")
+        reader = PyprojectReader.for_product(product_dir)
+        # 1. Catalog: [tool.splent].spl
+        spl_name = reader.splent_config.get("spl")
+        if spl_name:
+            workspace = os.getenv("WORKING_DIR", "/workspace")
+            catalog_uvl = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+            if os.path.isfile(catalog_uvl):
+                return catalog_uvl
+        # 2. Legacy: [tool.splent.uvl].file
+        uvl_file = reader.uvl_config.get("file")
         if uvl_file:
             return os.path.join(product_dir, "uvl", uvl_file)
     except Exception:

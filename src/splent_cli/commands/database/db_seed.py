@@ -22,10 +22,16 @@ def _resolve_feature_order(features_raw: list[str]) -> list[str]:
     uvl_path = None
     if product_dir:
         try:
-            uvl_cfg = PyprojectReader.for_product(product_dir).uvl_config
-            uvl_file = uvl_cfg.get("file")
-            if uvl_file:
-                uvl_path = os.path.join(product_dir, "uvl", uvl_file)
+            reader = PyprojectReader.for_product(product_dir)
+            spl_name = reader.splent_config.get("spl")
+            if spl_name:
+                candidate = os.path.join(working_dir, "splent_catalog", spl_name, f"{spl_name}.uvl")
+                if os.path.isfile(candidate):
+                    uvl_path = candidate
+            if not uvl_path:
+                uvl_file = reader.uvl_config.get("file")
+                if uvl_file:
+                    uvl_path = os.path.join(product_dir, "uvl", uvl_file)
         except (OSError, KeyError, AttributeError):
             pass
 

@@ -196,20 +196,24 @@ def check_deps():
     product = context.require_app()
     product_dir = os.path.join(workspace, product)
 
-    # Read UVL
+    # Read UVL (catalog or legacy)
     try:
         reader = PyprojectReader.for_product(product_dir)
-        uvl_cfg = reader.uvl_config
+        # 1. Catalog: [tool.splent].spl
+        spl_name = reader.splent_config.get("spl")
+        if spl_name:
+            uvl_path = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+        else:
+            # 2. Legacy: [tool.splent.uvl].file
+            uvl_file = reader.uvl_config.get("file")
+            if not uvl_file:
+                click.secho("  [✖] No UVL configured. Set [tool.splent].spl or [tool.splent.uvl].file.", fg="red")
+                raise SystemExit(1)
+            uvl_path = os.path.join(product_dir, "uvl", uvl_file)
     except (FileNotFoundError, RuntimeError) as e:
         click.secho(f"  [✖] Cannot read pyproject.toml: {e}", fg="red")
         raise SystemExit(1)
 
-    uvl_file = uvl_cfg.get("file")
-    if not uvl_file:
-        click.secho("  [✖] No UVL file configured.", fg="red")
-        raise SystemExit(1)
-
-    uvl_path = os.path.join(product_dir, "uvl", uvl_file)
     if not os.path.isfile(uvl_path):
         click.secho(f"  [✖] UVL file not found: {uvl_path}", fg="red")
         raise SystemExit(1)
