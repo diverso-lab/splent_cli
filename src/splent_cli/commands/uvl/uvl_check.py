@@ -12,6 +12,7 @@ from splent_cli.commands.uvl.uvl_utils import (
     get_uvl_cfg as _get_uvl_cfg,
     get_feature_deps as _get_feature_deps,
     normalize_feature_name as _normalize_feature_name,
+    resolve_uvl_path as _resolve_uvl_path,
     resolve_uvlhub_raw_url as _resolve_uvlhub_raw_url,
     list_all_features_from_uvl as _list_all_features_from_uvl,
     write_csvconf_full as _write_csvconf_full,
@@ -29,18 +30,10 @@ def run_uvl_check(workspace: str) -> tuple[bool, str]:
         product_path = os.path.join(workspace, app_name)
         pyproject_path = os.path.join(product_path, "pyproject.toml")
         data = _load_pyproject(pyproject_path)
-        uvl_cfg = _get_uvl_cfg(data)
-        mirror = uvl_cfg.get("mirror")
-        doi = uvl_cfg.get("doi")
-        file = uvl_cfg.get("file")
-        if not mirror or not doi or not file:
-            return False, "Missing mirror, doi, or file in [tool.splent.uvl]."
-        local_uvl = os.path.join(product_path, "uvl", file)
-        if not os.path.exists(local_uvl):
-            return (
-                False,
-                f"UVL not downloaded: {local_uvl}\n           Run: splent uvl:fetch",
-            )
+        try:
+            local_uvl = _resolve_uvl_path(workspace, app_name, data)
+        except Exception:
+            return False, "UVL file not found. Check [tool.splent].spl or [tool.splent.uvl]."
         universe, root_name = _list_all_features_from_uvl(local_uvl)
         deps = _get_feature_deps(data)
         selected = {_normalize_feature_name(d) for d in deps}
@@ -83,26 +76,8 @@ def uvl_check(pyproject, print_config):
     pyproject_path = pyproject or os.path.join(product_path, "pyproject.toml")
     data = _load_pyproject(pyproject_path)
 
-    # 3) UVL config + local file
-    uvl_cfg = _get_uvl_cfg(data)
-    mirror = uvl_cfg.get("mirror")
-    doi = uvl_cfg.get("doi")
-    file = uvl_cfg.get("file")
-
-    if not mirror or not doi or not file:
-        raise click.ClickException(
-            "Missing one of: mirror, doi, file in [tool.splent.uvl]"
-        )
-
-    resolved_url = _resolve_uvlhub_raw_url(mirror, doi, file)
-
-    local_uvl = os.path.join(product_path, "uvl", file)
-    if not os.path.exists(local_uvl):
-        raise click.ClickException(
-            f"UVL not downloaded: {local_uvl}\n"
-            f"Run: splent uvl:fetch\n"
-            f"Expected URL: {resolved_url}"
-        )
+    # 3) Resolve UVL (catalog or legacy)
+    local_uvl = _resolve_uvl_path(workspace, app_name, data)
 
     # 4) Universe from UVL (robust)
     universe, root_name = _list_all_features_from_uvl(local_uvl)
@@ -136,7 +111,6 @@ def uvl_check(pyproject, print_config):
 
     # 9) Output
     _print_uvl_header("check", app_name, local_uvl, len(universe))
-    click.echo(f"URL      : {resolved_url}")
     click.echo(f"Selected : {', '.join(sorted(selected))}")
     click.echo()
 

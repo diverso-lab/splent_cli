@@ -51,11 +51,44 @@ def load_pyproject(pyproject_path: str) -> dict:
 
 
 def get_uvl_cfg(data: dict) -> dict:
-    """Extract [tool.splent.uvl] section from pyproject data."""
+    """Extract [tool.splent.uvl] section from pyproject data (legacy)."""
     try:
         return data["tool"]["splent"]["uvl"]
     except KeyError:
         raise click.ClickException("Missing [tool.splent.uvl] in pyproject.toml")
+
+
+def resolve_uvl_path(workspace: str, app_name: str, data: dict) -> str:
+    """Resolve the absolute path to the UVL file.
+
+    Resolution order:
+      1. SPL catalog: [tool.splent].spl → workspace/splent_catalog/{spl}/{spl}.uvl
+      2. Legacy: [tool.splent.uvl].file → product_dir/uvl/{file}
+
+    Raises ClickException if UVL not found.
+    """
+    splent = data.get("tool", {}).get("splent", {})
+    product_path = os.path.join(workspace, app_name)
+
+    # 1. Catalog resolution
+    spl_name = splent.get("spl")
+    if spl_name:
+        catalog_uvl = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+        if os.path.isfile(catalog_uvl):
+            return catalog_uvl
+
+    # 2. Legacy: product/uvl/{file}
+    uvl_cfg = splent.get("uvl", {})
+    uvl_file = uvl_cfg.get("file")
+    if uvl_file:
+        legacy_path = os.path.join(product_path, "uvl", uvl_file)
+        if os.path.isfile(legacy_path):
+            return legacy_path
+
+    raise click.ClickException(
+        f"UVL file not found. Set [tool.splent].spl in pyproject.toml "
+        f"or ensure [tool.splent.uvl].file points to an existing file."
+    )
 
 
 def get_feature_deps(data: dict) -> list[str]:
