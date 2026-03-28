@@ -7,7 +7,7 @@ from splent_cli.services import context
 from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
     load_pyproject as _load_pyproject,
-    get_uvl_cfg as _get_uvl_cfg,
+    resolve_uvl_path as _resolve_uvl_path,
     get_feature_deps as _get_feature_deps,
     normalize_feature_name as _normalize_feature_name,
     list_all_features_from_uvl as _list_all_features_from_uvl,
@@ -32,16 +32,7 @@ def uvl_missing(pyproject, fail):
     pyproject_path = pyproject or os.path.join(product_path, "pyproject.toml")
     data = _load_pyproject(pyproject_path)
 
-    uvl_cfg = _get_uvl_cfg(data)
-    file = uvl_cfg.get("file")
-    if not file:
-        raise click.ClickException("Missing [tool.splent.uvl].file in pyproject.toml")
-
-    local_uvl = os.path.join(product_path, "uvl", file)
-    if not os.path.exists(local_uvl):
-        raise click.ClickException(
-            f"UVL not downloaded: {local_uvl} (run: splent uvl:fetch)"
-        )
+    local_uvl = _resolve_uvl_path(workspace, app_name, data)
 
     # universe + root
     universe, root_name = _list_all_features_from_uvl(local_uvl)

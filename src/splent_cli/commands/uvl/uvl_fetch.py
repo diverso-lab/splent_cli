@@ -32,10 +32,17 @@ def fetch_uvl(force):
 
     url = _resolve_uvlhub_raw_url(mirror, doi, file)
 
-    uvl_dir = os.path.join(product_path, "uvl")
-    os.makedirs(uvl_dir, exist_ok=True)
+    # Determine write target: catalog location if spl is set, legacy otherwise
+    splent = data.get("tool", {}).get("splent", {})
+    spl_name = splent.get("spl")
+    if spl_name:
+        uvl_dir = os.path.join(workspace, "splent_catalog", spl_name)
+        target = os.path.join(uvl_dir, f"{spl_name}.uvl")
+    else:
+        uvl_dir = os.path.join(product_path, "uvl")
+        target = os.path.join(uvl_dir, file)
 
-    target = os.path.join(uvl_dir, file)
+    os.makedirs(uvl_dir, exist_ok=True)
 
     if os.path.exists(target) and not force:
         if not click.confirm(f"UVL file already exists: {target}\nOverwrite?"):

@@ -6,6 +6,7 @@ from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
     load_pyproject as _load_pyproject,
     get_uvl_cfg as _get_uvl_cfg,
+    resolve_uvl_path as _resolve_uvl_path,
     resolve_uvlhub_raw_url as _resolve_uvlhub_raw_url,
     list_all_features_from_uvl as _list_all_features_from_uvl,
 )
@@ -34,8 +35,13 @@ def uvl_info():
     except click.ClickException:
         url = "(unsupported mirror)"
 
-    local_path = os.path.join(product_path, "uvl", file)
-    exists = os.path.exists(local_path)
+    try:
+        local_path = _resolve_uvl_path(workspace, app_name, data)
+        exists = True
+    except click.ClickException:
+        # File not downloaded yet — fall back to legacy path for display
+        local_path = os.path.join(product_path, "uvl", file)
+        exists = False
 
     n_features = len(_list_all_features_from_uvl(local_path)[0]) if exists else None
 

@@ -11,7 +11,10 @@ import re
 import click
 
 from splent_cli.services import context
-from splent_framework.utils.pyproject_reader import PyprojectReader
+from splent_cli.commands.uvl.uvl_utils import (
+    load_pyproject as _load_pyproject,
+    resolve_uvl_path as _resolve_uvl_path,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -161,20 +164,17 @@ def uvl_fix():
     product_dir = os.path.join(workspace, product)
 
     # Read UVL
+    pyproject_path = os.path.join(product_dir, "pyproject.toml")
     try:
-        uvl_cfg = PyprojectReader.for_product(product_dir).uvl_config
-    except (FileNotFoundError, RuntimeError) as e:
-        click.secho(f"❌ Cannot read pyproject.toml: {e}", fg="red")
+        data = _load_pyproject(pyproject_path)
+    except click.ClickException as e:
+        click.secho(f"Cannot read pyproject.toml: {e.format_message()}", fg="red")
         raise SystemExit(1)
 
-    uvl_file = uvl_cfg.get("file")
-    if not uvl_file:
-        click.secho("❌ No UVL file configured.", fg="red")
-        raise SystemExit(1)
-
-    uvl_path = os.path.join(product_dir, "uvl", uvl_file)
-    if not os.path.isfile(uvl_path):
-        click.secho(f"❌ UVL file not found: {uvl_path}", fg="red")
+    try:
+        uvl_path = _resolve_uvl_path(workspace, product, data)
+    except click.ClickException as e:
+        click.secho(f"UVL file not found: {e.format_message()}", fg="red")
         raise SystemExit(1)
 
     package_map, existing_raw, raw_text = _parse_uvl(uvl_path)
@@ -272,7 +272,7 @@ def uvl_fix():
     if to_add:
         click.echo(click.style("  ─" * 30, fg="bright_black"))
         click.echo()
-        click.echo(f"  Adding {len(to_add)} constraint(s) to {uvl_file}:")
+        click.echo(f"  Adding {len(to_add)} constraint(s) to {uvl_path}:")
         for c in to_add:
             click.echo(f"    + {c}")
         click.echo()
