@@ -16,12 +16,40 @@ DEFAULT_LEVELS = ("unit", "integration", "functional")
 
 
 def _validate_testing_environment():
-    env = get_current_app_config_value("TESTING")
-    db_url = get_current_app_config_value("SQLALCHEMY_DATABASE_URI")
+    try:
+        env = get_current_app_config_value("TESTING")
+        db_url = get_current_app_config_value("SQLALCHEMY_DATABASE_URI")
+    except Exception as e:
+        click.secho(
+            f"❌ Cannot connect to the test database.\n"
+            f"   {e}\n\n"
+            f"   If a production deployment is running, stop it first:\n"
+            f"     splent product:deploy --down\n\n"
+            f"   Then start development:\n"
+            f"     splent product:up --dev\n"
+            f"     splent product:run --dev",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     if not env:
-        raise AssertionError(f"❌ TESTING mode is not active. Current DB: {db_url}")
+        click.secho(
+            f"❌ TESTING mode is not active.\n"
+            f"   Current DB: {db_url}\n\n"
+            f"   Make sure you are running in the development environment.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     if "test" not in db_url.lower():
-        raise AssertionError(f"❌ Non-test database in use: {db_url}")
+        click.secho(
+            f"❌ Non-test database in use: {db_url}\n\n"
+            f"   Tests require a database with 'test' in the name.\n"
+            f"   If a production deployment is running, stop it first:\n"
+            f"     splent product:deploy --down",
+            fg="red",
+        )
+        raise SystemExit(1)
 
 
 def _pkg_name(ref: str) -> str:

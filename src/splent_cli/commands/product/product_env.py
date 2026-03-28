@@ -3,7 +3,7 @@ import tomllib
 import subprocess
 import shutil
 import click
-from splent_cli.services import context
+from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
@@ -185,15 +185,9 @@ def product_env(generate, merge, env_name, process_all):
 
         feature_env_paths = []
         for feature in features:
-            if "/" in feature:
-                raw_org, feat_part = feature.split("/", 1)
-                org_part = raw_org.replace("-", "_").replace(".", "_")
-            else:
-                org_part = "splent_io"
-                feat_part = feature
-            docker_dir_f = os.path.join(
-                workspace, ".splent_cache", "features", org_part, feat_part, "docker"
-            )
+            clean_ref = compose.normalize_feature_ref(feature)
+            bare_name = clean_ref.split("/")[-1] if "/" in clean_ref else clean_ref
+            docker_dir_f = compose.feature_docker_dir(workspace, bare_name)
 
             candidates_f = [
                 os.path.join(docker_dir_f, ".env"),  # preferimos la .env ya generada

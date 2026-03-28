@@ -14,6 +14,7 @@ from splent_cli.commands.check.check_docker import check_docker
 from splent_cli.commands.check.check_github import check_github
 from splent_cli.commands.check.check_pypi import check_pypi
 from splent_cli.commands.check.check_deps import check_deps
+from splent_cli.commands.check.check_infra import check_infra
 from splent_cli.commands.feature.feature_status import feature_status
 from splent_cli.commands.version import version as version_cmd
 from splent_cli.commands.database.db_status import db_status
@@ -29,6 +30,7 @@ CHECKS = [
     ("check:deps", check_deps, False, False),
     ("feature:status", feature_status, False, False),
     ("check:docker", check_docker, False, False),
+    ("check:infra", check_infra, False, False),
     ("product:status", product_status, False, False),
     ("db:status", db_status, True, False),
     ("check:github", check_github, False, True),
@@ -50,10 +52,11 @@ def doctor(fast):
       4. check:features    — cache, symlinks, pip install, git state
       5. feature:status    — lifecycle state of all features
       6. check:docker      — Docker daemon, compose, containers
-      7. product:status    — Docker container status for the product
-      8. db:status         — Migration status for all features
-      9. check:github      — GitHub credentials and API access
-     10. check:pypi        — PyPI credentials and upload access
+      7. check:infra       — Docker infrastructure (ports, services, networks)
+      8. product:status    — Docker container status for the product
+      9. db:status         — Migration status for all features
+     10. check:github      — GitHub credentials and API access
+     11. check:pypi        — PyPI credentials and upload access
 
     \b
     Each is a standalone command you can run independently:

@@ -16,4 +16,12 @@ set -e
 
 echo "🚀 [Start app in prod mode] entrypoint starting..."
 
-exec gunicorn --bind 0.0.0.0:5000 '{{ product_name }}:create_app()' --log-level info --timeout 3600
+WORKERS=${GUNICORN_WORKERS:-$(( 2 * $(nproc) + 1 ))}
+TIMEOUT=${GUNICORN_TIMEOUT:-120}
+
+exec gunicorn --bind 0.0.0.0:5000 \
+    '{{ product_name }}:create_app()' \
+    --workers "$WORKERS" \
+    --timeout "$TIMEOUT" \
+    --access-logfile - \
+    --log-level info

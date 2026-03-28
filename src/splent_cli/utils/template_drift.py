@@ -53,6 +53,7 @@ def product_ctx(product_name: str) -> dict:
         "db_port": 33060 + offset,
         "redis_port": 6379 + offset,
         "cli_version": CLI_VERSION,
+        "network_name": "splent_network",
     }
 
 

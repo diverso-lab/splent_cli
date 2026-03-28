@@ -53,6 +53,18 @@ run_step () {
 }
 
 # ---------------------------------------------------------------------------
+# Ensure the framework's dotenv loader picks up deploy vars, not dev vars.
+# The Docker container already has the correct env vars from env_file;
+# this syncs the on-disk .env so load_dotenv(override=True) is harmless.
+# ---------------------------------------------------------------------------
+ENV_DEPLOY="/workspace/{{ product_name }}/docker/.env.deploy"
+ENV_FILE="/workspace/{{ product_name }}/docker/.env"
+if [ -f "$ENV_DEPLOY" ]; then
+  cp "$ENV_DEPLOY" "$ENV_FILE"
+  echo "📋 Synced .env.deploy → .env"
+fi
+
+# ---------------------------------------------------------------------------
 # MAIN STARTUP SEQUENCE
 # ---------------------------------------------------------------------------
 run_step "02_0_db_wait"             "/workspace/{{ product_name }}/scripts/02_0_db_wait_connection.sh"

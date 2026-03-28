@@ -1,7 +1,8 @@
-FROM python:3.13
+# ── Stage 1: Builder ─────────────────────────────────────────────────────────
+FROM python:3.13 AS builder
 WORKDIR /workspace
 
-# System dependencies (cached layer)
+# System dependencies for building
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gcc \
@@ -10,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mariadb-client \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Node.js 22 (only needed at build time for asset compilation)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates gnupg curl \
@@ -24,16 +26,47 @@ COPY {{ product_name }}/ {{ product_name }}/
 
 ENV PIP_ROOT_USER_ACTION=ignore
 
+# Install SPLENT CLI first (needed for feature:pip-install)
+RUN pip install --no-cache-dir splent_cli=={{ cli_version }}
+
 # Install product + framework
 RUN pip install --no-cache-dir ./{{ product_name }}
 RUN pip install --no-cache-dir ./{{ product_name }}[core]
-
-# Install SPLENT CLI (needed for feature:pip-install)
-RUN pip install --no-cache-dir splent_cli
 
 # Install all features from PyPI using the CLI
 ENV SPLENT_APP={{ product_name }}
 ENV WORKING_DIR=/workspace
 RUN splent feature:pip-install
+
+# Compile frontend assets (if package.json exists)
+RUN if [ -f {{ product_name }}/package.json ]; then \
+        cd {{ product_name }} && npm install --no-audit --no-fund && \
+        splent feature:compile && \
+        cd /workspace; \
+    fi
+
+# Production server
+RUN pip install --no-cache-dir gunicorn
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM python:3.13-slim
+WORKDIR /workspace
+
+# Minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mariadb-client \
+    curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV PIP_ROOT_USER_ACTION=ignore
+ENV SPLENT_APP={{ product_name }}
+ENV WORKING_DIR=/workspace
+
+# Copy installed Python packages from builder
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy product source (includes compiled assets, templates, migrations, entrypoints)
+COPY --from=builder /workspace/ /workspace/
 
 EXPOSE 5000

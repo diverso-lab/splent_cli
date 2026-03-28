@@ -1,34 +1,41 @@
 services:
 
-  {{ product_name }}_web:
+  {{ product_name }}_web_deploy:
     image: {{ product_name }}:latest
-    container_name: {{ product_name }}_web
+    container_name: {{ product_name }}_web_deploy
     env_file:
-      - ./.env
+      - ./.env.deploy
     ports:
       - "{{ web_port }}:5000"
     depends_on:
-      - {{ product_name }}_db
+      {{ product_name }}_db_deploy:
+        condition: service_healthy
     networks:
-      - splent_network
+      - {{ network_name }}
     command: [ "bash", "-c", "bash /workspace/{{ product_name }}/entrypoints/entrypoint.prod.sh" ]
 
-  {{ product_name }}_db:
-    image: mariadb:latest
-    container_name: {{ product_name }}_db
+  {{ product_name }}_db_deploy:
+    image: mariadb:11.4
+    container_name: {{ product_name }}_db_deploy
     env_file:
-      - ./.env
+      - ./.env.deploy
     command: --default-authentication-plugin=mysql_native_password
     ports:
       - "{{ db_port }}:3306"
     volumes:
-      - {{ product_name }}_db_data:/var/lib/mysql
+      - {{ product_name }}_db_deploy_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb -u$${MARIADB_USER} -p$${MARIADB_PASSWORD} -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     networks:
-      - splent_network
+      - {{ network_name }}
 
 volumes:
-  {{ product_name }}_db_data:
+  {{ product_name }}_db_deploy_data:
 
 networks:
-  splent_network:
+  {{ network_name }}:
     external: true

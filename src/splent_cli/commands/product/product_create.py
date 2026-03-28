@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import stat
 import click
+import yaml
 import zlib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -54,6 +55,32 @@ def make_product(name, features_file):
     web_port = 5000 + offset
     db_port = 33060 + offset
     redis_port = 6379 + offset
+
+    # Check for port collisions with existing products
+    workspace_path = context.workspace()
+    for existing in workspace_path.iterdir():
+        if not existing.is_dir() or existing.name == name or existing.name.startswith("."):
+            continue
+        dev_compose = existing / "docker" / "docker-compose.dev.yml"
+        if not dev_compose.is_file():
+            continue
+        try:
+            with open(dev_compose) as cf:
+                data = yaml.safe_load(cf) or {}
+            for svc in data.get("services", {}).values():
+                for p in svc.get("ports", []):
+                    parts = str(p).split(":")
+                    if len(parts) == 2:
+                        existing_port = int(parts[0])
+                        if existing_port in (web_port, db_port):
+                            click.secho(
+                                f"\u26a0\ufe0f  Port conflict: {existing_port} already used by product '{existing.name}'.\n"
+                                f"   Edit the generated docker-compose files to use different ports.",
+                                fg="yellow",
+                            )
+        except Exception:
+            pass
+
     template_ctx = {
         "product_name": name,
         "pascal_name": pascalcase(name),
@@ -61,6 +88,7 @@ def make_product(name, features_file):
         "db_port": db_port,
         "redis_port": redis_port,
         "cli_version": _CLI_VERSION,
+        "network_name": "splent_network",
     }
 
     base_path = str(context.workspace() / name)

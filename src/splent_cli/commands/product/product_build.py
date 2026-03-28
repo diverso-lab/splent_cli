@@ -1,11 +1,11 @@
 import os
-import glob
 import tomllib
 import subprocess
 
 import yaml
 import click
-from splent_cli.services import context
+from splent_cli.services import context, compose
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def load_env_file(path):
@@ -41,14 +41,19 @@ def load_compose_file(path):
         return yaml.safe_load(f) or {}
 
 
-def merge_compose(base, override):
-    """Merge two docker-compose YAML dicts."""
+def merge_compose(base, override, label=""):
+    """Merge two docker-compose YAML dicts. Reports conflicts via warnings."""
     result = dict(base)
 
     for key, value in override.items():
         if key == "services":
             result.setdefault("services", {})
             for svc, svc_def in value.items():
+                if svc in result["services"]:
+                    click.secho(
+                        f"  ⚠️  Service '{svc}' overridden by: {label}",
+                        fg="yellow",
+                    )
                 result["services"][svc] = svc_def
         elif key in ("networks", "volumes"):
             result.setdefault(key, {})
@@ -91,21 +96,31 @@ def product_build(no_image):
 
     env_result = load_env_file(product_env_file)
 
-    if os.path.isdir(features_path):
-        for ns_dir in sorted(glob.glob(os.path.join(features_path, "*"))):
-            for feature_dir in sorted(glob.glob(os.path.join(ns_dir, "*"))):
-                f_docker = os.path.join(feature_dir, "docker")
-                if not os.path.isdir(f_docker):
-                    continue
+    # Read declared features from pyproject.toml (not glob)
+    with open(pyproject_path, "rb") as f:
+        pydata = tomllib.load(f)
+    declared_features = read_features_from_data(pydata, "prod")
 
-                feature_env_file = (
-                    os.path.join(f_docker, ".env.prod.example")
-                    if os.path.isfile(os.path.join(f_docker, ".env.prod.example"))
-                    else os.path.join(f_docker, ".env.example")
-                )
+    seen_features: set[str] = set()
+    for feat in declared_features:
+        clean = compose.normalize_feature_ref(feat)
+        bare_name = clean.split("/")[-1] if "/" in clean else clean
+        if bare_name in seen_features:
+            continue
+        seen_features.add(bare_name)
 
-                feature_env = load_env_file(feature_env_file)
-                env_result = merge_env_dicts(env_result, feature_env)
+        f_docker = compose.feature_docker_dir(workspace, bare_name)
+        if not os.path.isdir(f_docker):
+            continue
+
+        feature_env_file = (
+            os.path.join(f_docker, ".env.prod.example")
+            if os.path.isfile(os.path.join(f_docker, ".env.prod.example"))
+            else os.path.join(f_docker, ".env.example")
+        )
+
+        feature_env = load_env_file(feature_env_file)
+        env_result = merge_env_dicts(env_result, feature_env)
 
     env_deploy_path = os.path.join(docker_path, ".env.deploy.example")
     with open(env_deploy_path, "w", encoding="utf-8") as f:
@@ -127,21 +142,40 @@ def product_build(no_image):
 
     compose_result = load_compose_file(product_compose_file)
 
-    if os.path.isdir(features_path):
-        for ns_dir in sorted(glob.glob(os.path.join(features_path, "*"))):
-            for feature_dir in sorted(glob.glob(os.path.join(ns_dir, "*"))):
-                f_docker = os.path.join(feature_dir, "docker")
-                if not os.path.isdir(f_docker):
-                    continue
+    seen_compose: set[str] = set()
+    for feat in declared_features:
+        clean = compose.normalize_feature_ref(feat)
+        bare_name = clean.split("/")[-1] if "/" in clean else clean
+        if bare_name in seen_compose:
+            continue
+        seen_compose.add(bare_name)
 
-                feature_compose_file = (
-                    os.path.join(f_docker, "docker-compose.prod.yml")
-                    if os.path.isfile(os.path.join(f_docker, "docker-compose.prod.yml"))
-                    else os.path.join(f_docker, "docker-compose.yml")
-                )
+        f_docker = compose.feature_docker_dir(workspace, bare_name)
+        if not os.path.isdir(f_docker):
+            continue
 
-                feature_compose = load_compose_file(feature_compose_file)
-                compose_result = merge_compose(compose_result, feature_compose)
+        feature_compose_file = (
+            os.path.join(f_docker, "docker-compose.prod.yml")
+            if os.path.isfile(os.path.join(f_docker, "docker-compose.prod.yml"))
+            else os.path.join(f_docker, "docker-compose.yml")
+        )
+
+        feature_compose = load_compose_file(feature_compose_file)
+        compose_result = merge_compose(compose_result, feature_compose, label=bare_name)
+
+    # Check for port conflicts in merged result
+    port_map: dict[str, list[str]] = {}  # "host_port" -> [service_names]
+    for svc_name, svc_def in compose_result.get("services", {}).items():
+        for p in svc_def.get("ports", []):
+            host_port = str(p).split(":")[0]
+            port_map.setdefault(host_port, []).append(svc_name)
+
+    for port, services in port_map.items():
+        if len(services) > 1:
+            click.secho(
+                f"  ⚠️  Port {port} declared by multiple services: {', '.join(services)}",
+                fg="yellow",
+            )
 
     deploy_compose_path = os.path.join(docker_path, "docker-compose.deploy.yml")
     with open(deploy_compose_path, "w", encoding="utf-8") as f:

@@ -10,19 +10,48 @@ from splent_cli.utils.feature_utils import read_features_from_data
     "product:down",
     short_help="Stop the product and its features (optionally removing volumes).",
 )
-@click.option("--env", default="dev", help="Environment name (dev or prod)")
-@click.option("--v", is_flag=True, help="Remove all volumes (requires confirmation)")
-def product_down(env, v):
-    """Stops the product and its features using Docker Compose.
-    Use --v to also remove all volumes.
-    """
-    product = context.require_app()
-    product_path = compose.product_path(product, str(context.workspace()))
+@click.option("--dev", is_flag=True, help="Stop development environment.")
+@click.option("--prod", is_flag=True, help="Stop production deployment.")
+@click.option("--v", is_flag=True, help="Remove all volumes (requires confirmation).")
+def product_down(dev, prod, v):
+    """Stop the product and its features using Docker Compose.
 
+    \b
+    --dev   stops the development containers (features + product).
+    --prod  stops the production deployment (docker-compose.deploy.yml).
+
+    If neither flag is given, stops whichever is currently running.
+    """
+    if dev and prod:
+        click.secho("❌ You cannot specify both --dev and --prod.", fg="red")
+        raise SystemExit(1)
+
+    product = context.require_app()
+    workspace = str(context.workspace())
+    product_path = compose.product_path(product, workspace)
+    docker_dir = os.path.join(product_path, "docker")
+
+    # Auto-detect if no flag given
+    if not dev and not prod:
+        deploy_compose = os.path.join(docker_dir, "docker-compose.deploy.yml")
+        if os.path.isfile(deploy_compose):
+            result = subprocess.run(
+                ["docker", "compose", "-f", deploy_compose, "ps", "-q"],
+                capture_output=True,
+                text=True,
+                cwd=docker_dir,
+            )
+            if result.stdout.strip():
+                prod = True
+
+        if not prod:
+            dev = True
+
+    # Volume removal confirmation
     remove_volumes = False
     if v:
         if not click.confirm(
-            "⚠️  This will remove ALL Docker volumes for the product and its features. Continue?",
+            "⚠️  This will remove ALL Docker volumes. Continue?",
             default=False,
         ):
             click.echo("❎ Operation cancelled.")
@@ -30,11 +59,30 @@ def product_down(env, v):
         remove_volumes = True
         click.echo("🧹 Volumes will be removed.")
 
-    def shutdown(name, docker_dir):
-        compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
-        compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
+    # --prod: stop deployment
+    if prod:
+        deploy_compose = os.path.join(docker_dir, "docker-compose.deploy.yml")
+        if not os.path.isfile(deploy_compose):
+            click.secho("⚠️  No docker-compose.deploy.yml found.", fg="yellow")
+            return
+
+        args = ["docker", "compose", "-f", deploy_compose, "down"]
+        if remove_volumes:
+            args += ["-v"]
+        subprocess.run(args, check=False, cwd=docker_dir)
+        click.secho(f"🛑 Production deployment stopped.", fg="green")
+        return
+
+    # --dev: stop development containers
+    env = "dev"
+
+    def shutdown(name, svc_docker_dir):
+        compose_preferred = os.path.join(svc_docker_dir, f"docker-compose.{env}.yml")
+        compose_fallback = os.path.join(svc_docker_dir, "docker-compose.yml")
         compose_file = (
-            compose_preferred if os.path.exists(compose_preferred) else compose_fallback
+            compose_preferred
+            if os.path.exists(compose_preferred)
+            else compose_fallback
         )
         if not os.path.exists(compose_file):
             return
@@ -46,10 +94,8 @@ def product_down(env, v):
         subprocess.run(args, check=False)
         click.echo(f"🛑  {name}: stopped successfully")
 
-    # Stop the product first (to avoid dependency issues)
-    shutdown(product, os.path.join(product_path, "docker"))
+    shutdown(product, docker_dir)
 
-    # Then stop the features
     py = os.path.join(product_path, "pyproject.toml")
     if not os.path.exists(py):
         click.echo("⚠️ pyproject.toml not found.")
@@ -59,7 +105,11 @@ def product_down(env, v):
         data = tomllib.load(f)
     features = read_features_from_data(data, env)
 
-    ws = str(context.workspace())
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
-        shutdown(clean, compose.feature_docker_dir(ws, clean))
+        shutdown(clean, compose.feature_docker_dir(workspace, clean))
+
+    click.secho("🛑 Development environment stopped.", fg="green")
+
+
+cli_command = product_down
