@@ -8,6 +8,7 @@ from splent_cli.commands.uvl.uvl_utils import (
     list_all_features_from_uvl as _list_all_features_from_uvl,
     extract_implications_from_uvl_text as _extract_implications_from_uvl_text,
 )
+from splent_cli.services import context
 
 
 def _build_graph(pairs: list[tuple[str, str]]):
@@ -35,20 +36,16 @@ def _closure(start: str, graph: dict[str, set[str]]) -> list[str]:
     "spl:deps",
     short_help="Show dependencies implied by UVL constraints (A => B) for a feature",
 )
-@click.argument("feature", required=True)
-@click.argument("spl_name", required=False, default=None)
+@click.argument("feature")
+@click.argument("spl_name")
 @click.option(
     "--reverse",
     is_flag=True,
     help="Show reverse dependencies (who requires this feature)",
 )
+@context.requires_detached
 def spl_deps(feature, spl_name, reverse):
-    """Show dependency closure for FEATURE in the SPL's UVL model.
-
-    \b
-    If SPL_NAME is given, uses it directly.
-    Otherwise reads [tool.splent].spl from the active product.
-    """
+    """Show dependency closure for FEATURE in the SPL's UVL model."""
     name, uvl_path = _resolve_spl(spl_name)
 
     universe, _ = _list_all_features_from_uvl(uvl_path)

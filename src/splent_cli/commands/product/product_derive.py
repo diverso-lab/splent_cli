@@ -114,7 +114,7 @@ def product_derive(mode):
 
     \b
     Runs pre-flight checks before the pipeline:
-      1. uvl:check       — feature selection must be satisfiable under the UVL model.
+      1. product:validate — feature selection must be satisfiable under the UVL model.
       2. feature:diff    — no ERROR-level conflicts between feature contracts.
       3. port conflicts  — no running containers occupying required host ports (dev only).
 

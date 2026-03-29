@@ -53,7 +53,8 @@ def _bare_name(feature_ref: str) -> str:
 @click.option("--models", "filter_cat", flag_value="model", help="Show only models.")
 @click.option("--routes", "filter_cat", flag_value="route", help="Show only routes.")
 @click.option("--hooks", "filter_cat", flag_value="hook", help="Show only hooks.")
-def feature_xray(feature_ref, filter_cat):
+@click.option("--validate", is_flag=True, help="Validate extensibility (detect conflicts).")
+def feature_xray(feature_ref, filter_cat, validate):
     """Show the refinement and extension map for all features (or a single one)."""
     workspace = str(context.workspace())
     product = context.require_app()
@@ -272,6 +273,154 @@ def feature_xray(feature_ref, filter_cat):
         )
     else:
         click.secho("  No refinements declared.", fg="bright_black")
+    click.echo()
+
+    # ── Validate mode ─────────────────────────────────────────────────
+    if not validate:
+        return
+
+    click.echo(click.style("  ── Validation ──", bold=True))
+    click.echo()
+
+    ok = 0
+    warn = 0
+    fail = 0
+
+    # 1. Services: check for name collisions
+    all_services: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        for svc in fdata["contract"].get("provides", {}).get("services", []):
+            all_services.setdefault(svc, []).append(name)
+
+    svc_collisions = {s: fs for s, fs in all_services.items() if len(fs) > 1}
+    if svc_collisions:
+        # Check if collision is a legitimate refinement override
+        for svc, features_list in svc_collisions.items():
+            is_refinement = any(
+                o["target"] == svc and o["category"] == "service"
+                for overrides_list in refinement_map.values()
+                for o in overrides_list
+            )
+            if is_refinement:
+                click.secho(f"  ✅ Service '{svc}' — overridden by refinement ({', '.join(features_list)})", fg="green")
+                ok += 1
+            else:
+                click.secho(f"  ❌ Service '{svc}' — collision: {', '.join(features_list)}", fg="red")
+                fail += 1
+    else:
+        click.secho(f"  ✅ Services: no collisions ({len(all_services)} unique)", fg="green")
+        ok += 1
+
+    # 2. Models: check for name collisions
+    all_models: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        for model in fdata["contract"].get("provides", {}).get("models", []):
+            all_models.setdefault(model, []).append(name)
+
+    model_collisions = {m: fs for m, fs in all_models.items() if len(fs) > 1}
+    if model_collisions:
+        for model, features_list in model_collisions.items():
+            click.secho(f"  ❌ Model '{model}' — collision: {', '.join(features_list)}", fg="red")
+            fail += 1
+    else:
+        click.secho(f"  ✅ Models: no collisions ({len(all_models)} unique)", fg="green")
+        ok += 1
+
+    # 3. Routes: check for collisions
+    all_routes: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        for route in fdata["contract"].get("provides", {}).get("routes", []):
+            all_routes.setdefault(route, []).append(name)
+
+    route_collisions = {r: fs for r, fs in all_routes.items() if len(fs) > 1}
+    if route_collisions:
+        for route, features_list in route_collisions.items():
+            click.secho(f"  ❌ Route '{route}' — collision: {', '.join(features_list)}", fg="red")
+            fail += 1
+    else:
+        click.secho(f"  ✅ Routes: no collisions ({len(all_routes)} unique)", fg="green")
+        ok += 1
+
+    # 4. Blueprints: check for name collisions
+    all_bps: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        for bp in fdata["contract"].get("provides", {}).get("blueprints", []):
+            all_bps.setdefault(bp, []).append(name)
+
+    bp_collisions = {b: fs for b, fs in all_bps.items() if len(fs) > 1}
+    if bp_collisions:
+        for bp, features_list in bp_collisions.items():
+            click.secho(f"  ❌ Blueprint '{bp}' — collision: {', '.join(features_list)}", fg="red")
+            fail += 1
+    else:
+        click.secho(f"  ✅ Blueprints: no collisions ({len(all_bps)} unique)", fg="green")
+        ok += 1
+
+    # 5. Hooks: shared slots (warn, not error — additive by design)
+    shared_hooks: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        for hook in fdata["contract"].get("provides", {}).get("hooks", []):
+            shared_hooks.setdefault(hook, []).append(name)
+
+    multi_hooks = {h: fs for h, fs in shared_hooks.items() if len(fs) > 1}
+    if multi_hooks:
+        for hook, features_list in multi_hooks.items():
+            click.secho(
+                f"  ℹ️  Hook '{hook}' — {len(features_list)} contributors: {', '.join(features_list)}",
+                fg="bright_black",
+            )
+        click.secho(f"  ✅ Hooks: {len(multi_hooks)} shared slot(s) — additive, OK", fg="green")
+        ok += 1
+    else:
+        click.secho(f"  ✅ Hooks: no shared slots ({len(shared_hooks)} unique)", fg="green")
+        ok += 1
+
+    # 6. Layout hooks: check for unused slots
+    unused_hooks = [h for h in layout_hooks if h not in hook_usage]
+    used_hooks = [h for h in layout_hooks if h in hook_usage]
+    if unused_hooks:
+        click.secho(
+            f"  ℹ️  Layout: {len(unused_hooks)} unused hook(s): {', '.join(unused_hooks)}",
+            fg="bright_black",
+        )
+    click.secho(f"  ✅ Layout: {len(used_hooks)}/{len(layout_hooks)} hooks active", fg="green")
+    ok += 1
+
+    # 7. Refinements: validate targets
+    for base_name, overrides_list in refinement_map.items():
+        base_ext = feature_data.get(base_name, {}).get("extensible", {})
+        for o in overrides_list:
+            cat_key = o["category"] + "s" if not o["category"].endswith("s") else o["category"]
+            extensible_list = base_ext.get(cat_key, [])
+            if o["category"] == "route":
+                if not base_ext.get("routes", False):
+                    click.secho(
+                        f"  ❌ {o['refiner']} adds routes to {base_name} — not declared extensible",
+                        fg="red",
+                    )
+                    fail += 1
+                else:
+                    ok += 1
+            elif o["target"] in extensible_list:
+                click.secho(
+                    f"  ✅ {o['refiner']} overrides {base_name}/{o['target']} — allowed",
+                    fg="green",
+                )
+                ok += 1
+            else:
+                click.secho(
+                    f"  ❌ {o['refiner']} overrides {base_name}/{o['target']} — NOT declared extensible",
+                    fg="red",
+                )
+                fail += 1
+
+    # Final summary
+    click.echo()
+    if fail:
+        click.secho(f"  {fail} issue(s) found, {warn} warning(s), {ok} passed.", fg="red")
+        raise SystemExit(1)
+    else:
+        click.secho(f"  ✅ All {ok} checks passed.", fg="green")
     click.echo()
 
 

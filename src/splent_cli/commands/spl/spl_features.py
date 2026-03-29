@@ -4,21 +4,18 @@ from splent_cli.commands.spl.spl_utils import _resolve_spl
 from splent_cli.commands.uvl.uvl_utils import (
     list_all_features_from_uvl as _list_all_features_from_uvl,
 )
+from splent_cli.services import context
 
 
 @click.command(
     "spl:features",
     short_help="Print the list of features present in the SPL's UVL model",
 )
-@click.argument("spl_name", required=False, default=None)
+@click.argument("spl_name")
 @click.option("--no-root", is_flag=True, help="Do not print the root feature")
+@context.requires_detached
 def spl_features(spl_name, no_root):
-    """List all features defined in the SPL's UVL model.
-
-    \b
-    If SPL_NAME is given, uses it directly.
-    Otherwise reads [tool.splent].spl from the active product.
-    """
+    """List all features defined in the SPL's UVL model."""
     name, uvl_path = _resolve_spl(spl_name)
 
     feats, root_name = _list_all_features_from_uvl(uvl_path)
@@ -33,7 +30,10 @@ def spl_features(spl_name, no_root):
     for f in feats:
         if no_root and f == root_name:
             continue
-        click.echo(f"- {f}")
+        if f == root_name:
+            click.echo(f"- {f}" + click.style("  (root)", fg="bright_black"))
+        else:
+            click.echo(f"- {f}")
 
     click.echo()
 

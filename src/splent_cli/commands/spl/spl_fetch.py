@@ -14,41 +14,18 @@ from splent_cli.services import context
     "spl:fetch",
     short_help="Download the UVL model from UVLHub into the SPL catalog",
 )
-@click.argument("spl_name", required=False, default=None)
+@click.argument("spl_name")
 @click.option("--force", is_flag=True, help="Redownload even if cached")
+@context.requires_detached
 def spl_fetch(spl_name, force):
     """Download the UVL model for the SPL from its configured UVLHub mirror.
-
-    \b
-    If SPL_NAME is given, uses it directly.
-    Otherwise reads [tool.splent].spl from the active product.
 
     Reads mirror/DOI from splent_catalog/{spl}/metadata.toml and writes
     the downloaded UVL to splent_catalog/{spl}/{spl}.uvl.
     """
     workspace = str(context.workspace())
 
-    # Resolve SPL name (don't require UVL to exist yet — we're downloading it)
-    if spl_name:
-        name = spl_name
-    else:
-        product = context.active_app()
-        if not product:
-            raise click.ClickException(
-                "No SPL specified. Pass a name or select a product:\n"
-                "  splent spl:fetch <spl_name>\n"
-                "  splent product:select <product>"
-            )
-        import tomllib
-
-        pyproject = os.path.join(workspace, product, "pyproject.toml")
-        with open(pyproject, "rb") as f:
-            data = tomllib.load(f)
-        name = data.get("tool", {}).get("splent", {}).get("spl")
-        if not name:
-            raise click.ClickException(
-                f"Product '{product}' has no [tool.splent].spl configured."
-            )
+    name = spl_name
 
     metadata = _resolve_spl_metadata(name)
     uvl_cfg = metadata.get("spl", {}).get("uvl", {})

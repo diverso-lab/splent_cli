@@ -40,8 +40,8 @@ class SPLENTCLI(click.Group):
             "🏗️ Product Management": [
                 cmd for cmd in self.commands if cmd.startswith("product:")
             ],
-            "🧬 UVL & Variability": [
-                cmd for cmd in self.commands if cmd.startswith("uvl:")
+            "🧬 SPL & Variability": [
+                cmd for cmd in self.commands if cmd.startswith(("spl:", "uvl:"))
             ],
             "🧱 Database": [cmd for cmd in self.commands if cmd.startswith("db:")],
             "💾 Cache": [cmd for cmd in self.commands if cmd.startswith("cache:")],

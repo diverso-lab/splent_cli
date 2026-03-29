@@ -1,7 +1,7 @@
 """
 spl:fix — Interactive wizard to add missing UVL constraints based on code analysis.
 
-Requires an active product (for code scanning) AND an SPL (for writing constraints).
+Scans all splent_feature_* directories at workspace root (detached mode).
 """
 
 import os
@@ -92,20 +92,17 @@ def _scan_imports(
     return imported
 
 
-def _resolve_feature_paths(workspace: str, product: str) -> dict[str, str]:
+def _resolve_feature_paths(workspace: str, spl_packages: set[str]) -> dict[str, str]:
+    """Find feature directories at workspace root, filtered to SPL packages only.
+
+    Only returns features declared in the SPL's UVL — features from other SPLs
+    in the same workspace are ignored.
+    """
     result = {}
-    features_dir = os.path.join(workspace, product, "features")
-    if not os.path.isdir(features_dir):
-        return result
-    for org_dir in os.listdir(features_dir):
-        org_path = os.path.join(features_dir, org_dir)
-        if not os.path.isdir(org_path):
-            continue
-        for entry in os.listdir(org_path):
-            entry_path = os.path.abspath(os.path.join(org_path, entry))
-            name = entry.split("@")[0]
-            if os.path.isdir(entry_path):
-                result[name] = entry_path
+    for pkg_name in spl_packages:
+        candidate = os.path.join(workspace, pkg_name)
+        if os.path.isdir(candidate):
+            result[pkg_name] = candidate
     return result
 
 
@@ -144,14 +141,14 @@ def _write_constraints(
     "spl:fix",
     short_help="Interactive wizard to add missing UVL constraints from code analysis.",
 )
-@click.argument("spl_name", required=False, default=None)
+@click.argument("spl_name")
+@context.requires_detached
 def spl_fix(spl_name):
-    """
-    Scans feature source code for cross-feature imports, compares with
-    existing UVL constraints, and offers to add the missing ones.
+    """Scan feature source code for cross-feature imports, compare with
+    existing UVL constraints, and offer to add the missing ones.
 
-    Requires an active product (for code scanning). The SPL can be passed
-    as an argument or read from the product's [tool.splent].spl.
+    Only scans features declared in the SPL's UVL — features from other SPLs
+    in the same workspace are ignored.
 
     \b
     For each missing constraint, shows:
@@ -160,10 +157,7 @@ def spl_fix(spl_name):
       - Lets you choose: add the constraint, skip, or mark as inverted (needs refactoring)
     """
     workspace = str(context.workspace())
-    product = context.require_app()
-    product_dir = os.path.join(workspace, product)
 
-    # Resolve SPL — uses argument or product's pyproject
     name, uvl_path = _resolve_spl(spl_name)
 
     package_map, existing_raw, raw_text = _parse_uvl(uvl_path)
@@ -177,7 +171,7 @@ def spl_fix(spl_name):
         existing_pairs.add((src, dst))
 
     # Scan code
-    feature_paths = _resolve_feature_paths(workspace, product)
+    feature_paths = _resolve_feature_paths(workspace, all_packages)
 
     missing: list[tuple[str, str, str]] = []  # (importer_short, imported_short, type)
 

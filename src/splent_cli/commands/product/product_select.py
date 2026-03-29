@@ -49,5 +49,3 @@ def select_app(app_name, shell):
     # If --shell, print commands for eval
     if shell:
         print(f"export SPLENT_APP={app_name}")
-        print(f"source {workspace_env_path}")
-        print("type set_prompt >/dev/null 2>&1 && set_prompt || true")

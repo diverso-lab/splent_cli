@@ -201,6 +201,48 @@ def print_uvl_header(
     click.echo()
 
 
+def run_uvl_check(workspace: str) -> tuple[bool, str]:
+    """
+    Programmatic UVL validation. Returns (ok, message).
+    Does not print anything and does not call sys.exit.
+    """
+    from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
+
+    try:
+        app_name = read_splent_app(workspace=workspace)
+        product_path = os.path.join(workspace, app_name)
+        pyproject_path = os.path.join(product_path, "pyproject.toml")
+        data = load_pyproject(pyproject_path)
+        try:
+            local_uvl = resolve_uvl_path(workspace, app_name, data)
+        except Exception:
+            return False, "UVL file not found. Check [tool.splent].spl or [tool.splent.uvl]."
+        universe, root_name = list_all_features_from_uvl(local_uvl)
+        deps = get_feature_deps(data)
+        selected = {normalize_feature_name(d) for d in deps}
+        selected.add(root_name)
+        unknown = sorted(f for f in selected if f not in universe)
+        if unknown:
+            return (
+                False,
+                f"pyproject contains features not in UVL: {', '.join(unknown)}",
+            )
+        conf_path = write_csvconf_full(universe, selected)
+        try:
+            fm = FLAMAFeatureModel(local_uvl)
+            ok = fm.satisfiable_configuration(conf_path, full_configuration=False)
+        finally:
+            try:
+                os.remove(conf_path)
+            except OSError:
+                pass
+        if not ok:
+            return False, "Configuration is NOT satisfiable under the UVL constraints."
+        return True, "OK"
+    except Exception as exc:
+        return False, str(exc)
+
+
 def write_csvconf_full(universe: list[str], selected: set[str]) -> str:
     """
     Write a temporary csvconf file for Flamapy configuration validation.

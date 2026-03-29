@@ -11,7 +11,7 @@ import click
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import read_features_from_data
-from splent_cli.commands.uvl.uvl_check import run_uvl_check
+from splent_cli.commands.uvl.uvl_utils import run_uvl_check
 from splent_cli.commands.feature.feature_diff import run_all_product_check
 
 
@@ -36,9 +36,9 @@ def run_preflight(*, interactive: bool = True) -> bool:
 
     failed = False
 
-    # [1/2] uvl:check
+    # [1/2] product:validate
     if interactive:
-        click.echo(click.style("  [1/2] uvl:check", fg="bright_black"))
+        click.echo(click.style("  [1/2] product:validate", fg="bright_black"))
     uvl_ok, uvl_msg = run_uvl_check(workspace)
     if uvl_ok:
         if interactive:
@@ -46,7 +46,7 @@ def run_preflight(*, interactive: bool = True) -> bool:
     else:
         if interactive:
             click.secho(f"        🚨 {uvl_msg}", fg="red")
-            click.secho("        → Run: splent uvl:check", fg="yellow")
+            click.secho("        → Run: splent product:validate", fg="yellow")
         failed = True
     if interactive:
         click.echo()

@@ -6,25 +6,22 @@ from splent_cli.commands.spl.spl_utils import _resolve_spl
 from splent_cli.commands.uvl.uvl_utils import (
     list_all_features_from_uvl as _list_all_features_from_uvl,
 )
+from splent_cli.services import context
 
 
 @click.command(
     "spl:configs",
     short_help="Print the number of valid configurations represented by the SPL's UVL model",
 )
-@click.argument("spl_name", required=False, default=None)
+@click.argument("spl_name")
 @click.option(
     "--with-sat",
     is_flag=True,
     help="Force PySAT backend (useful in some environments; slower sometimes)",
 )
+@context.requires_detached
 def spl_configs(spl_name, with_sat):
-    """Show the number of valid configurations for the SPL.
-
-    \b
-    If SPL_NAME is given, uses it directly.
-    Otherwise reads [tool.splent].spl from the active product.
-    """
+    """Show the number of valid configurations for the SPL."""
     name, uvl_path = _resolve_spl(spl_name)
 
     universe, _ = _list_all_features_from_uvl(uvl_path)

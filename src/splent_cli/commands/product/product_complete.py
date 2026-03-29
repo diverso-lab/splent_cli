@@ -197,8 +197,8 @@ def _rewrite_pyproject_features_block(py_text: str, to_add: List[str]) -> str:
 
 
 @click.command(
-    "uvl:sync",
-    short_help="Add missing required features to pyproject optional-dependencies.features using UVL metadata",
+    "product:complete",
+    short_help="Add missing required features to pyproject using UVL metadata.",
 )
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option(
@@ -210,7 +210,8 @@ def _rewrite_pyproject_features_block(py_text: str, to_add: List[str]) -> str:
 @click.option(
     "--dry-run", is_flag=True, help="Only show what would change; do not modify files"
 )
-def uvl_sync(pyproject, default_org, yes, dry_run):
+def product_complete(pyproject, default_org, yes, dry_run):
+    context.require_app()
     workspace = str(context.workspace())
     app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
@@ -249,7 +250,7 @@ def uvl_sync(pyproject, default_org, yes, dry_run):
         )
 
     if not missing_names:
-        _print_uvl_header("sync", app_name, local_uvl, len(universe))
+        _print_uvl_header("complete", app_name, local_uvl, len(universe))
         click.echo("OK: nothing to add (no missing dependencies).")
         click.echo()
         return
@@ -262,7 +263,7 @@ def uvl_sync(pyproject, default_org, yes, dry_run):
         spec = _dep_spec_from_meta(fname, meta, default_org=default_org)
         to_add_specs.append(spec)
 
-    _print_uvl_header("sync", app_name, local_uvl, len(universe))
+    _print_uvl_header("complete", app_name, local_uvl, len(universe))
     click.echo("Missing features (by name):")
     for f in missing_names:
         click.echo(f"- {f}")
@@ -299,3 +300,6 @@ def uvl_sync(pyproject, default_org, yes, dry_run):
     Path(pyproject_path).write_text(new_text, encoding="utf-8")
     click.echo(f"Updated: {pyproject_path}")
     click.echo()
+
+
+cli_command = product_complete

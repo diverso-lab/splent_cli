@@ -17,14 +17,15 @@ from splent_cli.commands.uvl.uvl_utils import (
 
 
 @click.command(
-    "uvl:missing",
-    short_help="List missing required features according to UVL constraints (based on pyproject selection)",
+    "product:missing",
+    short_help="List missing required features according to UVL constraints (based on pyproject selection).",
 )
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option(
     "--fail", is_flag=True, help="Exit with code 2 if missing dependencies are found"
 )
-def uvl_missing(pyproject, fail):
+def product_missing(pyproject, fail):
+    context.require_app()
     workspace = str(context.workspace())
     app_name = _read_splent_app(workspace=workspace)
     product_path = os.path.join(workspace, app_name)
@@ -81,3 +82,6 @@ def uvl_missing(pyproject, fail):
 
     if fail:
         raise click.ClickException("Missing dependencies found")
+
+
+cli_command = product_missing

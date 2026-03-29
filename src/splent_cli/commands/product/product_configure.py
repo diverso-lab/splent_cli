@@ -217,6 +217,31 @@ def product_configure():
 
     click.echo()
 
+    # Clear existing features from pyproject before applying new selection
+    import tomli_w
+    from splent_cli.utils.feature_utils import write_features_to_data
+
+    with open(pyproject_path, "rb") as f:
+        pydata = tomllib.load(f)
+
+    write_features_to_data(pydata, [])
+    with open(pyproject_path, "wb") as f:
+        tomli_w.dump(pydata, f)
+
+    # Clean stale symlinks
+    features_dir = os.path.join(product_path, "features")
+    if os.path.isdir(features_dir):
+        for org_dir in os.listdir(features_dir):
+            org_path = os.path.join(features_dir, org_dir)
+            if not os.path.isdir(org_path):
+                continue
+            for entry in os.listdir(org_path):
+                entry_path = os.path.join(org_path, entry)
+                if os.path.islink(entry_path):
+                    os.unlink(entry_path)
+
+    click.echo("  🧹 Cleared existing feature list.")
+
     # Find latest version in cache for each feature
     cache_dir = os.path.join(workspace, ".splent_cache", "features")
 
