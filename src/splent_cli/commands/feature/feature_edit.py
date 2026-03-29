@@ -11,11 +11,16 @@ from splent_cli.utils.cache_utils import make_feature_writable
 # =====================================================================
 # GITHUB WRITE ACCESS CHECK
 # =====================================================================
-def _has_write_access(ns_git: str, name: str) -> bool:
-    """Return True if the authenticated user has push access to ns_git/name."""
+def _has_write_access(ns_git: str, name: str) -> tuple[bool, str]:
+    """Check if the authenticated user has push access to ns_git/name.
+
+    Returns (has_access, reason_if_denied).
+    """
     token = os.getenv("GITHUB_TOKEN")
+    github_user = os.getenv("GITHUB_USER", "(not set)")
     if not token:
-        return False
+        return False, f"GITHUB_TOKEN not set (user: {github_user})"
+
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"token {token}",
@@ -27,11 +32,19 @@ def _has_write_access(ns_git: str, name: str) -> bool:
             headers=headers,
             timeout=5,
         )
+        if resp.status_code == 404:
+            return False, f"Repo {ns_git}/{name} not found (user: {github_user})"
         if resp.status_code == 200:
-            return resp.json().get("permissions", {}).get("push", False)
-    except requests.RequestException:
-        pass
-    return False
+            perms = resp.json().get("permissions", {})
+            if perms.get("push", False):
+                return True, ""
+            return False, (
+                f"User '{github_user}' has no push access to {ns_git}/{name}\n"
+                f"     Permissions: {perms}"
+            )
+        return False, f"GitHub API returned {resp.status_code} (user: {github_user})"
+    except requests.RequestException as e:
+        return False, f"GitHub API error: {e} (user: {github_user})"
 
 
 # =====================================================================
@@ -175,15 +188,17 @@ def _edit_one(
         return True
 
     # Guard: require write access to the GitHub repo
-    if not force and not _has_write_access(ns_git, name):
-        click.secho(
-            f"  ❌ No write access to {ns_git}/{name}.\n"
-            f"     You cannot edit a feature you don't own.\n"
-            f"     To work on your own copy, use: splent feature:fork {ns_git}/{name}\n"
-            f"     Or use --force to bypass this check.",
-            fg="red",
-        )
-        return False
+    if not force:
+        has_access, reason = _has_write_access(ns_git, name)
+        if not has_access:
+            click.secho(
+                f"  ❌ No write access to {ns_git}/{name}.\n"
+                f"     {reason}\n"
+                f"     To work on your own copy, use: splent feature:fork {ns_git}/{name}\n"
+                f"     Or use --force to bypass this check.",
+                fg="red",
+            )
+            return False
 
     # Guard: cannot edit a feature with applied migrations
     key, _, _, _ = resolve_feature_key_from_entry(match)
