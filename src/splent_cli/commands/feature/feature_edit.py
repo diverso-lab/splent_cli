@@ -233,8 +233,9 @@ def _edit_one(
             shutil.rmtree(editable_path, ignore_errors=True)
             click.secho("     ❌ Failed to copy feature to editable path.", fg="red")
             return False
-        # Unlock files so the editable copy is writable
-        make_feature_writable(editable_path)
+
+    # Always ensure editable copy is writable (cache files are read-only)
+    make_feature_writable(editable_path)
 
     ensure_git_main(editable_path, ns_git, name)
     replace_pyproject_reference(pyproject_path, name, version)
