@@ -7,6 +7,24 @@ from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
+def _is_port_var(key: str, value: str) -> bool:
+    """Check if an env var looks like a port declaration.
+
+    Matches variables ending in _PORT or containing _PORT_ with a numeric value.
+    Excludes internal ports (like MAIL_PORT=1025 which is a container-internal port).
+    """
+    if not value.strip().isdigit():
+        return False
+    key_upper = key.upper()
+    # HOST_PORT suffix = definitely a host port mapping
+    if key_upper.endswith("_HOST_PORT"):
+        return True
+    # _PORT_ONE, _PORT_TWO = mailhog pattern
+    if "_PORT_ONE" in key_upper or "_PORT_TWO" in key_upper:
+        return True
+    return False
+
+
 @click.command(
     "product:env", short_help="Generate or merge .env files for the active product."
 )
@@ -187,6 +205,7 @@ def product_env(generate, merge, env_name, process_all):
         for feature in features:
             clean_ref = compose.normalize_feature_ref(feature)
             bare_name = clean_ref.split("/")[-1] if "/" in clean_ref else clean_ref
+            bare_name = bare_name.split("@")[0]  # strip version
             docker_dir_f = compose.feature_docker_dir(workspace, bare_name)
 
             candidates_f = [
@@ -208,6 +227,12 @@ def product_env(generate, merge, env_name, process_all):
 
             feature_env_paths.append(target_f)
 
+        # Compute product port offset for feature port adjustment
+        import zlib
+
+        port_offset = zlib.crc32(product.encode("utf-8")) % 1000
+        port_adjusted = []
+
         for f_env in feature_env_paths:
             if not os.path.exists(f_env):
                 continue
@@ -215,11 +240,26 @@ def product_env(generate, merge, env_name, process_all):
                 for line in f:
                     if "=" in line and not line.strip().startswith("#"):
                         k, v = line.strip().split("=", 1)
-                        merged.setdefault(k, v)
+                        # Apply product offset to feature port variables
+                        if k not in merged and _is_port_var(k, v):
+                            try:
+                                original = int(v)
+                                adjusted = original + port_offset
+                                merged.setdefault(k, str(adjusted))
+                                port_adjusted.append((k, original, adjusted))
+                            except ValueError:
+                                merged.setdefault(k, v)
+                        else:
+                            merged.setdefault(k, v)
 
         with open(target_env, "w", encoding="utf-8") as f:
             for k, v in merged.items():
                 f.write(f"{k}={v}\n")
+
+        if port_adjusted:
+            click.echo("🔧 Adjusted feature ports for product isolation:")
+            for name, orig, adj in port_adjusted:
+                click.echo(f"   {name}: {orig} → {adj} (+{port_offset})")
 
         click.echo(
             f"🔗 Merged {len(feature_env_paths)} feature .env files into {target_env}"

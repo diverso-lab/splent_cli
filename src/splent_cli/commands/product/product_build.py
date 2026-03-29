@@ -7,6 +7,7 @@ import click
 from splent_cli.services import context, compose
 from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.commands.product.product_env import _is_port_var
 
 
 def load_env_file(path):
@@ -130,6 +131,17 @@ def product_build(no_image, skip_preflight):
 
         feature_env = load_env_file(feature_env_file)
         env_result = merge_env_dicts(env_result, feature_env)
+
+    # Apply product port offset to feature port variables
+    import zlib
+
+    port_offset = zlib.crc32(product.encode("utf-8")) % 1000
+    for k, v in env_result.items():
+        if _is_port_var(k, v):
+            try:
+                env_result[k] = str(int(v) + port_offset)
+            except ValueError:
+                pass
 
     env_deploy_path = os.path.join(docker_path, ".env.deploy.example")
     with open(env_deploy_path, "w", encoding="utf-8") as f:

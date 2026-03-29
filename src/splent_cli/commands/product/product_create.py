@@ -77,6 +77,8 @@ def make_product(name, spl_name, features_file):
     web_port = 5000 + offset
     db_port = 33060 + offset
     redis_port = 6379 + offset
+    mailhog_port_one = 8025 + offset
+    mailhog_port_two = 1025 + offset
 
     # Check for port collisions with existing products
     workspace_path = context.workspace()
@@ -109,6 +111,8 @@ def make_product(name, spl_name, features_file):
         "web_port": web_port,
         "db_port": db_port,
         "redis_port": redis_port,
+        "mailhog_port_one": mailhog_port_one,
+        "mailhog_port_two": mailhog_port_two,
         "cli_version": _CLI_VERSION,
         "network_name": "splent_network",
         "spl_name": spl_name or "",

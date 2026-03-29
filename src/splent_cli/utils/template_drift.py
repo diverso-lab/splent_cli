@@ -69,6 +69,8 @@ def product_ctx(product_name: str) -> dict:
         "web_port": 5000 + offset,
         "db_port": 33060 + offset,
         "redis_port": 6379 + offset,
+        "mailhog_port_one": 8025 + offset,
+        "mailhog_port_two": 1025 + offset,
         "cli_version": CLI_VERSION,
         "network_name": "splent_network",
         "spl_name": spl_name,
