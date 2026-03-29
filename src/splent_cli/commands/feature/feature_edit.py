@@ -175,11 +175,12 @@ def _edit_one(
         return True
 
     # Guard: require write access to the GitHub repo
-    if not _has_write_access(ns_git, name):
+    if not force and not _has_write_access(ns_git, name):
         click.secho(
             f"  ❌ No write access to {ns_git}/{name}.\n"
             f"     You cannot edit a feature you don't own.\n"
-            f"     To work on your own copy, use: splent feature:fork {ns_git}/{name}",
+            f"     To work on your own copy, use: splent feature:fork {ns_git}/{name}\n"
+            f"     Or use --force to bypass this check.",
             fg="red",
         )
         return False
