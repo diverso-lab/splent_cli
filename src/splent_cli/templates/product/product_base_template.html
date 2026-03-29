@@ -10,23 +10,15 @@
     <meta name="author" content="Diverso Lab">
 
     <link rel="preconnect" href="https://fonts.gstatic.com">
-
-
     <link rel="canonical" href="https://www.splent.io"/>
 
-    <title>{{ SPLENT_APP }}</title>
+    <title>{% block title %}{{ SPLENT_APP }}{% endblock %}</title>
 
     <link rel="stylesheet" href="{{ url_for("static", filename="css/app.css") }}">
-
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-
-    <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
-
-    <link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" type="text/css"/>
-
-    <link rel="stylesheet" href="{{ url_for("static", filename="css/dropzone.css") }}">
-
     <link rel="stylesheet" href="{{ url_for("static", filename="css/own.css") }}">
+
+    {% block head %}{% endblock %}
 
     {% for hook in get_template_hooks("layout.head.css") %}
         {{ hook() | safe }}
@@ -39,34 +31,23 @@
 
     <nav id="sidebar" class="sidebar js-sidebar">
         <div class="sidebar-content js-simplebar">
-            <a class="sidebar-brand" href="{{ url_for('public.index') }}">
+            <a class="sidebar-brand" href="/">
                 {{ SPLENT_APP }}
             </a>
 
-
             <ul class="sidebar-nav">
 
-                <li class="sidebar-header">
-                    Menu
-                </li>
+                {% for hook in get_template_hooks("layout.sidebar.top") %}
+                    {{ hook() | safe }}
+                {% endfor %}
 
-                <li class="sidebar-item {{ 'active' if request.endpoint == 'public.index' else '' }}">
-                    <a class="sidebar-link" href="{{ url_for('public.index') }}">
-                        <i class="align-middle" data-feather="home"></i> <span class="align-middle">Home</span>
-                    </a>
-                </li>
-
-                {% if current_user.is_anonymous %}
+                {% if current_user is defined and current_user.is_anonymous %}
 
                     {% for hook in get_template_hooks("layout.anonymous_sidebar") %}
                         {{ hook() | safe }}
                     {% endfor %}
 
-                {% else %}
-
-                    <li class="sidebar-header">
-                        Options
-                    </li>
+                {% elif current_user is defined and current_user.is_authenticated %}
 
                     {% for hook in get_template_hooks("layout.authenticated_sidebar") %}
                         {{ hook() | safe }}
@@ -96,20 +77,19 @@
                             <i class="align-middle" data-feather="user"></i>
                         </a>
 
-                        {% if current_user.is_anonymous %}
+                        {% if current_user is defined and current_user.is_anonymous %}
 
                             {% for hook in get_template_hooks("layout.navbar.anonymous") %}
                                 {{ hook() | safe }}
                             {% endfor %}
 
-                        {% else %}
+                        {% elif current_user is defined and current_user.is_authenticated %}
 
                             {% for hook in get_template_hooks("layout.navbar.authenticated") %}
                                 {{ hook() | safe }}
                             {% endfor %}
 
                         {% endif %}
-
 
                     </li>
                 </ul>
@@ -146,22 +126,6 @@
 </div>
 
 <script src="{{ url_for("static", filename="js/app.js") }}"></script>
-
-<script>
-
-    function submitSearchForm(event) {
-        event.preventDefault();
-        let query = document.getElementById('search-query').value;
-        window.location.href = '/explore?query=' + encodeURIComponent(query);
-    }
-
-    function copyText(div_identifier) {
-        let textToCopy = document.getElementById(div_identifier).textContent;
-        textToCopy = textToCopy.trim();
-        navigator.clipboard.writeText(textToCopy);
-    }
-
-</script>
 
 {% for hook in get_template_hooks("layout.scripts") %}
     {{ hook() | safe }}
