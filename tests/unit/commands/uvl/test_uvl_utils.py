@@ -174,13 +174,15 @@ class TestReadSplentApp:
         result = read_splent_app(str(tmp_path))
         assert result == "myapp"
 
-    def test_missing_env_raises(self, tmp_path):
-        with pytest.raises(click.ClickException, match="Missing"):
+    def test_missing_env_raises(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("SPLENT_APP", raising=False)
+        with pytest.raises(click.ClickException, match="SPLENT_APP not set"):
             read_splent_app(str(tmp_path))
 
-    def test_missing_splent_app_raises(self, tmp_path):
+    def test_missing_splent_app_raises(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("SPLENT_APP", raising=False)
         (tmp_path / ".env").write_text("OTHER_VAR=value\n")
-        with pytest.raises(click.ClickException, match="SPLENT_APP"):
+        with pytest.raises(click.ClickException, match="SPLENT_APP not set"):
             read_splent_app(str(tmp_path))
 
     def test_product_dir_missing_raises(self, tmp_path):
