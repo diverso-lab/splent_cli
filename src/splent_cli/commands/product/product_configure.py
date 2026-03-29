@@ -242,12 +242,14 @@ def product_configure():
 
     click.echo("  🧹 Cleared existing feature list.")
 
-    # Find latest version in cache for each feature
+    # Write selected features to pyproject and create symlinks
     cache_dir = os.path.join(workspace, ".splent_cache", "features")
 
-    from splent_cli.commands.feature.feature_attach import feature_attach
+    import subprocess
+    from splent_cli.utils.feature_utils import write_features_to_data
 
-    ctx = click.get_current_context()
+    # Build the feature list with versions (from cache or PyPI)
+    feature_entries = []
     for f in features:
         name = f["name"]
         if name not in all_selected:
@@ -258,7 +260,7 @@ def product_configure():
         if not package:
             continue
 
-        # Find latest cached version
+        # Try cache first
         org_safe = org.replace("-", "_")
         org_cache = os.path.join(cache_dir, org_safe)
         version = None
@@ -270,18 +272,40 @@ def product_configure():
             if candidates:
                 version = candidates[0].split("@", 1)[1]
 
-        if version:
-            click.echo(f"  📦 {org}/{package}@{version}")
+        # Fallback: query PyPI
+        if not version:
             try:
-                ctx.invoke(feature_attach, feature_identifier=package, version=version)
-            except (SystemExit, Exception) as e:
-                if str(e) != "0":
-                    click.secho(f"     ⚠️ {e}", fg="yellow")
+                result = subprocess.run(
+                    ["pip", "index", "versions", package],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if result.returncode == 0 and "(" in result.stdout:
+                    pypi_ver = result.stdout.split("(")[1].split(")")[0].strip()
+                    version = f"v{pypi_ver}"
+            except Exception:
+                pass
+
+        if version:
+            entry = f"{org}/{package}@{version}"
         else:
-            click.echo(f"  ⚠️ {package}: no cached version found — attach manually")
+            entry = f"{org}/{package}"
+        feature_entries.append(entry)
+        click.echo(f"  📦 {entry}")
+
+    # Write features to pyproject
+    with open(pyproject_path, "rb") as pf:
+        current_data = tomllib.load(pf)
+
+    write_features_to_data(current_data, feature_entries)
+    import tomli_w
+    with open(pyproject_path, "wb") as pf:
+        tomli_w.dump(current_data, pf)
 
     click.echo()
     click.secho("  ✅ Configuration applied.", fg="green")
+    click.echo()
+    click.echo("  Next: download and link features with:")
+    click.echo("     splent product:sync")
     click.echo()
 
 

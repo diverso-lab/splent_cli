@@ -16,22 +16,24 @@ from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def read_splent_app(workspace: str) -> str:
-    """Read SPLENT_APP from workspace .env and validate the product directory exists."""
-    env_path = os.path.join(workspace, ".env")
-    if not os.path.exists(env_path):
-        raise click.ClickException(
-            f"Missing {env_path} (run: splent product:select <app>)"
-        )
+    """Read SPLENT_APP from env var or workspace .env and validate the product directory exists."""
+    # Prefer environment variable (set by product:select or passed via -e)
+    app_name = os.getenv("SPLENT_APP")
 
-    app_name = None
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.startswith("SPLENT_APP="):
-                app_name = line.strip().split("=", 1)[1]
+    # Fallback: read from .env file
+    if not app_name:
+        env_path = os.path.join(workspace, ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("SPLENT_APP="):
+                        val = line.strip().split("=", 1)[1].strip()
+                        if val:
+                            app_name = val
 
     if not app_name:
         raise click.ClickException(
-            f"SPLENT_APP not set in {env_path} (run: splent product:select <app>)"
+            "SPLENT_APP not set. Run: splent product:select <app>"
         )
 
     product_path = os.path.join(workspace, app_name)
