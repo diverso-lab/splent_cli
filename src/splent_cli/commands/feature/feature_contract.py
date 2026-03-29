@@ -46,7 +46,7 @@ def update_contract(feature_path: str, namespace: str, feature_name: str) -> dic
 
 
 def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
-    """Resolve a feature from the cache (editable or versioned)."""
+    """Resolve a feature: workspace root first, then cache."""
     if "/" in feature_ref:
         ns_raw, rest = feature_ref.split("/", 1)
         ns = ns_raw.replace("-", "_").replace(".", "_")
@@ -56,18 +56,22 @@ def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
 
     name, _, version = rest.partition("@")
 
+    # 1. Workspace root (editable features)
+    workspace_path = Path(workspace) / name
+    if workspace_path.exists():
+        return workspace_path, ns, name
+
+    # 2. Cache (pinned features)
     cache_base = Path(workspace) / ".splent_cache" / "features" / ns
 
     if version:
-        # Versioned: look for exact match
         cache_path = cache_base / f"{name}@{version}"
     else:
-        # Editable: look for bare name first, then any versioned entry
         cache_path = cache_base / name
         if not cache_path.exists():
             candidates = sorted(cache_base.glob(f"{name}@*"))
             if candidates:
-                cache_path = candidates[-1]  # latest version
+                cache_path = candidates[-1]
 
     if not cache_path.exists():
         raise SystemExit(
