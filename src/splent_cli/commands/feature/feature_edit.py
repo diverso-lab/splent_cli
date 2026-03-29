@@ -19,7 +19,11 @@ def _has_write_access(ns_git: str, name: str) -> tuple[bool, str]:
     token = os.getenv("GITHUB_TOKEN")
     github_user = os.getenv("GITHUB_USER", "(not set)")
     if not token:
-        return False, f"GITHUB_TOKEN not set (user: {github_user})"
+        return False, (
+            f"GitHub user (env): {github_user}\n"
+            f"     Repo owner:      {ns_git}\n"
+            f"     GITHUB_TOKEN not set"
+        )
 
     headers = {
         "Accept": "application/vnd.github+json",
@@ -33,18 +37,31 @@ def _has_write_access(ns_git: str, name: str) -> tuple[bool, str]:
             timeout=5,
         )
         if resp.status_code == 404:
-            return False, f"Repo {ns_git}/{name} not found (user: {github_user})"
+            return False, (
+                f"GitHub user (env): {github_user}\n"
+                f"     Repo owner:      {ns_git}\n"
+                f"     Repo {ns_git}/{name} not found (404)"
+            )
         if resp.status_code == 200:
             perms = resp.json().get("permissions", {})
             if perms.get("push", False):
                 return True, ""
             return False, (
-                f"User '{github_user}' has no push access to {ns_git}/{name}\n"
-                f"     Permissions: {perms}"
+                f"GitHub user (env): {github_user}\n"
+                f"     Repo owner:      {ns_git}\n"
+                f"     Push access: {perms.get('push', False)}"
             )
-        return False, f"GitHub API returned {resp.status_code} (user: {github_user})"
+        return False, (
+            f"GitHub user (env): {github_user}\n"
+            f"     Repo owner:      {ns_git}\n"
+            f"     GitHub API returned {resp.status_code}"
+        )
     except requests.RequestException as e:
-        return False, f"GitHub API error: {e} (user: {github_user})"
+        return False, (
+            f"GitHub user (env): {github_user}\n"
+            f"     Repo owner:      {ns_git}\n"
+            f"     API error: {e}"
+        )
 
 
 # =====================================================================
@@ -199,10 +216,6 @@ def _edit_one(
                 fg="red",
             )
             return False
-
-    # Guard: cannot edit a feature with applied migrations
-    key, _, _, _ = resolve_feature_key_from_entry(match)
-    require_state(product_path, key, command="feature:edit", force=force)
 
     click.echo(f"  🧩 {ns_git}/{name}@{version}")
 

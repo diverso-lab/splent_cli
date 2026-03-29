@@ -44,11 +44,20 @@ def _state_badge(state: str) -> str:
     return click.style(f" {state:<10}", fg=color, bold=(state == "active"))
 
 
-def _progress_bar(state: str) -> str:
-    """Return a compact ASCII progress indicator for the 4 core states."""
+def _progress_bar(state: str, has_migrations: bool = True) -> str:
+    """Return a compact ASCII progress indicator for the 4 core states.
+
+    If has_migrations is False, the 'migrated' step is shown as skipped (grey)
+    even if the feature reached 'active'.
+    """
     idx = STATES.index(state) if state in STATES else -1
+    migrated_idx = STATES.index("migrated")
     parts = []
     for i, s in enumerate(STATES):
+        # Skip migrated step if feature has no migrations
+        if i == migrated_idx and not has_migrations and idx >= migrated_idx:
+            parts.append(click.style("○", fg="bright_black"))
+            continue
         if i < idx:
             parts.append(click.style("●", fg="green"))
         elif i == idx:
@@ -111,6 +120,8 @@ def feature_status(as_json):
 
         # Build rows and compute dynamic column width
         rows = []
+        from splent_framework.managers.migration_manager import MigrationManager
+
         for key, entry in sorted(features.items()):
             name = entry.get("name", key)
             version = entry.get("version") or "editable"
@@ -119,7 +130,10 @@ def feature_status(as_json):
             label = f"{entry.get('namespace', '')}/{name}"
             if version != "editable":
                 label += f"@{version}"
-            rows.append((label, mode, state))
+            # Check if feature has migrations
+            mdir = MigrationManager.get_feature_migration_dir(name)
+            has_migrations = mdir is not None and os.path.isdir(mdir)
+            rows.append((label, mode, state, has_migrations))
 
         col_w = max(len(r[0]) for r in rows)
         col_w = max(col_w, len("Feature")) + 2
@@ -129,8 +143,8 @@ def feature_status(as_json):
         click.echo(f"  {'Feature':<{col_w}} {'Mode':<10}{'Progress':<9}  State")
         click.echo(click.style(f"  {'─' * total_w}", fg="bright_black"))
 
-        for label, mode, state in rows:
-            progress = _progress_bar(state)
+        for label, mode, state, has_mig in rows:
+            progress = _progress_bar(state, has_migrations=has_mig)
             state_str = _state_badge(state)
             mode_color = "cyan" if mode == "pinned" else "magenta"
             mode_str = click.style(f"{mode:<10}", fg=mode_color)
