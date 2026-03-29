@@ -27,13 +27,13 @@ cli_version = "{{ cli_version }}"
 # Declares what this feature provides to and requires from the product.
 # Used by `splent feature:check` and `splent product:derive` for validation.
 [tool.splent.contract]
-description = "{{ feature_name }} feature"
+description = "{{ short_name }} feature"
 
 [tool.splent.contract.provides]
 # Routes exposed by this feature
-routes = ["/{{ feature_name }}"]
+routes = ["/{{ short_name }}"]
 # Blueprint names registered into Flask
-blueprints = ["{{ feature_name }}_bp"]
+blueprints = ["{{ short_name }}_bp"]
 # SQLAlchemy models introduced by this feature
 models = []
 # CLI commands added by this feature

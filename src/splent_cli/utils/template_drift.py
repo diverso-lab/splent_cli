@@ -78,8 +78,12 @@ def product_ctx(product_name: str) -> dict:
 
 
 def feature_ctx(org_safe: str, feature_name: str) -> dict:
+    short_name = feature_name
+    if short_name.startswith("splent_feature_"):
+        short_name = short_name[len("splent_feature_"):]
     return {
         "feature_name": feature_name,
+        "short_name": short_name,
         "org_safe": org_safe,
         "feature_import": f"{org_safe}.{feature_name}",
         "cli_version": CLI_VERSION,

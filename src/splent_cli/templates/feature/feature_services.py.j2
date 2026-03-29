@@ -1,9 +1,7 @@
-from {{ feature_import }}.repositories import (
-    {{ feature_name | pascalcase }}Repository,
-)
+from {{ feature_import }}.repositories import {{ short_name | pascalcase }}Repository
 from splent_framework.services.BaseService import BaseService
 
 
-class {{ feature_name | pascalcase }}Service(BaseService):
+class {{ short_name | pascalcase }}Service(BaseService):
     def __init__(self):
-        super().__init__({{ feature_name | pascalcase }}Repository())
+        super().__init__({{ short_name | pascalcase }}Repository())

@@ -6,11 +6,11 @@ from flask import url_for
 # Register the feature's compiled bundle so it loads on every page
 # via the layout.scripts hook in the product's base_template.html.
 
-def {{ feature_name }}_scripts():
+def {{ short_name }}_scripts():
     return (
         '<script src="'
         + url_for(
-            "{{ feature_name }}.assets",
+            "{{ short_name }}.assets",
             subfolder="dist",
             filename="{{ feature_name }}.bundle.js",
         )
@@ -18,4 +18,4 @@ def {{ feature_name }}_scripts():
     )
 
 
-register_template_hook("layout.scripts", {{ feature_name }}_scripts)
+register_template_hook("layout.scripts", {{ short_name }}_scripts)

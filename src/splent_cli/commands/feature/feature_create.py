@@ -82,8 +82,14 @@ def make_feature(full_name):
         )
         raise SystemExit(1)
     env = setup_jinja_env()
+    # Derive short name: splent_feature_notes → notes
+    short_name = feature_name
+    if short_name.startswith("splent_feature_"):
+        short_name = short_name[len("splent_feature_"):]
+
     template_ctx = {
         "feature_name": feature_name,
+        "short_name": short_name,
         "org_safe": org_safe,
         "feature_import": f"{org_safe}.{feature_name}",
         "cli_version": _CLI_VERSION,
@@ -100,7 +106,7 @@ def make_feature(full_name):
         "seeders.py": "feature/feature_seeders.py.j2",
         "hooks.py": "feature/feature_hooks.py.j2",
         os.path.join(
-            "templates", feature_name, "index.html"
+            "templates", short_name, "index.html"
         ): "feature/feature_templates_index.html.j2",
         os.path.join("assets", "js", "scripts.js"): "feature/feature_scripts.js.j2",
         os.path.join(
