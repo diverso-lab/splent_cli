@@ -82,6 +82,19 @@ def spl_configs(spl_name, count, with_sat):
     if count:
         return
 
+    # Guard against very large config spaces
+    if n > 200:
+        click.secho(
+            f"  {n} configurations is too many to list. "
+            f"Use --count to see just the total, or add constraints to reduce the space.",
+            fg="yellow",
+        )
+        return
+
+    if n > 50:
+        if not click.confirm(f"  List all {n} configurations?", default=False):
+            return
+
     # List configurations
     try:
         configs = fm.configurations()
