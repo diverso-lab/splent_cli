@@ -171,6 +171,25 @@ def _extract_docker(feature_root: Path) -> list[str]:
     return sorted(found)
 
 
+def _extract_signals(signals_path: Path) -> tuple[list[str], list[str]]:
+    """Extract signal names from signals.py.
+
+    Returns (provided, required) where:
+      - provided = signals defined via define_signal()
+      - required = signals connected via connect_signal()
+    """
+    if not signals_path.exists():
+        return [], []
+    text = signals_path.read_text()
+    provided = sorted(
+        set(re.findall(r"""define_signal\s*\(\s*['"]([^'"]+)['"]""", text))
+    )
+    required = sorted(
+        set(re.findall(r"""connect_signal\s*\(\s*['"]([^'"]+)['"]""", text))
+    )
+    return provided, required
+
+
 def _scan_dependencies(
     src_dir: Path, own_feature_name: str
 ) -> tuple[list[str], list[str]]:
@@ -218,6 +237,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
     templates = _extract_templates(src_dir)
     docker = _extract_docker(feature_root)
     req_features, env_vars = _scan_dependencies(src_dir, feature_name)
+    signals_provided, signals_required = _extract_signals(src_dir / "signals.py")
 
     return {
         "routes": routes,
@@ -226,9 +246,11 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
         "commands": [],
         "hooks": hooks,
         "services": services,
+        "signals": signals_provided,
         "docker": docker,
         "requires_features": req_features,
         "env_vars": env_vars,
+        "requires_signals": signals_required,
         # Extensible: everything a feature provides is extensible by default
         "extensible_services": services,
         "extensible_templates": templates,
@@ -299,11 +321,13 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         f"commands   = {_toml_list(contract['commands'])}\n"
         f"hooks      = {_toml_list(contract['hooks'])}\n"
         f"services   = {_toml_list(contract['services'])}\n"
+        f"signals    = {_toml_list(contract.get('signals', []))}\n"
         f"docker     = {_toml_list(contract['docker'])}\n"
         "\n"
         "[tool.splent.contract.requires]\n"
         f"features = {_toml_list(contract['requires_features'])}\n"
         f"env_vars = {_toml_list(contract['env_vars'])}\n"
+        f"signals  = {_toml_list(contract.get('requires_signals', []))}\n"
         "\n"
         "[tool.splent.contract.extensible]\n"
         f"services  = {_toml_list(ext_services)}\n"

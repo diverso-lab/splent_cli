@@ -97,9 +97,11 @@ def _read_current_contract(pyproject_path: Path) -> dict:
         "commands": raw.get("provides", {}).get("commands", []),
         "hooks": raw.get("provides", {}).get("hooks", []),
         "services": raw.get("provides", {}).get("services", []),
+        "signals": raw.get("provides", {}).get("signals", []),
         "docker": raw.get("provides", {}).get("docker", []),
         "requires_features": raw.get("requires", {}).get("features", []),
         "env_vars": raw.get("requires", {}).get("env_vars", []),
+        "requires_signals": raw.get("requires", {}).get("signals", []),
         "extensible_services": ext.get("services", []),
         "extensible_templates": ext.get("templates", []),
         "extensible_models": ext.get("models", []),
@@ -136,11 +138,13 @@ def _print_contract(contract: dict, feature_name: str) -> None:
     click.echo(f"  commands   = {_fmt(contract['commands'])}")
     click.echo(f"  hooks      = {_fmt(contract['hooks'])}")
     click.echo(f"  services   = {_fmt(contract['services'])}")
+    click.echo(f"  signals    = {_fmt(contract.get('signals', []))}")
     click.echo(f"  docker     = {_fmt(contract['docker'])}")
     click.echo()
     click.echo(click.style("  [tool.splent.contract.requires]", fg="bright_black"))
     click.echo(f"  features   = {_fmt(contract['requires_features'])}")
     click.echo(f"  env_vars   = {_fmt(contract['env_vars'])}")
+    click.echo(f"  signals    = {_fmt(contract.get('requires_signals', []))}")
     click.echo()
     click.echo(click.style("  [tool.splent.contract.extensible]", fg="bright_black"))
     click.echo(f"  services   = {_fmt(contract.get('extensible_services', []))}")
@@ -166,6 +170,8 @@ def _print_diff(current: dict, inferred: dict) -> bool:
         ("docker", "docker"),
         ("requires_features", "requires.features"),
         ("env_vars", "requires.env_vars"),
+        ("signals", "provides.signals"),
+        ("requires_signals", "requires.signals"),
     ]
 
     diff_lines = []
