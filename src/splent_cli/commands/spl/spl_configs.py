@@ -120,6 +120,15 @@ def spl_configs(spl_name, count, with_sat):
         click.echo(f"  {idx} {feat_str:<80} {size_label}")
 
     click.echo()
+    click.echo(
+        "  "
+        + click.style("core", fg="green", bold=True)
+        + "  "
+        + click.style("optional", fg="yellow")
+        + "  "
+        + click.style("dead", fg="red")
+    )
+    click.echo()
 
 
 cli_command = spl_configs
