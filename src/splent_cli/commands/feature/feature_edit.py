@@ -177,23 +177,45 @@ def _hot_reinstall(workspace: str, product_path: str, editable_path: str, name: 
 # =====================================================================
 # WEBPACK COMPILATION
 # =====================================================================
-def _compile_assets(editable_path: str, name: str):
-    """Compile webpack assets if the feature has a webpack config."""
-    # Find webpack.config.js in the feature's assets
+def _compile_assets(workspace: str, product_path: str, name: str):
+    """Compile webpack assets using the product's node_modules via the web container."""
+    import shlex
+
+    product = os.path.basename(product_path)
+    env = os.getenv("SPLENT_ENV", "dev")
+
+    # Find webpack config
+    editable_path = os.path.join(workspace, name)
+    webpack_file = None
     for root, dirs, files in os.walk(editable_path):
         if "webpack.config.js" in files:
-            click.echo(f"     📦 Compiling assets...")
-            result = subprocess.run(
-                ["npx", "webpack", "--mode", "development", "--config", "webpack.config.js"],
-                cwd=root,
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                click.echo(f"     ✔  Assets compiled.")
-            else:
-                click.secho(f"     ⚠  Asset compilation failed: {result.stderr[:200]}", fg="yellow")
-            return
+            webpack_file = os.path.join(root, "webpack.config.js")
+            break
+    if not webpack_file:
+        return
+
+    # Find the web container
+    compose_file = compose.resolve_file(product_path, env)
+    if not compose_file:
+        return
+    docker_dir = os.path.join(product_path, "docker")
+    pname = compose.project_name(product, env)
+    container_id = compose.find_main_container(pname, compose_file, docker_dir)
+    if not container_id:
+        return
+
+    click.echo(f"     📦 Compiling assets...")
+    product_root = f"/workspace/{product}"
+    cmd = f"cd {shlex.quote(product_root)} && npx webpack --config {shlex.quote(webpack_file)} --mode development"
+    result = subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", cmd],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        click.echo(f"     ✔  Assets compiled.")
+    else:
+        click.secho(f"     ⚠  Asset compilation failed.", fg="yellow")
 
 
 # =====================================================================
@@ -276,8 +298,8 @@ def _edit_one(
     # Flask process picks up the new location without a manual restart.
     _hot_reinstall(workspace, product_path, editable_path, name)
 
-    # Compile webpack assets if the feature has a webpack config
-    _compile_assets(editable_path, name)
+    # Compile webpack assets via the product's web container
+    _compile_assets(workspace, product_path, name)
 
     click.secho("     ✔  ready for editing.", fg="green")
     return True
