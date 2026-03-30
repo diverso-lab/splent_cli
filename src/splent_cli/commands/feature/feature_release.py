@@ -453,6 +453,24 @@ def _semver_wizard(ns_github: str, feature_name: str) -> str:
 # =====================================================================
 # VERSIONED SNAPSHOT
 # =====================================================================
+def _compile_before_release(feature_path: str):
+    """Compile webpack assets if the feature has a webpack config."""
+    for root, dirs, files in os.walk(feature_path):
+        if "webpack.config.js" in files:
+            click.echo("📦 Compiling frontend assets...")
+            result = subprocess.run(
+                ["npx", "webpack", "--mode", "production", "--config", "webpack.config.js"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                click.echo("✅ Assets compiled for production.")
+            else:
+                click.secho(f"⚠  Asset compilation failed: {result.stderr[:200]}", fg="yellow")
+            return
+
+
 def create_versioned_snapshot(namespace, feature_name, version, workspace):
     org_github = namespace.replace("_", "-")
     namespace_fs = normalize_namespace(namespace)
@@ -542,6 +560,9 @@ def feature_release(feature_ref, version, attach):
     ).stdout.strip()
     repo = release.extract_repo(remote_url)
     release.create_github_release(repo, version, os.getenv("GITHUB_TOKEN"))
+
+    # Compile webpack assets before building the PyPI package
+    _compile_before_release(feature_path)
 
     release.build_and_upload_pypi(feature_path)
 

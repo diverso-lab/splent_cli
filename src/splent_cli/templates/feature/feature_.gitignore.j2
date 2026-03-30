@@ -18,9 +18,14 @@ app.log.*
 # macOS system files
 .DS_Store
 
-# Build artifacts (setuptools output — NOT webpack dist)
-/build/
-/dist/
+# Build artifacts and distribution directories
+build/
+dist/
+
+# Webpack bundles and source maps
+*.bundle.js
+*.bundle.js.map
+*.map
 
 # Coverage reports
 .coverage

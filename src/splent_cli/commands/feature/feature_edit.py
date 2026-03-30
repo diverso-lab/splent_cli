@@ -175,6 +175,28 @@ def _hot_reinstall(workspace: str, product_path: str, editable_path: str, name: 
 
 
 # =====================================================================
+# WEBPACK COMPILATION
+# =====================================================================
+def _compile_assets(editable_path: str, name: str):
+    """Compile webpack assets if the feature has a webpack config."""
+    # Find webpack.config.js in the feature's assets
+    for root, dirs, files in os.walk(editable_path):
+        if "webpack.config.js" in files:
+            click.echo(f"     📦 Compiling assets...")
+            result = subprocess.run(
+                ["npx", "webpack", "--mode", "development", "--config", "webpack.config.js"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                click.echo(f"     ✔  Assets compiled.")
+            else:
+                click.secho(f"     ⚠  Asset compilation failed: {result.stderr[:200]}", fg="yellow")
+            return
+
+
+# =====================================================================
 # CORE LOGIC (single feature)
 # =====================================================================
 def _edit_one(
@@ -253,6 +275,9 @@ def _edit_one(
     # Reinstall via pip in the product's web container so the running
     # Flask process picks up the new location without a manual restart.
     _hot_reinstall(workspace, product_path, editable_path, name)
+
+    # Compile webpack assets if the feature has a webpack config
+    _compile_assets(editable_path, name)
 
     click.secho("     ✔  ready for editing.", fg="green")
     return True
