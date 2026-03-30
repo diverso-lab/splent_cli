@@ -58,18 +58,18 @@ def _progress_bar(state: str, has_migrations: bool = True) -> str:
 
 # ── Timeline renderer ─────────────────────────────────────────────────
 
-_LANE_COLORS = ["cyan", "yellow", "magenta", "green", "blue", "red", "bright_cyan", "bright_yellow"]
-
-_STATE_SYMBOLS = {
-    "declared": "○",
-    "installed": "◐",
-    "migrated": "◑",
-    "active": "●",
+_STATE_NODES = {
+    "declared": ("○", "bright_black"),
+    "installed": ("◐", "yellow"),
+    "migrated": ("◑", "blue"),
+    "active": ("●", "green"),
 }
+
+_FEATURE_COLORS = ["cyan", "yellow", "magenta", "green", "blue", "red"]
 
 
 def _render_timeline(product, product_path):
-    """Render a GitKraken-style multi-lane timeline of feature state transitions."""
+    """Render a git-graph style vertical timeline of feature state transitions."""
     from datetime import datetime
 
     if not manifest_exists(product_path):
@@ -79,7 +79,6 @@ def _render_timeline(product, product_path):
     manifest = read_manifest(product_path)
     all_features = manifest.get("features", {})
 
-    # Filter to active keys (from pyproject)
     from splent_cli.utils.lifecycle import resolve_feature_key_from_entry
     try:
         pyproject_entries = load_product_features(product_path, os.getenv("SPLENT_ENV"))
@@ -95,144 +94,124 @@ def _render_timeline(product, product_path):
         click.secho("  No features to display.", fg="yellow")
         return
 
-    # Build sorted feature list for lane assignment
-    feature_names = []
-    feature_data = {}
-    for key, entry in sorted(features.items()):
+    # Assign colors to features
+    feature_list = []
+    color_map = {}
+    for i, (key, entry) in enumerate(sorted(features.items())):
         short = entry.get("name", key).replace("splent_feature_", "")
-        feature_names.append(short)
-        feature_data[short] = entry
+        feature_list.append((short, entry))
+        color_map[short] = _FEATURE_COLORS[i % len(_FEATURE_COLORS)]
 
-    num_lanes = len(feature_names)
-
-    # Collect all events: (timestamp, feature_short, state)
+    # Collect events: (timestamp, short_name, state)
     events = []
-    for short, entry in feature_data.items():
-        for state_key, state_name in [
+    for short, entry in feature_list:
+        for ts_key, state in [
             ("declared_at", "declared"),
             ("installed_at", "installed"),
             ("migrated_at", "migrated"),
         ]:
-            ts = entry.get(state_key)
+            ts = entry.get(ts_key)
             if ts:
-                events.append((ts, short, state_name))
-        # active = updated_at if state is active
+                events.append((ts, short, state))
         if entry.get("state") == "active":
             events.append((entry.get("updated_at", ""), short, "active"))
 
-    # Sort by timestamp
-    events.sort(key=lambda e: e[0])
+    events.sort(key=lambda e: (e[0], e[1]))
 
-    # Group events by timestamp (same second = same row)
+    # Group by timestamp (same second = same group)
     grouped = []
-    current_ts = None
-    current_group = []
+    cur_ts = None
+    cur_group = []
     for ts, short, state in events:
-        ts_short = ts[:19] if ts else ""  # trim to seconds
-        if ts_short != current_ts:
-            if current_group:
-                grouped.append((current_ts, current_group))
-            current_ts = ts_short
-            current_group = []
-        current_group.append((short, state))
-    if current_group:
-        grouped.append((current_ts, current_group))
+        ts_sec = ts[:19] if ts else ""
+        if ts_sec != cur_ts:
+            if cur_group:
+                grouped.append((cur_ts, cur_group))
+            cur_ts = ts_sec
+            cur_group = []
+        cur_group.append((short, state))
+    if cur_group:
+        grouped.append((cur_ts, cur_group))
 
     # Render
     click.echo()
     click.secho(f"  Feature timeline — {product}", bold=True)
     click.echo()
 
-    # Lane headers
-    lane_width = max(len(n) for n in feature_names) + 2
-    time_col = 10
-    header_parts = [f"  {'TIME':<{time_col}}"]
-    for i, name in enumerate(feature_names):
-        color = _LANE_COLORS[i % len(_LANE_COLORS)]
-        header_parts.append(click.style(f"{name:^{lane_width}}", fg=color, bold=True))
-    click.echo("".join(header_parts))
-    click.echo("  " + "─" * (time_col + lane_width * num_lanes))
+    name_col = max(len(s) for s, _ in feature_list) + 2
 
-    # Render each time row
     prev_ts = None
     for ts, group_events in grouped:
-        # Time label (show only HH:MM:SS)
+        # Time
         try:
             dt = datetime.fromisoformat(ts)
             time_str = dt.strftime("%H:%M:%S")
         except (ValueError, TypeError):
-            time_str = ts[:8] if ts else "??:??:??"
+            time_str = "??:??:??"
 
-        # Show time gap
+        # Gap connector
         if prev_ts:
             try:
-                prev_dt = datetime.fromisoformat(prev_ts)
-                curr_dt = datetime.fromisoformat(ts)
-                gap = (curr_dt - prev_dt).total_seconds()
-                if gap > 5:
-                    # Empty row with just pipes
-                    gap_parts = [f"  {'':>{time_col}}"]
-                    for i in range(num_lanes):
-                        color = _LANE_COLORS[i % len(_LANE_COLORS)]
-                        gap_parts.append(click.style(f"{'│':^{lane_width}}", fg=color))
-                    click.echo("".join(gap_parts))
-
+                gap = (datetime.fromisoformat(ts) - datetime.fromisoformat(prev_ts)).total_seconds()
+                if gap > 2:
+                    click.echo(click.style("            │", fg="bright_black"))
                     if gap > 30:
-                        gap_label = f"+{int(gap)}s"
-                        gap_parts2 = [f"  {click.style(gap_label, fg='bright_black'):>{time_col + 9}}"]
-                        for i in range(num_lanes):
-                            color = _LANE_COLORS[i % len(_LANE_COLORS)]
-                            gap_parts2.append(click.style(f"{'│':^{lane_width}}", fg=color))
-                        click.echo("".join(gap_parts2))
+                        click.echo(
+                            click.style(f"            │  +{int(gap)}s", fg="bright_black")
+                        )
+                        click.echo(click.style("            │", fg="bright_black"))
             except (ValueError, TypeError):
                 pass
-
         prev_ts = ts
 
-        # Build the event set for this row
-        event_map = {short: state for short, state in group_events}
+        n = len(group_events)
+        for idx, (short, state) in enumerate(group_events):
+            node_sym, node_color = _STATE_NODES.get(state, ("?", "white"))
+            feat_color = color_map.get(short, "white")
 
-        row_parts = [click.style(f"  {time_str:<{time_col}}", fg="bright_black")]
-        for i, name in enumerate(feature_names):
-            color = _LANE_COLORS[i % len(_LANE_COLORS)]
-            if name in event_map:
-                state = event_map[name]
-                symbol = _STATE_SYMBOLS.get(state, "?")
-                state_color = STATE_COLORS.get(state, "white")
-                node = click.style(symbol, fg=state_color, bold=True)
-                label = click.style(f" {state}", fg=state_color)
-                # Pad considering invisible ANSI codes
-                cell = f"{node}{label}"
-                visible_len = len(symbol) + 1 + len(state)
-                padding = lane_width - visible_len
-                cell += " " * max(padding, 0)
+            # Tree connector
+            if n == 1:
+                connector = "──"
+            elif idx == 0:
+                connector = "┬─"
+            elif idx == n - 1:
+                connector = "└─"
             else:
-                cell = click.style(f"{'│':^{lane_width}}", fg=color)
-            row_parts.append(cell)
+                connector = "├─"
 
-        click.echo("".join(row_parts))
+            # Time label only on first line of group
+            if idx == 0:
+                time_label = click.style(f"  {time_str}  ", fg="bright_black")
+            else:
+                time_label = click.style(f"           ", fg="bright_black")
 
-    # Final state indicators
-    click.echo("  " + "─" * (time_col + lane_width * num_lanes))
-    final_parts = [f"  {'NOW':<{time_col}}"]
-    for i, name in enumerate(feature_names):
-        state = feature_data[name].get("state", "?")
-        color = STATE_COLORS.get(state, "white")
-        symbol = _STATE_SYMBOLS.get(state, "?")
-        cell = click.style(f"{symbol} {state}", fg=color, bold=True)
-        visible_len = len(symbol) + 1 + len(state)
-        padding = lane_width - visible_len
-        cell += " " * max(padding, 0)
-        final_parts.append(cell)
-    click.echo("".join(final_parts))
+            connector_styled = click.style(connector, fg="bright_black")
+            node_styled = click.style(node_sym, fg=node_color, bold=True)
+            name_styled = click.style(f" {short:<{name_col}}", fg=feat_color, bold=True)
+            state_styled = click.style(state, fg=node_color)
+
+            click.echo(f"{time_label}{connector_styled}{node_styled}{name_styled}{state_styled}")
+
+    # Final line
+    click.echo(click.style("            │", fg="bright_black"))
+    click.echo(
+        click.style("  NOW     ", fg="bright_black")
+        + click.style("──●", fg="green", bold=True)
+        + click.style(f" {len(feature_list)} feature(s) ", fg="green", bold=True)
+        + click.style(
+            ", ".join(
+                click.style(s, fg=color_map[s]) for s, _ in feature_list
+            ),
+        )
+    )
 
     # Legend
     click.echo()
     click.echo(
         "  "
-        + "  ".join(
-            click.style(f"{sym} {name}", fg=STATE_COLORS.get(name, "white"))
-            for name, sym in _STATE_SYMBOLS.items()
+        + "   ".join(
+            click.style(f"{sym} {name}", fg=color)
+            for name, (sym, color) in _STATE_NODES.items()
         )
     )
     click.echo()
