@@ -12,7 +12,9 @@ from splent_cli.utils.manifest import feature_key, set_feature_state
 )
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)
-def feature_attach(feature_identifier, version):
+@click.option("--dev", "env_scope", flag_value="dev", help="Add to features_dev (development only).")
+@click.option("--prod", "env_scope", flag_value="prod", help="Add to features_prod (production only).")
+def feature_attach(feature_identifier, version, env_scope):
     """
     Attach a cached feature version to the current product.
 
@@ -62,20 +64,24 @@ def feature_attach(feature_identifier, version):
         write_features_to_data,
     )
 
-    features = read_features_from_data(data)
+    features_key = f"features_{env_scope}" if env_scope else "features"
+    features = read_features_from_data(data) if not env_scope else (
+        data.get("tool", {}).get("splent", {}).get(features_key, [])
+    )
 
     if full_name in features:
-        click.echo(f"ℹ️  Feature '{full_name}' already present in pyproject.toml.")
+        click.echo(f"ℹ️  Feature '{full_name}' already present in {features_key}.")
     else:
         # Replace bare entry (added by uvl:sync) or old versioned entry if present
         features = [
             f for f in features if f != bare_name and not f.startswith(f"{bare_name}@")
         ]
         features.append(full_name)
-        write_features_to_data(data, features)
+        write_features_to_data(data, features, key=features_key)
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
-        click.echo(f"🧩 Updated pyproject.toml → {full_name}")
+        scope_label = f" ({env_scope} only)" if env_scope else ""
+        click.echo(f"🧩 Updated {features_key} → {full_name}{scope_label}")
 
     # --- 3️⃣ Create/update symlink ------------------------------------------
     product_features_dir = os.path.join(product_path, "features", namespace_fs)

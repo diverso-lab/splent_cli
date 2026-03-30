@@ -12,13 +12,21 @@ from splent_cli.utils.manifest import feature_key, set_feature_state
     short_help="Adds a local (non-versioned) feature to the active product.",
 )
 @click.argument("full_name", required=True)
-def feature_add(full_name):
+@click.option("--dev", "env_scope", flag_value="dev", help="Add to features_dev (development only).")
+@click.option("--prod", "env_scope", flag_value="prod", help="Add to features_prod (production only).")
+def feature_add(full_name, env_scope):
     """
     Adds a local feature (no version, no repo) to the current SPLENT product.
     The feature name must be in the format <namespace>/<feature_name>.
 
-    Example:
+    \b
+    By default, adds to [tool.splent].features (all environments).
+    Use --dev or --prod to add to features_dev or features_prod.
+
+    \b
+    Examples:
       splent feature:add drorganvidez/notepad
+      splent feature:add splent-io/splent_feature_admin --dev
     """
 
     # --------------------------
@@ -57,16 +65,20 @@ def feature_add(full_name):
         write_features_to_data,
     )
 
-    features = read_features_from_data(data)
+    features_key = f"features_{env_scope}" if env_scope else "features"
+    features = read_features_from_data(data) if not env_scope else (
+        data.get("tool", {}).get("splent", {}).get(features_key, [])
+    )
 
     if full_name not in features:
         features.append(full_name)
-        write_features_to_data(data, features)
+        write_features_to_data(data, features, key=features_key)
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
-        click.echo(f"🧩 Added '{full_name}' to pyproject.toml.")
+        scope_label = f" ({env_scope} only)" if env_scope else ""
+        click.echo(f"🧩 Added '{full_name}' to {features_key}{scope_label}.")
     else:
-        click.echo(f"ℹ️ Feature '{full_name}' already present in pyproject.toml.")
+        click.echo(f"ℹ️ Feature '{full_name}' already present in {features_key}.")
 
     # --------------------------
     # 2️⃣ Create symlink
