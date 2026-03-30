@@ -55,6 +55,21 @@ def _get_containers(project_name: str, compose_file: str) -> list[dict]:
     return containers
 
 
+def _service_label(source: str, service: str, target_port: int) -> str | None:
+    """Return a human-readable label if this port is browser-accessible, else None."""
+    # Known HTTP target ports
+    if target_port == 5000:
+        return "App"
+    if target_port == 8025:
+        return "Mailhog"
+    if target_port in (80, 443, 8080, 3000, 4000):
+        return source or service
+    # Known non-HTTP — skip
+    if target_port in (3306, 5432, 6379, 1025, 27017, 5672, 15672):
+        return None
+    return None
+
+
 def _format_ports(ports) -> str:
     if isinstance(ports, list):
         return ", ".join(
@@ -135,6 +150,8 @@ def product_status(env_dev, env_prod):
     click.secho(header, fg="cyan")
     click.echo("  " + "─" * (col_source + col_name + col_state + 20))
 
+    accessible = []
+
     for source, c in all_containers:
         name = c.get("Service") or c.get("Name", "?")
         state = c.get("State") or c.get("Status", "?")
@@ -145,7 +162,35 @@ def product_status(env_dev, env_prod):
             f"  {source_styled} {name:<{col_name}} {_status_color(state):<{col_state}} {ports}"
         )
 
+        # Collect accessible services (HTTP ports)
+        publishers = c.get("Publishers") or c.get("Ports", [])
+        if isinstance(publishers, list):
+            for p in publishers:
+                pub = p.get("PublishedPort", 0)
+                target = p.get("TargetPort", 0)
+                if pub and target:
+                    label = _service_label(source, name, target)
+                    if label:
+                        accessible.append((label, pub))
+
     click.echo()
+
+    if accessible:
+        # Deduplicate (Docker reports IPv4 and IPv6 separately)
+        seen = set()
+        unique = []
+        for label, port in accessible:
+            key = (label, port)
+            if key not in seen:
+                seen.add(key)
+                unique.append((label, port))
+
+        click.secho("  Accessible services:", bold=True)
+        click.echo("  " + "─" * (col_source + col_name + col_state + 20))
+        for label, port in unique:
+            url = f"http://localhost:{port}"
+            click.echo(f"    {label:<20} {click.style(url, fg='cyan')}")
+        click.echo()
 
 
 cli_command = product_status

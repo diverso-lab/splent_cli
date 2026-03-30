@@ -50,8 +50,10 @@ def product_validate(feature_list, pyproject, print_config):
                 f"Unknown feature(s) (not in UVL): {', '.join(unknown)}"
             )
     else:
-        # Pyproject mode (was uvl:check)
-        deps = _get_feature_deps(data)
+        # Pyproject mode — include env-specific features (dev/prod)
+        from splent_cli.utils.feature_utils import read_features_from_data
+        env = os.getenv("SPLENT_ENV", "dev")
+        deps = read_features_from_data(data, env)
         selected = {_normalize_feature_name(d) for d in deps}
         selected.add(root_name)
 

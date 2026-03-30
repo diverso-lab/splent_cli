@@ -220,7 +220,8 @@ def run_uvl_check(workspace: str) -> tuple[bool, str]:
         except Exception:
             return False, "UVL file not found. Check [tool.splent].spl or [tool.splent.uvl]."
         universe, root_name = list_all_features_from_uvl(local_uvl)
-        deps = get_feature_deps(data)
+        env = os.getenv("SPLENT_ENV", "dev")
+        deps = read_features_from_data(data, env)
         selected = {normalize_feature_name(d) for d in deps}
         selected.add(root_name)
         unknown = sorted(f for f in selected if f not in universe)
