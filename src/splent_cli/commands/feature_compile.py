@@ -98,17 +98,23 @@ def _compile_in_container(container_id, feature, watch, production, workspace, p
     base_name, _, version = name_version.partition("@")
     version = version or None
 
-    # Pinned features (with version) must not be compiled — they are immutable.
-    # If the bundle is wrong, edit the feature and re-release.
+    # Pinned features: only skip if the dist/ already has compiled bundles.
+    # During startup inside Docker, pinned features need compilation too.
     if version:
-        click.echo(
-            click.style(
-                f"⏩ {feature} is pinned ({version}) — skipping. "
-                f"Use 'splent feature:edit {base_name}' to make it editable.",
-                fg="bright_black",
+        webpack_check = _find_webpack(workspace, product, org_safe, base_name, version)
+        if not webpack_check:
+            return
+        dist_dir = os.path.join(os.path.dirname(webpack_check), "..", "dist")
+        if os.path.isdir(dist_dir) and any(
+            f.endswith(".bundle.js") for f in os.listdir(dist_dir)
+        ):
+            click.echo(
+                click.style(
+                    f"⏩ {feature} — assets already compiled, skipping.",
+                    fg="bright_black",
+                )
             )
-        )
-        return
+            return
 
     webpack_file = _find_webpack(workspace, product, org_safe, base_name, version)
 
