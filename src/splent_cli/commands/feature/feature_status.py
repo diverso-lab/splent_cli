@@ -56,6 +56,188 @@ def _progress_bar(state: str, has_migrations: bool = True) -> str:
     return "─".join(parts)
 
 
+# ── Timeline renderer ─────────────────────────────────────────────────
+
+_LANE_COLORS = ["cyan", "yellow", "magenta", "green", "blue", "red", "bright_cyan", "bright_yellow"]
+
+_STATE_SYMBOLS = {
+    "declared": "○",
+    "installed": "◐",
+    "migrated": "◑",
+    "active": "●",
+}
+
+
+def _render_timeline(product, product_path):
+    """Render a GitKraken-style multi-lane timeline of feature state transitions."""
+    from datetime import datetime
+
+    if not manifest_exists(product_path):
+        click.secho("  No manifest found — run product:derive first.", fg="yellow")
+        return
+
+    manifest = read_manifest(product_path)
+    all_features = manifest.get("features", {})
+
+    # Filter to active keys (from pyproject)
+    from splent_cli.utils.lifecycle import resolve_feature_key_from_entry
+    try:
+        pyproject_entries = load_product_features(product_path, os.getenv("SPLENT_ENV"))
+    except FileNotFoundError:
+        pyproject_entries = []
+    active_keys = set()
+    for entry in pyproject_entries:
+        key, _, _, _ = resolve_feature_key_from_entry(entry)
+        active_keys.add(key)
+
+    features = {k: v for k, v in all_features.items() if k in active_keys}
+    if not features:
+        click.secho("  No features to display.", fg="yellow")
+        return
+
+    # Build sorted feature list for lane assignment
+    feature_names = []
+    feature_data = {}
+    for key, entry in sorted(features.items()):
+        short = entry.get("name", key).replace("splent_feature_", "")
+        feature_names.append(short)
+        feature_data[short] = entry
+
+    num_lanes = len(feature_names)
+
+    # Collect all events: (timestamp, feature_short, state)
+    events = []
+    for short, entry in feature_data.items():
+        for state_key, state_name in [
+            ("declared_at", "declared"),
+            ("installed_at", "installed"),
+            ("migrated_at", "migrated"),
+        ]:
+            ts = entry.get(state_key)
+            if ts:
+                events.append((ts, short, state_name))
+        # active = updated_at if state is active
+        if entry.get("state") == "active":
+            events.append((entry.get("updated_at", ""), short, "active"))
+
+    # Sort by timestamp
+    events.sort(key=lambda e: e[0])
+
+    # Group events by timestamp (same second = same row)
+    grouped = []
+    current_ts = None
+    current_group = []
+    for ts, short, state in events:
+        ts_short = ts[:19] if ts else ""  # trim to seconds
+        if ts_short != current_ts:
+            if current_group:
+                grouped.append((current_ts, current_group))
+            current_ts = ts_short
+            current_group = []
+        current_group.append((short, state))
+    if current_group:
+        grouped.append((current_ts, current_group))
+
+    # Render
+    click.echo()
+    click.secho(f"  Feature timeline — {product}", bold=True)
+    click.echo()
+
+    # Lane headers
+    lane_width = max(len(n) for n in feature_names) + 2
+    time_col = 10
+    header_parts = [f"  {'TIME':<{time_col}}"]
+    for i, name in enumerate(feature_names):
+        color = _LANE_COLORS[i % len(_LANE_COLORS)]
+        header_parts.append(click.style(f"{name:^{lane_width}}", fg=color, bold=True))
+    click.echo("".join(header_parts))
+    click.echo("  " + "─" * (time_col + lane_width * num_lanes))
+
+    # Render each time row
+    prev_ts = None
+    for ts, group_events in grouped:
+        # Time label (show only HH:MM:SS)
+        try:
+            dt = datetime.fromisoformat(ts)
+            time_str = dt.strftime("%H:%M:%S")
+        except (ValueError, TypeError):
+            time_str = ts[:8] if ts else "??:??:??"
+
+        # Show time gap
+        if prev_ts:
+            try:
+                prev_dt = datetime.fromisoformat(prev_ts)
+                curr_dt = datetime.fromisoformat(ts)
+                gap = (curr_dt - prev_dt).total_seconds()
+                if gap > 5:
+                    # Empty row with just pipes
+                    gap_parts = [f"  {'':>{time_col}}"]
+                    for i in range(num_lanes):
+                        color = _LANE_COLORS[i % len(_LANE_COLORS)]
+                        gap_parts.append(click.style(f"{'│':^{lane_width}}", fg=color))
+                    click.echo("".join(gap_parts))
+
+                    if gap > 30:
+                        gap_label = f"+{int(gap)}s"
+                        gap_parts2 = [f"  {click.style(gap_label, fg='bright_black'):>{time_col + 9}}"]
+                        for i in range(num_lanes):
+                            color = _LANE_COLORS[i % len(_LANE_COLORS)]
+                            gap_parts2.append(click.style(f"{'│':^{lane_width}}", fg=color))
+                        click.echo("".join(gap_parts2))
+            except (ValueError, TypeError):
+                pass
+
+        prev_ts = ts
+
+        # Build the event set for this row
+        event_map = {short: state for short, state in group_events}
+
+        row_parts = [click.style(f"  {time_str:<{time_col}}", fg="bright_black")]
+        for i, name in enumerate(feature_names):
+            color = _LANE_COLORS[i % len(_LANE_COLORS)]
+            if name in event_map:
+                state = event_map[name]
+                symbol = _STATE_SYMBOLS.get(state, "?")
+                state_color = STATE_COLORS.get(state, "white")
+                node = click.style(symbol, fg=state_color, bold=True)
+                label = click.style(f" {state}", fg=state_color)
+                # Pad considering invisible ANSI codes
+                cell = f"{node}{label}"
+                visible_len = len(symbol) + 1 + len(state)
+                padding = lane_width - visible_len
+                cell += " " * max(padding, 0)
+            else:
+                cell = click.style(f"{'│':^{lane_width}}", fg=color)
+            row_parts.append(cell)
+
+        click.echo("".join(row_parts))
+
+    # Final state indicators
+    click.echo("  " + "─" * (time_col + lane_width * num_lanes))
+    final_parts = [f"  {'NOW':<{time_col}}"]
+    for i, name in enumerate(feature_names):
+        state = feature_data[name].get("state", "?")
+        color = STATE_COLORS.get(state, "white")
+        symbol = _STATE_SYMBOLS.get(state, "?")
+        cell = click.style(f"{symbol} {state}", fg=color, bold=True)
+        visible_len = len(symbol) + 1 + len(state)
+        padding = lane_width - visible_len
+        cell += " " * max(padding, 0)
+        final_parts.append(cell)
+    click.echo("".join(final_parts))
+
+    # Legend
+    click.echo()
+    click.echo(
+        "  "
+        + "  ".join(
+            click.style(f"{sym} {name}", fg=STATE_COLORS.get(name, "white"))
+            for name, sym in _STATE_SYMBOLS.items()
+        )
+    )
+    click.echo()
+
+
 @click.command(
     "feature:status",
     short_help="Show lifecycle state of all features in the active product.",
@@ -63,7 +245,8 @@ def _progress_bar(state: str, has_migrations: bool = True) -> str:
 @click.option("--json", "as_json", is_flag=True, help="Output raw manifest as JSON.")
 @click.option("--integrity", is_flag=True, help="Verify manifest against actual system state.")
 @click.option("--fix", "do_fix", is_flag=True, help="Fix detected integrity issues.")
-def feature_status(as_json, integrity, do_fix):
+@click.option("--timeline", is_flag=True, help="Show lifecycle timeline (GitKraken style).")
+def feature_status(as_json, integrity, do_fix, timeline):
     """
     Show the lifecycle state of every feature tracked in splent.manifest.json.
 
@@ -81,6 +264,10 @@ def feature_status(as_json, integrity, do_fix):
         import json
 
         click.echo(json.dumps(read_manifest(product_path), indent=2))
+        return
+
+    if timeline:
+        _render_timeline(product, product_path)
         return
 
     click.echo()
