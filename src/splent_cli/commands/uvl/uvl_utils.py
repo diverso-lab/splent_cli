@@ -224,6 +224,11 @@ def run_uvl_check(workspace: str) -> tuple[bool, str]:
         deps = read_features_from_data(data, env)
         selected = {normalize_feature_name(d) for d in deps}
         selected.add(root_name)
+
+        # Activate parent features (abstract groups like session_type)
+        from splent_cli.commands.product.product_validate import _infer_parents
+        selected |= _infer_parents(local_uvl, selected)
+
         unknown = sorted(f for f in selected if f not in universe)
         if unknown:
             return (
