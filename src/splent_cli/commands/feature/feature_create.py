@@ -144,6 +144,8 @@ def make_feature(full_name):
             "migrations", "script.py.mako"
         ): "feature/feature_migrations_script.py.mako.j2",
         os.path.join("migrations", "versions", ".gitkeep"): None,
+        # Translations scaffold
+        os.path.join("translations", ".gitkeep"): None,
     }
 
     base_files_and_templates = {
