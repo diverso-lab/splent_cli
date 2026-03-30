@@ -393,6 +393,10 @@ def run_release_pipeline(
 
     repo = get_repo_from_path(path)
     create_github_release(repo, tag, os.getenv("GITHUB_TOKEN"))
+
+    from splent_cli.commands.clear_cache import clean_build_artifacts
+    clean_build_artifacts(path, quiet=True)
+
     build_and_upload_pypi(path)
 
     if post_pypi_hook:

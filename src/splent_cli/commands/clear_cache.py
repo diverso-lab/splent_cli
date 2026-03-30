@@ -1,9 +1,53 @@
 import click
 import shutil
 import os
+from pathlib import Path
 
 from splent_cli.utils.path_utils import PathUtils
 from splent_cli.services import context
+
+
+def clean_build_artifacts(target_path: str | Path, *, quiet: bool = False):
+    """Remove __pycache__, .pyc, .pytest_cache, build/, dist/, and *.egg-info
+    under *target_path*.
+
+    When *quiet* is True only errors are printed (used by the release pipeline).
+    """
+    root = Path(target_path)
+
+    # dist/ and build/
+    for name in ("dist", "build"):
+        d = root / name
+        if d.exists():
+            shutil.rmtree(d, ignore_errors=True)
+
+    # *.egg-info
+    for d in root.glob("**/*.egg-info"):
+        shutil.rmtree(d, ignore_errors=True)
+
+    # .pytest_cache
+    for d in root.rglob(".pytest_cache"):
+        shutil.rmtree(d, ignore_errors=True)
+
+    # __pycache__
+    removed = 0
+    for d in root.rglob("__pycache__"):
+        try:
+            shutil.rmtree(d)
+            removed += 1
+        except Exception as e:
+            if not quiet:
+                click.secho(f"  warn: could not remove {d}: {e}", fg="yellow")
+
+    # stray .pyc files
+    for f in root.rglob("*.pyc"):
+        try:
+            f.unlink()
+        except Exception:
+            pass
+
+    if not quiet:
+        click.secho(f"  Cleared build artifacts ({removed} __pycache__ dirs removed).", fg="green")
 
 
 @click.command(
@@ -11,65 +55,10 @@ from splent_cli.services import context
     short_help="Clear __pycache__, .pytest_cache and build artifacts from the workspace.",
 )
 def clear_cache():
-    if click.confirm(
-        "Are you sure you want to clear the pytest cache and the build directory?"
+    if not click.confirm(
+        "Are you sure you want to clear caches and build artifacts?"
     ):
-        project_root = context.workspace()
+        click.secho("  Cancelled.", fg="yellow")
+        return
 
-        pytest_cache_dir = os.path.join(PathUtils.get_modules_dir(), ".pytest_cache")
-
-        build_dir = str(project_root / "build")
-
-        if os.path.exists(pytest_cache_dir):
-            try:
-                shutil.rmtree(pytest_cache_dir)
-                click.echo(click.style("Pytest cache cleared.", fg="green"))
-            except Exception as e:
-                click.echo(click.style(f"Failed to clear pytest cache: {e}", fg="red"))
-        else:
-            click.echo(
-                click.style("No pytest cache found. Nothing to clear.", fg="yellow")
-            )
-
-        if os.path.exists(build_dir):
-            try:
-                shutil.rmtree(build_dir)
-                click.echo(click.style("Build directory cleared.", fg="green"))
-            except Exception as e:
-                click.echo(
-                    click.style(f"Failed to clear build directory: {e}", fg="red")
-                )
-        else:
-            click.echo(
-                click.style(
-                    "No cache or build directory found. Nothing to clear.",
-                    fg="yellow",
-                )
-            )
-
-        pycache_dirs = project_root.rglob("__pycache__")
-        for dir in pycache_dirs:
-            try:
-                shutil.rmtree(dir)
-            except Exception as e:
-                click.echo(
-                    click.style(
-                        f"Failed to clear __pycache__ directory {dir}: {e}",
-                        fg="red",
-                    )
-                )
-        click.echo(click.style("All __pycache__ directories cleared.", fg="green"))
-
-        pyc_files = project_root.rglob("*.pyc")
-        for file in pyc_files:
-            try:
-                file.unlink()
-            except Exception as e:
-                click.echo(
-                    click.style(f"Failed to clear .pyc file {file}: {e}", fg="red")
-                )
-
-        click.echo(click.style("All cache cleared.", fg="green"))
-
-    else:
-        click.echo(click.style("Clear operation cancelled.", fg="yellow"))
+    clean_build_artifacts(context.workspace())
