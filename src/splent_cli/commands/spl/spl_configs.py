@@ -51,7 +51,11 @@ def spl_configs(spl_name, count, with_sat):
 
     # Header
     click.echo()
-    click.secho(f"  {name}  —  {n} valid configuration(s)", bold=True)
+    click.echo(f"  SPL      : {name}")
+    click.echo(f"  UVL      : {uvl_path}")
+    click.echo(f"  Features : {len(universe)}")
+    click.echo()
+    click.secho(f"  {n} valid configuration(s)", bold=True)
     click.echo()
 
     # Core features
