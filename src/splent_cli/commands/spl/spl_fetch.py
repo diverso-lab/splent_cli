@@ -1,12 +1,8 @@
 import os
 
 import click
-import requests
 
-from splent_cli.commands.spl.spl_utils import _resolve_spl_metadata
-from splent_cli.commands.uvl.uvl_utils import (
-    resolve_uvlhub_raw_url as _resolve_uvlhub_raw_url,
-)
+from splent_cli.commands.spl.spl_utils import _resolve_spl_metadata, _fetch_uvl
 from splent_cli.services import context
 
 
@@ -25,43 +21,16 @@ def spl_fetch(spl_name, force):
     """
     workspace = str(context.workspace())
 
-    name = spl_name
-
-    metadata = _resolve_spl_metadata(name)
-    uvl_cfg = metadata.get("spl", {}).get("uvl", {})
-    mirror = uvl_cfg.get("mirror")
-    doi = uvl_cfg.get("doi")
-    file = uvl_cfg.get("file")
-
-    if not mirror or not doi or not file:
-        raise click.ClickException(
-            f"Incomplete [spl.uvl] in metadata.toml for '{name}'. "
-            f"Need mirror, doi, and file."
-        )
-
-    url = _resolve_uvlhub_raw_url(mirror, doi, file)
-
-    uvl_dir = os.path.join(workspace, "splent_catalog", name)
-    target = os.path.join(uvl_dir, f"{name}.uvl")
-
-    os.makedirs(uvl_dir, exist_ok=True)
+    metadata = _resolve_spl_metadata(spl_name)
+    target = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
 
     if os.path.exists(target) and not force:
         if not click.confirm(f"UVL file already exists: {target}\nOverwrite?"):
             click.echo("Aborted.")
             return
 
-    click.echo(f"Downloading UVL from {url}")
-
-    r = requests.get(url, timeout=20)
-    if r.status_code != 200:
-        click.echo(f"Error downloading UVL ({r.status_code})", err=True)
-        raise SystemExit(1)
-
-    with open(target, "w", encoding="utf-8") as f:
-        f.write(r.text)
-
-    click.echo(f"UVL saved to {target}")
+    _fetch_uvl(spl_name, metadata, target)
+    click.secho("Done.", fg="green")
 
 
 cli_command = spl_fetch
