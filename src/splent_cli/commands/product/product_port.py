@@ -184,12 +184,8 @@ def product_port(env_flag):
     """
     Show the real port where the product web service is running.
     """
-    # 1. Load /workspace/.env
-    global_env = load_global_env()
-
-    app = global_env.get("SPLENT_APP")
-    if not app:
-        raise click.ClickException("SPLENT_APP missing from /workspace/.env")
+    # 1. Get active product
+    app = context.require_app()
 
     # 2. Load /workspace/<app>/docker/.env
     product_env = load_product_env(app)
