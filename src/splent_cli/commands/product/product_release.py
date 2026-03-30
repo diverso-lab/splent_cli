@@ -125,6 +125,21 @@ def product_release(version, product):
 
     click.echo(f"🚀 Releasing PRODUCT {product}@{version}")
 
+    # Guard: all features must be pinned for a reproducible release
+    from splent_cli.utils.feature_utils import load_product_features
+    features = load_product_features(product_path)
+    editable = [f for f in features if "@" not in f]
+    if editable:
+        click.secho("\n❌ Cannot release: the following features are editable (no version pinned):\n", fg="red")
+        for f in editable:
+            click.echo(f"   - {f}")
+        click.echo(
+            "\n   A product release must be reproducible. Pin all features first:\n"
+            "     splent feature:release <feature> <version>\n"
+            "     splent feature:attach <feature> <version>\n"
+        )
+        raise SystemExit(1)
+
     release.update_version(pyproject_path, version)
     release.commit_local_changes(product_path, version, subject="bump product version")
 
