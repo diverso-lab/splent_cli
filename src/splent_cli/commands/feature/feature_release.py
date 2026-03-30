@@ -171,6 +171,20 @@ def _extract_docker(feature_root: Path) -> list[str]:
     return sorted(found)
 
 
+def _extract_translations(translations_dir: Path) -> list[str]:
+    """Find available locale directories in translations/."""
+    if not translations_dir.is_dir():
+        return []
+    locales = []
+    for entry in sorted(translations_dir.iterdir()):
+        if entry.is_dir() and not entry.name.startswith("."):
+            # Check it has a LC_MESSAGES dir with .po or .mo
+            lc = entry / "LC_MESSAGES"
+            if lc.is_dir():
+                locales.append(entry.name)
+    return locales
+
+
 def _extract_signals(signals_path: Path) -> tuple[list[str], list[str]]:
     """Extract signal names from signals.py.
 
@@ -238,6 +252,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
     docker = _extract_docker(feature_root)
     req_features, env_vars = _scan_dependencies(src_dir, feature_name)
     signals_provided, signals_required = _extract_signals(src_dir / "signals.py")
+    translations = _extract_translations(src_dir / "translations")
 
     return {
         "routes": routes,
@@ -247,6 +262,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
         "hooks": hooks,
         "services": services,
         "signals": signals_provided,
+        "translations": translations,
         "docker": docker,
         "requires_features": req_features,
         "env_vars": env_vars,
@@ -322,6 +338,7 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         f"hooks      = {_toml_list(contract['hooks'])}\n"
         f"services   = {_toml_list(contract['services'])}\n"
         f"signals    = {_toml_list(contract.get('signals', []))}\n"
+        f"translations = {_toml_list(contract.get('translations', []))}\n"
         f"docker     = {_toml_list(contract['docker'])}\n"
         "\n"
         "[tool.splent.contract.requires]\n"

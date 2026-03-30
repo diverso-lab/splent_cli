@@ -98,6 +98,7 @@ def _read_current_contract(pyproject_path: Path) -> dict:
         "hooks": raw.get("provides", {}).get("hooks", []),
         "services": raw.get("provides", {}).get("services", []),
         "signals": raw.get("provides", {}).get("signals", []),
+        "translations": raw.get("provides", {}).get("translations", []),
         "docker": raw.get("provides", {}).get("docker", []),
         "requires_features": raw.get("requires", {}).get("features", []),
         "env_vars": raw.get("requires", {}).get("env_vars", []),
@@ -139,6 +140,7 @@ def _print_contract(contract: dict, feature_name: str) -> None:
     click.echo(f"  hooks      = {_fmt(contract['hooks'])}")
     click.echo(f"  services   = {_fmt(contract['services'])}")
     click.echo(f"  signals    = {_fmt(contract.get('signals', []))}")
+    click.echo(f"  translations = {_fmt(contract.get('translations', []))}")
     click.echo(f"  docker     = {_fmt(contract['docker'])}")
     click.echo()
     click.echo(click.style("  [tool.splent.contract.requires]", fg="bright_black"))
@@ -171,6 +173,7 @@ def _print_diff(current: dict, inferred: dict) -> bool:
         ("requires_features", "requires.features"),
         ("env_vars", "requires.env_vars"),
         ("signals", "provides.signals"),
+        ("translations", "provides.translations"),
         ("requires_signals", "requires.signals"),
     ]
 
