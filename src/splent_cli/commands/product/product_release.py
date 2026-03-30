@@ -1,159 +1,117 @@
+"""
+product:release — Release a product with version bump, tag, GitHub/PyPI/Docker Hub.
+"""
+
 import os
 import subprocess
 import click
 from splent_cli.services import context, release
 
 
-# =====================================================================
-# VALIDACIONES
-# =====================================================================
-def validate_product_release_env():
-    missing = []
+def _guard_all_features_pinned(product_path: str):
+    """Abort if any feature is editable (not pinned to a version)."""
+    from splent_cli.utils.feature_utils import load_product_features
 
-    if not os.getenv("GITHUB_TOKEN"):
-        click.echo("⚠️ Warning: GITHUB_TOKEN not set → GitHub release will be skipped.")
+    features = load_product_features(product_path)
+    editable = [f for f in features if "@" not in f]
+    if not editable:
+        return
 
-    pypi_user = os.getenv("TWINE_USERNAME") or os.getenv("PYPI_USERNAME")
-    pypi_pass = os.getenv("TWINE_PASSWORD") or os.getenv("PYPI_PASSWORD")
-
-    if not pypi_user:
-        missing.append("TWINE_USERNAME or PYPI_USERNAME")
-    if not pypi_pass:
-        missing.append("TWINE_PASSWORD or PYPI_PASSWORD")
-
-    if not os.getenv("DOCKERHUB_USERNAME"):
-        missing.append("DOCKERHUB_USERNAME")
-    if not os.getenv("DOCKERHUB_PASSWORD"):
-        missing.append("DOCKERHUB_PASSWORD")
-
-    if missing:
-        click.echo("❌ Missing required environment variables:")
-        for m in missing:
-            click.echo(f"   - {m}")
-        raise SystemExit(1)
+    click.secho(
+        "\n  Cannot release: the following features are editable (no version pinned):\n",
+        fg="red",
+    )
+    for f in editable:
+        click.echo(f"    - {f}")
+    click.echo(
+        "\n  A product release must be reproducible. Pin all features first:\n"
+        "    splent feature:release <feature>\n"
+        "    splent feature:attach <feature> <version>\n"
+    )
+    raise SystemExit(1)
 
 
-# =====================================================================
-# DOCKER RELEASE
-# =====================================================================
-def release_docker_image(product, version, docker_dir):
+def _release_docker_image(product: str, version: str, docker_dir: str):
+    """Build and push Docker images to Docker Hub."""
     username = os.getenv("DOCKERHUB_USERNAME")
     password = os.getenv("DOCKERHUB_PASSWORD")
+    image_name = f"{username}/{product}"
 
-    click.echo("🐳 Logging into Docker Hub...")
+    click.echo("  docker   logging into Docker Hub...")
     try:
         subprocess.run(
             ["docker", "login", "-u", username, "--password-stdin"],
-            input=password,
-            text=True,
-            check=True,
-            capture_output=True,
+            input=password, text=True, check=True, capture_output=True,
         )
     except subprocess.CalledProcessError:
-        click.secho(
-            "❌ Docker Hub login failed."
-            " Check DOCKERHUB_USERNAME and DOCKERHUB_PASSWORD.",
-            fg="red",
-        )
+        click.secho("  error: Docker Hub login failed", fg="red")
         raise SystemExit(1)
 
-    image_name = f"{username}/{product}"
-
-    click.echo("🐳 Building Docker image...")
+    click.echo("  docker   building image...")
     try:
         subprocess.run(
             [
-                "docker",
-                "build",
-                "-t",
-                f"{image_name}:{version}",
-                "-t",
-                f"{image_name}:latest",
+                "docker", "build",
+                "-t", f"{image_name}:{version}",
+                "-t", f"{image_name}:latest",
                 docker_dir,
             ],
             check=True,
         )
     except subprocess.CalledProcessError:
-        click.secho("❌ Docker image build failed.", fg="red")
+        click.secho("  error: Docker image build failed", fg="red")
         raise SystemExit(1)
 
-    click.echo("📤 Pushing Docker images...")
+    click.echo("  docker   pushing images...")
     try:
-        subprocess.run(
-            ["docker", "push", f"{image_name}:{version}"], check=True
-        )
-        subprocess.run(
-            ["docker", "push", f"{image_name}:latest"], check=True
-        )
+        subprocess.run(["docker", "push", f"{image_name}:{version}"], check=True)
+        subprocess.run(["docker", "push", f"{image_name}:latest"], check=True)
     except subprocess.CalledProcessError:
-        click.secho(
-            "❌ Docker image push failed."
-            " Check network and DockerHub permissions.",
-            fg="red",
-        )
+        click.secho("  error: Docker image push failed", fg="red")
         raise SystemExit(1)
 
-    click.echo("✅ Docker Hub release complete.")
+    click.echo("  docker   push complete")
 
 
-# =====================================================================
-# COMMAND
-# =====================================================================
 @click.command(
     "product:release",
-    short_help="Release a product: version bump, tag, GitHub release, PyPI release, DockerHub release.",
+    short_help="Release a product: version bump, tag, GitHub/PyPI/Docker Hub.",
 )
-@click.argument("version")
+@click.argument("version", required=False, default=None)
 @click.option("--product", default=None, help="Override SPLENT_APP.")
 @context.requires_product
 def product_release(version, product):
-    validate_product_release_env()
-
     product = product or os.getenv("SPLENT_APP")
-
     if not product:
-        click.echo("❌ No product specified and SPLENT_APP not set.")
+        click.secho("  error: no product specified and SPLENT_APP not set", fg="red")
         raise SystemExit(1)
 
     product_path = str(context.workspace() / product)
-    pyproject_path = os.path.join(product_path, "pyproject.toml")
     docker_dir = os.path.join(product_path, "docker")
 
-    if not os.path.isfile(pyproject_path):
-        click.echo(f"❌ pyproject.toml not found in product: {product}")
+    if not os.path.isfile(os.path.join(product_path, "pyproject.toml")):
+        click.secho(f"  error: pyproject.toml not found in {product}", fg="red")
         raise SystemExit(1)
 
-    click.echo(f"🚀 Releasing PRODUCT {product}@{version}")
+    _guard_all_features_pinned(product_path)
 
-    # Guard: all features must be pinned for a reproducible release
-    from splent_cli.utils.feature_utils import load_product_features
-    features = load_product_features(product_path)
-    editable = [f for f in features if "@" not in f]
-    if editable:
-        click.secho("\n❌ Cannot release: the following features are editable (no version pinned):\n", fg="red")
-        for f in editable:
-            click.echo(f"   - {f}")
-        click.echo(
-            "\n   A product release must be reproducible. Pin all features first:\n"
-            "     splent feature:release <feature> <version>\n"
-            "     splent feature:attach <feature> <version>\n"
-        )
-        raise SystemExit(1)
+    # Determine org/repo for the semver wizard
+    repo = release.get_repo_from_path(product_path)
+    org, repo_name = repo.split("/")
 
-    release.update_version(pyproject_path, version)
-    release.commit_local_changes(product_path, version, subject="bump product version")
+    if not version:
+        version = release.semver_wizard(org, repo_name)
 
-    release.create_and_push_git_tag(product_path, version)
-    remote_url = subprocess.run(
-        ["git", "config", "--get", "remote.origin.url"],
-        capture_output=True,
-        text=True,
-        cwd=product_path,
-    ).stdout.strip()
-    repo = release.extract_repo(remote_url)
+    def _docker_hook(_path, ver):
+        _release_docker_image(product, ver, docker_dir)
 
-    release.create_github_release(repo, version, os.getenv("GITHUB_TOKEN"))
-    release.build_and_upload_pypi(product_path)
-    release_docker_image(product, version, docker_dir)
+    release.run_release_pipeline(
+        product,
+        product_path,
+        version,
+        require_docker=True,
+        post_pypi_hook=_docker_hook,
+    )
 
-    click.echo("🎉 Product release completed!")
+
+cli_command = product_release

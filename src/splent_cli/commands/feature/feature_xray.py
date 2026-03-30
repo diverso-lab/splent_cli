@@ -53,6 +53,8 @@ def _bare_name(feature_ref: str) -> str:
 @click.option("--models", "filter_cat", flag_value="model", help="Show only models.")
 @click.option("--routes", "filter_cat", flag_value="route", help="Show only routes.")
 @click.option("--hooks", "filter_cat", flag_value="hook", help="Show only hooks.")
+@click.option("--commands", "filter_cat", flag_value="command", help="Show only commands.")
+@click.option("--signals", "filter_cat", flag_value="signal", help="Show only signals.")
 @click.option("--validate", is_flag=True, help="Validate extensibility (detect conflicts).")
 def feature_xray(feature_ref, filter_cat, validate):
     """Show the refinement and extension map for all features (or a single one)."""
@@ -235,7 +237,7 @@ def feature_xray(feature_ref, filter_cat, validate):
         # Show what this feature provides (from contract)
         provides = contract.get("provides", {})
         if not ext and not is_refiner:
-            for cat in ["services", "models", "routes", "hooks"]:
+            for cat in ["services", "models", "routes", "hooks", "commands", "signals"]:
                 if filter_cat and cat.rstrip("s") != filter_cat:
                     continue
                 items = provides.get(cat, [])
@@ -360,7 +362,37 @@ def feature_xray(feature_ref, filter_cat, validate):
         click.secho(f"  ✅ Blueprints: no collisions ({len(all_bps)} unique)", fg="green")
         ok += 1
 
-    # 5. Hooks: shared slots (warn, not error — additive by design)
+    # 5. Commands: check for name collisions
+    all_commands: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        for cmd in fdata["contract"].get("provides", {}).get("commands", []):
+            all_commands.setdefault(cmd, []).append(name)
+
+    cmd_collisions = {c: fs for c, fs in all_commands.items() if len(fs) > 1}
+    if cmd_collisions:
+        for cmd, features_list in cmd_collisions.items():
+            click.secho(f"  ❌ Command '{cmd}' — collision: {', '.join(features_list)}", fg="red")
+            fail += 1
+    else:
+        click.secho(f"  ✅ Commands: no collisions ({len(all_commands)} unique)", fg="green")
+        ok += 1
+
+    # 6. Signals: check for name collisions (emitters)
+    all_signals: dict[str, list[str]] = {}
+    for name, fdata in feature_data.items():
+        for sig in fdata["contract"].get("provides", {}).get("signals", []):
+            all_signals.setdefault(sig, []).append(name)
+
+    sig_collisions = {s: fs for s, fs in all_signals.items() if len(fs) > 1}
+    if sig_collisions:
+        for sig, features_list in sig_collisions.items():
+            click.secho(f"  ❌ Signal '{sig}' — collision: {', '.join(features_list)}", fg="red")
+            fail += 1
+    else:
+        click.secho(f"  ✅ Signals: no collisions ({len(all_signals)} unique)", fg="green")
+        ok += 1
+
+    # 7. Hooks: shared slots (warn, not error — additive by design)
     shared_hooks: dict[str, list[str]] = {}
     for name, fdata in feature_data.items():
         for hook in fdata["contract"].get("provides", {}).get("hooks", []):
@@ -379,7 +411,7 @@ def feature_xray(feature_ref, filter_cat, validate):
         click.secho(f"  ✅ Hooks: no shared slots ({len(shared_hooks)} unique)", fg="green")
         ok += 1
 
-    # 6. Layout hooks: check for unused slots
+    # 8. Layout hooks: check for unused slots
     unused_hooks = [h for h in layout_hooks if h not in hook_usage]
     used_hooks = [h for h in layout_hooks if h in hook_usage]
     if unused_hooks:
@@ -390,7 +422,7 @@ def feature_xray(feature_ref, filter_cat, validate):
     click.secho(f"  ✅ Layout: {len(used_hooks)}/{len(layout_hooks)} hooks active", fg="green")
     ok += 1
 
-    # 7. Refinements: validate targets
+    # 9. Refinements: validate targets
     for base_name, overrides_list in refinement_map.items():
         base_ext = feature_data.get(base_name, {}).get("extensible", {})
         for o in overrides_list:

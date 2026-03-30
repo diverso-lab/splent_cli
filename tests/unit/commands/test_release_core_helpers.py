@@ -1,35 +1,33 @@
-"""Tests for pure helper functions in release_core.py."""
+"""Tests for shared release helpers in services/release.py."""
 import pytest
 from unittest.mock import patch, MagicMock
 
-from splent_cli.commands.release.release_core import (
+from splent_cli.services.release import (
     extract_repo,
     update_version,
-    validate_env,
+    validate_release_env,
 )
 
-_RUN = "splent_cli.commands.release.release_core.subprocess.run"
-
 
 # ---------------------------------------------------------------------------
-# validate_env
+# validate_release_env
 # ---------------------------------------------------------------------------
 
-class TestValidateEnv:
+class TestValidateReleaseEnv:
     def test_passes_when_all_vars_set(self, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "ghp_abc")
         monkeypatch.setenv("TWINE_USERNAME", "__token__")
         monkeypatch.setenv("TWINE_PASSWORD", "pypi-abc")
         monkeypatch.delenv("PYPI_USERNAME", raising=False)
         monkeypatch.delenv("PYPI_PASSWORD", raising=False)
-        validate_env()  # must not raise
+        validate_release_env()  # must not raise
 
     def test_exits_when_twine_username_missing(self, monkeypatch):
         monkeypatch.delenv("TWINE_USERNAME", raising=False)
         monkeypatch.delenv("PYPI_USERNAME", raising=False)
         monkeypatch.setenv("TWINE_PASSWORD", "pypi-abc")
         with pytest.raises(SystemExit) as exc:
-            validate_env()
+            validate_release_env()
         assert exc.value.code == 1
 
     def test_exits_when_twine_password_missing(self, monkeypatch):
@@ -37,7 +35,7 @@ class TestValidateEnv:
         monkeypatch.delenv("TWINE_PASSWORD", raising=False)
         monkeypatch.delenv("PYPI_PASSWORD", raising=False)
         with pytest.raises(SystemExit) as exc:
-            validate_env()
+            validate_release_env()
         assert exc.value.code == 1
 
     def test_pypi_username_accepted_as_fallback(self, monkeypatch):
@@ -45,20 +43,29 @@ class TestValidateEnv:
         monkeypatch.setenv("PYPI_USERNAME", "__token__")
         monkeypatch.setenv("TWINE_PASSWORD", "pypi-abc")
         monkeypatch.setenv("GITHUB_TOKEN", "ghp_abc")
-        validate_env()  # must not raise
+        validate_release_env()  # must not raise
 
     def test_pypi_password_accepted_as_fallback(self, monkeypatch):
         monkeypatch.setenv("TWINE_USERNAME", "__token__")
         monkeypatch.delenv("TWINE_PASSWORD", raising=False)
         monkeypatch.setenv("PYPI_PASSWORD", "pypi-abc")
         monkeypatch.setenv("GITHUB_TOKEN", "ghp_abc")
-        validate_env()  # must not raise
+        validate_release_env()  # must not raise
 
     def test_no_github_token_does_not_exit(self, monkeypatch):
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.setenv("TWINE_USERNAME", "__token__")
         monkeypatch.setenv("TWINE_PASSWORD", "pypi-abc")
-        validate_env()  # must not raise — token missing is just a warning
+        validate_release_env()  # must not raise — token missing is just a warning
+
+    def test_docker_validation_when_required(self, monkeypatch):
+        monkeypatch.setenv("TWINE_USERNAME", "__token__")
+        monkeypatch.setenv("TWINE_PASSWORD", "pypi-abc")
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_abc")
+        monkeypatch.delenv("DOCKERHUB_USERNAME", raising=False)
+        with pytest.raises(SystemExit) as exc:
+            validate_release_env(require_docker=True)
+        assert exc.value.code == 1
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +102,6 @@ class TestUpdateVersion:
         )
         update_version(str(p), "1.5.0")
         content = p.read_text()
-        # The top-level version line is updated
         assert 'version = "1.5.0"' in content
 
 
@@ -104,40 +110,22 @@ class TestUpdateVersion:
 # ---------------------------------------------------------------------------
 
 class TestExtractRepo:
-    def _mock_run(self, url: str):
-        mock = MagicMock()
-        mock.stdout = url + "\n"
-        return mock
-
-    def test_https_url_with_token(self, tmp_path):
-        with patch(_RUN, return_value=self._mock_run(
-            "https://ghp_token@github.com/myorg/myrepo.git"
-        )):
-            result = extract_repo(str(tmp_path))
+    def test_https_url_with_token(self):
+        result = extract_repo("https://ghp_token@github.com/myorg/myrepo.git")
         assert result == "myorg/myrepo"
 
-    def test_https_url_without_token(self, tmp_path):
-        with patch(_RUN, return_value=self._mock_run(
-            "https://github.com/myorg/myrepo.git"
-        )):
-            result = extract_repo(str(tmp_path))
+    def test_https_url_without_token(self):
+        result = extract_repo("https://github.com/myorg/myrepo.git")
         assert result == "myorg/myrepo"
 
-    def test_ssh_url(self, tmp_path):
-        with patch(_RUN, return_value=self._mock_run(
-            "git@github.com:myorg/myrepo.git"
-        )):
-            result = extract_repo(str(tmp_path))
+    def test_ssh_url(self):
+        result = extract_repo("git@github.com:myorg/myrepo.git")
         assert result == "myorg/myrepo"
 
-    def test_url_without_git_suffix(self, tmp_path):
-        with patch(_RUN, return_value=self._mock_run(
-            "https://github.com/myorg/myrepo"
-        )):
-            result = extract_repo(str(tmp_path))
+    def test_url_without_git_suffix(self):
+        result = extract_repo("https://github.com/myorg/myrepo")
         assert result == "myorg/myrepo"
 
-    def test_unknown_url_raises_system_exit(self, tmp_path):
-        with patch(_RUN, return_value=self._mock_run("not-a-valid-git-url")):
-            with pytest.raises(SystemExit):
-                extract_repo(str(tmp_path))
+    def test_unknown_url_raises_system_exit(self):
+        with pytest.raises(SystemExit):
+            extract_repo("not-a-valid-git-url")

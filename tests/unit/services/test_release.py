@@ -4,8 +4,8 @@ from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 import pytest
 from splent_cli.services.release import (
-    commit_local_changes,
-    create_and_push_git_tag,
+    commit_and_push,
+    create_and_push_tag,
     build_and_upload_pypi,
     extract_repo,
 )
@@ -46,7 +46,7 @@ class TestCommitLocalChanges:
 
             @click.command()
             def cmd():
-                commit_local_changes(str(tmp_path), "v1.0.0")
+                commit_and_push(str(tmp_path), "v1.0.0")
 
             result = CliRunner().invoke(cmd)
             assert "clean" in result.output.lower()
@@ -73,14 +73,11 @@ class TestCommitLocalChanges:
 
                 @click.command()
                 def cmd():
-                    commit_local_changes(str(tmp_path), "v1.0.0")
+                    commit_and_push(str(tmp_path), "v1.0.0")
 
                 result = CliRunner(mix_stderr=False).invoke(cmd)
                 assert result.exit_code == 1
-                assert (
-                    "failed" in result.output.lower()
-                    or "❌" in result.output
-                )
+                assert "failed" in result.output.lower()
                 assert "Traceback" not in result.output
 
     def test_git_push_failure_explains_partial_state(self, tmp_path):
@@ -103,7 +100,7 @@ class TestCommitLocalChanges:
 
                 @click.command()
                 def cmd():
-                    commit_local_changes(str(tmp_path), "v1.0.0")
+                    commit_and_push(str(tmp_path), "v1.0.0")
 
                 result = CliRunner(mix_stderr=False).invoke(cmd)
                 # Should mention that version was bumped but not committed
@@ -133,12 +130,12 @@ class TestCreateAndPushGitTag:
 
             @click.command()
             def cmd():
-                create_and_push_git_tag(str(tmp_path), "v1.0.0")
+                create_and_push_tag(str(tmp_path), "v1.0.0")
 
             result = CliRunner(mix_stderr=False).invoke(cmd)
             assert result.exit_code == 1
             assert "Traceback" not in result.output
-            assert "❌" in result.output
+            assert "error:" in result.output.lower() or "failed" in result.output.lower()
 
 
 class TestBuildAndUploadPypi:
@@ -160,10 +157,7 @@ class TestBuildAndUploadPypi:
             result = CliRunner(mix_stderr=False).invoke(cmd)
             assert result.exit_code == 1
             assert "Traceback" not in result.output
-            assert (
-                "build failed" in result.output.lower()
-                or "❌" in result.output
-            )
+            assert "build failed" in result.output.lower() or "error:" in result.output.lower()
 
     def test_upload_failure_shows_manual_recovery_hint(self, tmp_path):
         with patch(
