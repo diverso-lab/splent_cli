@@ -267,7 +267,51 @@ def feature_contract(feature_ref, write):
     # Write
     update_contract(str(cache_path), ns, name)
     click.secho("  ✅ Contract written to pyproject.toml.", fg="green")
+
+    # Check if config.py needs updating
+    _check_config_py(cache_path, ns, name, inferred)
+
     click.echo()
+
+
+def _check_config_py(feature_path, ns, name, inferred):
+    """Warn if config.py is missing or stale relative to the inferred contract."""
+    import re
+
+    env_vars = inferred.get("env_vars", [])
+    if not env_vars:
+        return
+
+    ns_safe = normalize_namespace(ns)
+    config_path = feature_path / "src" / ns_safe / name / "config.py"
+
+    if not config_path.exists():
+        click.echo()
+        click.secho(
+            f"  ⚠  config.py not found — {len(env_vars)} env var(s) detected but not injected into app.config.",
+            fg="yellow",
+        )
+        if click.confirm("     Run feature:inject-config to generate it?", default=True):
+            from splent_cli.commands.feature.feature_inject_config import feature_inject_config
+            ctx = click.get_current_context()
+            ctx.invoke(feature_inject_config, feature_ref=name, dry_run=False)
+        return
+
+    # Config exists — check for missing vars
+    text = config_path.read_text()
+    existing = set(re.findall(r'"([A-Z][A-Z0-9_]+)":\s*', text))
+    missing = sorted(set(env_vars) - existing)
+
+    if missing:
+        click.echo()
+        click.secho(
+            f"  ⚠  config.py is missing {len(missing)} env var(s): {', '.join(missing)}",
+            fg="yellow",
+        )
+        if click.confirm("     Run feature:inject-config to update it?", default=True):
+            from splent_cli.commands.feature.feature_inject_config import feature_inject_config
+            ctx = click.get_current_context()
+            ctx.invoke(feature_inject_config, feature_ref=name, dry_run=False)
 
 
 cli_command = feature_contract

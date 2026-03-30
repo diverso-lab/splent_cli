@@ -63,6 +63,21 @@ def db_status():
     # Get all feature migration dirs for filesystem cross-check
     dirs = MigrationManager.get_all_feature_migration_dirs()
 
+    # Declared feature names (from pyproject.toml) — used to detect orphans
+    declared_features = set(dirs.keys())
+    try:
+        from splent_framework.utils.pyproject_reader import PyprojectReader
+        product_dir = os.path.join(str(context.workspace()), context.require_app())
+        reader = PyprojectReader.for_product(product_dir)
+        env = os.getenv("SPLENT_ENV")
+        for entry in reader.features_for_env(env):
+            name = entry.split("@")[0]
+            if "/" in name:
+                name = name.split("/")[-1]
+            declared_features.add(name)
+    except Exception:
+        pass
+
     # Merge: features from DB + features from filesystem
     all_features = set(feat for feat, _ in rows) | set(dirs.keys())
 
@@ -82,6 +97,7 @@ def db_status():
     click.echo(f"  {'-' * col_feat}  {'-' * col_rev}  {'-' * col_rev}  {'-' * 12}")
 
     issues = 0
+    orphans = []
     for feat in sorted(all_features):
         db_rev = db_revisions.get(feat)
         mdir = dirs.get(feat)
@@ -95,6 +111,10 @@ def db_status():
         elif db_rev and fs_head and db_rev != fs_head:
             status = click.style("⚠ pending", fg="yellow")
             issues += 1
+        elif db_rev and not fs_head and feat not in declared_features:
+            # Feature has a DB entry but is no longer declared — orphan
+            status = click.style("⚠ orphan", fg="red")
+            orphans.append(feat)
         elif db_rev and not fs_head:
             status = click.style("⚠ no files", fg="yellow")
             issues += 1
@@ -113,6 +133,16 @@ def db_status():
         click.secho(
             f"  {issues} feature(s) out of sync. Run 'splent db:upgrade' to apply pending migrations.",
             fg="yellow",
+        )
+        click.echo()
+    if orphans:
+        click.secho(
+            f"  {len(orphans)} orphan(s) in DB no longer declared: {', '.join(orphans)}",
+            fg="red",
+        )
+        click.secho(
+            "  Run 'splent db:rollback <feature>' to clean up, or ignore if tables should be kept.",
+            fg="red",
         )
         click.echo()
 

@@ -53,8 +53,13 @@ def product_sync(ctx, force):
         click.secho(f"pyproject.toml not found in product '{product}'", fg="red")
         raise SystemExit(1)
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        click.secho(f"❌ Invalid pyproject.toml: {e}", fg="red")
+        click.secho(f"   File: {pyproject_path}", fg="red", dim=True)
+        raise SystemExit(1)
 
     env = os.getenv("SPLENT_ENV")
     features = read_features_from_data(data, env)
@@ -123,10 +128,13 @@ def product_sync(ctx, force):
         names_r = []
         for entry in remote_features:
             ns_safe, repo, version = parse_feature_entry(entry)
-            names_r.append((_short_name(repo), entry, ns_safe, repo, version))
+            # Extract raw namespace (e.g. "splent-io") for Git URLs;
+            # ns_safe ("splent_io") is only for filesystem paths.
+            ns_raw = entry.split("/", 1)[0] if "/" in entry else "splent-io"
+            names_r.append((_short_name(repo), entry, ns_safe, ns_raw, repo, version))
         max_w_r = max(len(n[0]) for n in names_r)
 
-        for short, entry, ns_safe, repo, version in names_r:
+        for short, entry, ns_safe, ns_raw, repo, version in names_r:
             cache_dir = os.path.join(
                 workspace, ".splent_cache", "features", ns_safe, f"{repo}@{version}"
             )
@@ -144,7 +152,7 @@ def product_sync(ctx, force):
             cloned = False
             if not os.path.exists(cache_dir):
                 try:
-                    ctx.invoke(feature_clone, full_name=f"{ns_safe}/{repo}@{version}")
+                    ctx.invoke(feature_clone, full_name=f"{ns_raw}/{repo}@{version}")
                     cloned = True
                 except SystemExit as e:
                     if e.code != 0:

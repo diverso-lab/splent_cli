@@ -62,17 +62,27 @@ def _load_product_env(product_path: str) -> dict[str, str]:
     return env_vars
 
 
-def _check_env_vars(workspace, product_path, features, ok_fn, fail_fn, warn_fn):
-    """Check that env vars declared in feature contracts are present in the product .env."""
-    click.echo(click.style("  Env vars (from feature contracts)", bold=True))
+def _short(name: str) -> str:
+    return name.removeprefix("splent_feature_")
+
+
+# ── Env vars ─────────────────────────────────────────────────────────────────
+
+
+def _check_env_vars(workspace, product_path, features, counters):
+    """Check required env vars from feature contracts."""
+    click.echo()
+    click.secho("  Env Vars", bold=True, fg="cyan")
+    click.echo()
 
     product_env = _load_product_env(product_path)
     if not product_env:
-        warn_fn("No product docker/.env found — run: splent product:env --merge --dev")
+        click.echo(click.style("  ⚠  No docker/.env found", fg="yellow"))
+        counters["warn"] += 1
         return
 
-    all_required: list[tuple[str, str]] = []  # (var_name, feature_name)
-
+    # Collect required vars per feature
+    per_feature: dict[str, list[str]] = {}
     for entry in features:
         ns_safe, name, version = parse_feature_entry(entry)
         data = _resolve_feature_pyproject(workspace, product_path, ns_safe, name, version)
@@ -85,95 +95,184 @@ def _check_env_vars(workspace, product_path, features, ok_fn, fail_fn, warn_fn):
             .get("requires", {})
             .get("env_vars", [])
         )
-        for var in env_vars:
-            all_required.append((var, name))
+        if env_vars:
+            per_feature[name] = env_vars
 
-    if not all_required:
-        ok_fn("No env vars required by any feature contract")
+    if not per_feature:
+        click.echo("  No env vars required by any feature contract.")
         return
 
-    missing = []
-    for var, feature in all_required:
-        if var not in product_env:
-            missing.append((var, feature))
+    # Get injected keys from config trace
+    injected_keys: set[str] = set()
+    try:
+        from splent_cli.utils.dynamic_imports import get_app
+        app = get_app()
+        trace = app.extensions.get("splent_config_trace", {})
+        injected_keys = set(trace.keys())
+    except Exception:
+        pass
 
-    if missing:
-        for var, feature in missing:
-            fail_fn(f"{var} missing from docker/.env (required by {feature})"
-                    f" — run: splent product:env --merge --dev")
-    else:
-        ok_fn(f"All {len(all_required)} required env var(s) present in docker/.env")
+    # Group by variable: var → list of feature short names
+    var_features: dict[str, list[str]] = {}
+    for name, vars_list in per_feature.items():
+        for var in vars_list:
+            var_features.setdefault(var, []).append(_short(name))
+
+    # Table
+    col_var = 30
+    col_feat = 25
+    col_src = 14
+
+    click.echo(f"  {'Variable':<{col_var}}  {'Feature(s)':<{col_feat}}  {'Source':<{col_src}}  Status")
+    click.echo(f"  {'-' * col_var}  {'-' * col_feat}  {'-' * col_src}  {'-' * 10}")
+
+    has_missing = False
+    for var in sorted(var_features):
+        feats = ", ".join(sorted(var_features[var]))
+
+        if var in product_env:
+            src = "docker/.env"
+            status = click.style("✔", fg="green")
+        elif var in injected_keys:
+            src = "inject_config"
+            status = click.style("✔", fg="green")
+        else:
+            src = "—"
+            status = click.style("✖ missing", fg="red")
+            has_missing = True
+            counters["fail"] += 1
+
+        click.echo(f"  {var:<{col_var}}  {feats:<{col_feat}}  {src:<{col_src}}  {status}")
+
+    if not has_missing:
+        counters["ok"] += 1
 
 
-def _check_symlinks(product_path, features, ok_fn, fail_fn, warn_fn):
-    """Check that feature symlinks in the product resolve correctly."""
-    click.echo(click.style("  Symlinks", bold=True))
+# ── Symlinks ─────────────────────────────────────────────────────────────────
+
+
+def _check_symlinks(product_path, features, counters):
+    """Check that feature symlinks resolve correctly."""
+    click.echo()
+    click.secho("  Symlinks", bold=True, fg="cyan")
+    click.echo()
 
     features_dir = os.path.join(product_path, "features")
     if not os.path.isdir(features_dir):
-        warn_fn(f"No features/ directory in product")
+        click.echo(click.style("  ⚠  No features/ directory", fg="yellow"))
+        counters["warn"] += 1
         return
 
-    broken = []
+    col_feat = 25
+    click.echo(f"  {'Feature':<{col_feat}}  Status")
+    click.echo(f"  {'-' * col_feat}  {'-' * 10}")
+
+    broken_count = 0
     for entry in features:
         ns_safe, name, version = parse_feature_entry(entry)
         dir_name = f"{name}@{version}" if version else name
         link = os.path.join(features_dir, ns_safe, dir_name)
 
+        feat_label = _short(name)
+        if version:
+            feat_label += f"@{version}"
+
         if os.path.islink(link) and not os.path.exists(link):
-            broken.append(f"{ns_safe}/{dir_name}")
+            click.echo(f"  {feat_label:<{col_feat}}  {click.style('✖ broken', fg='red')}")
+            broken_count += 1
+        elif os.path.exists(link):
+            click.echo(f"  {feat_label:<{col_feat}}  {click.style('✔', fg='green')}")
+        else:
+            click.echo(f"  {feat_label:<{col_feat}}  {click.style('— not linked', fg='bright_black')}")
 
-    if broken:
-        for b in broken:
-            fail_fn(f"Broken symlink: {b}")
+    if broken_count:
+        counters["fail"] += broken_count
     else:
-        ok_fn(f"All {len(features)} feature symlink(s) OK")
+        counters["ok"] += 1
 
 
-def _check_config_overwrites(ok_fn, fail_fn, warn_fn):
-    """Boot the app and check for config overwrites."""
-    click.echo(click.style("  Config overwrites", bold=True))
+# ── Config overwrites ────────────────────────────────────────────────────────
+
+
+def _check_config_overwrites(counters):
+    """Check for config overwrites between features."""
+    click.echo()
+    click.secho("  Config Overwrites", bold=True, fg="cyan")
+    click.echo()
 
     try:
         from splent_cli.utils.dynamic_imports import get_app
         app = get_app()
     except Exception:
-        warn_fn("Could not boot app — skipping config checks")
+        click.echo(click.style("  ⚠  Could not boot app — skipping", fg="yellow"))
+        counters["warn"] += 1
         return
 
     trace = app.extensions.get("splent_config_trace", {})
     overwrites = {k: v for k, v in trace.items() if v.get("action") == "overwritten"}
 
-    if overwrites:
+    if not overwrites:
+        click.echo(f"  No config key overwrites detected.")
+        counters["ok"] += 1
+    else:
+        col_key = 25
+        col_orig = 25
+
+        click.echo(f"  {'Key':<{col_key}}  {'Set by':<{col_orig}}  Overwritten by")
+        click.echo(f"  {'-' * col_key}  {'-' * col_orig}  {'-' * 25}")
+
         for key, info in sorted(overwrites.items()):
             prev_src = info.get("prev_source", "?")
             source = info.get("source", "?")
+            if "." in prev_src:
+                prev_src = _short(prev_src.rsplit(".", 1)[1])
             if "." in source:
-                source = f"feature ({source.rsplit('.', 1)[1]})"
-            warn_fn(f"{key}: {prev_src} overwritten by {source}")
-    else:
-        ok_fn("No config key overwrites detected")
+                source = _short(source.rsplit(".", 1)[1])
+            click.echo(
+                f"  {key:<{col_key}}  {prev_src:<{col_orig}}  "
+                f"{click.style(source, fg='yellow')}"
+            )
 
-    # Check features with no blueprints
-    click.echo(click.style("  Blueprint registration", bold=True))
+        counters["warn"] += len(overwrites)
+
+
+# ── Blueprints ───────────────────────────────────────────────────────────────
+
+
+def _check_blueprints(counters):
+    """Check blueprint registration."""
+    click.echo()
+    click.secho("  Blueprints", bold=True, fg="cyan")
+    click.echo()
+
+    try:
+        from splent_cli.utils.dynamic_imports import get_app
+        app = get_app()
+    except Exception:
+        click.echo(click.style("  ⚠  Could not boot app — skipping", fg="yellow"))
+        counters["warn"] += 1
+        return
+
     bp_trace = app.extensions.get("splent_blueprint_trace", {})
-    feature_sources = set(bp_trace.values())
 
-    config_trace = app.extensions.get("splent_config_trace", {})
-    config_sources = {
-        v["source"] for v in config_trace.values()
-        if "." in v.get("source", "")
-    }
+    if not bp_trace:
+        click.echo("  No blueprints registered.")
+        return
 
-    all_feature_sources = feature_sources | config_sources
-    features_with_no_bp = config_sources - feature_sources
+    col_bp = 20
+    col_feat = 25
 
-    if features_with_no_bp:
-        for src in sorted(features_with_no_bp):
-            name = src.rsplit(".", 1)[-1]
-            warn_fn(f"{name} injected config but registered no blueprints")
-    else:
-        ok_fn(f"{len(feature_sources)} feature(s) registered blueprints")
+    click.echo(f"  {'Blueprint':<{col_bp}}  Feature")
+    click.echo(f"  {'-' * col_bp}  {'-' * col_feat}")
+
+    for bp_name, source in sorted(bp_trace.items()):
+        feat = _short(source.rsplit(".", 1)[-1]) if "." in source else source
+        click.echo(f"  {bp_name:<{col_bp}}  {feat}")
+
+    counters["ok"] += 1
+
+
+# ── Command ──────────────────────────────────────────────────────────────────
 
 
 @click.command(
@@ -182,43 +281,24 @@ def _check_config_overwrites(ok_fn, fail_fn, warn_fn):
 )
 @context.requires_product
 def check_product():
-    """Run product-level health checks.
-
-    Validates that the active product is correctly wired:
-    env vars from feature contracts are set, symlinks resolve,
-    and config overwrites are flagged.
-    """
+    """Run product-level health checks."""
     product = context.require_app()
     workspace = str(context.workspace())
     product_path = os.path.join(workspace, product)
 
-    ok = fail = warn = 0
-
-    def _ok(msg):
-        nonlocal ok
-        ok += 1
-        click.echo(click.style("  [✔] ", fg="green") + msg)
-
-    def _fail(msg):
-        nonlocal fail
-        fail += 1
-        click.echo(click.style("  [✖] ", fg="red") + msg)
-
-    def _warn(msg):
-        nonlocal warn
-        warn += 1
-        click.echo(click.style("  [⚠] ", fg="yellow") + msg)
+    counters = {"ok": 0, "fail": 0, "warn": 0}
 
     click.echo()
+    click.secho(f"  check:product — {product}", bold=True, fg="cyan")
 
     try:
         features = load_product_features(product_path, os.getenv("SPLENT_ENV"))
     except FileNotFoundError:
-        _fail("pyproject.toml not found")
+        click.secho("  pyproject.toml not found", fg="red")
         raise SystemExit(1)
 
     if not features:
-        _warn("No features declared")
+        click.secho("  No features declared.", fg="yellow")
         click.echo()
         return
 
@@ -226,22 +306,24 @@ def check_product():
     from splent_cli.utils.contract_freshness import check_and_refresh_contracts
     check_and_refresh_contracts(workspace, features)
 
-    _check_env_vars(workspace, product_path, features, _ok, _fail, _warn)
-    _check_symlinks(product_path, features, _ok, _fail, _warn)
-    _check_config_overwrites(_ok, _fail, _warn)
+    _check_env_vars(workspace, product_path, features, counters)
+    _check_symlinks(product_path, features, counters)
+    _check_config_overwrites(counters)
+    _check_blueprints(counters)
 
     # Summary
     click.echo()
     parts = []
-    if ok:
-        parts.append(click.style(f"{ok} passed", fg="green"))
-    if warn:
-        parts.append(click.style(f"{warn} warnings", fg="yellow"))
-    if fail:
-        parts.append(click.style(f"{fail} failed", fg="red"))
+    if counters["ok"]:
+        parts.append(click.style(f"{counters['ok']} passed", fg="green"))
+    if counters["warn"]:
+        parts.append(click.style(f"{counters['warn']} warnings", fg="yellow"))
+    if counters["fail"]:
+        parts.append(click.style(f"{counters['fail']} failed", fg="red"))
     click.echo("  " + ", ".join(parts))
+    click.echo()
 
-    if fail:
+    if counters["fail"]:
         raise SystemExit(1)
 
 

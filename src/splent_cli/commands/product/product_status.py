@@ -81,12 +81,12 @@ def _format_ports(ports) -> str:
 
 
 @click.command(
-    "product:status",
+    "product:docker",
     short_help="Show Docker container status for the active product and its features.",
 )
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")
-def product_status(env_dev, env_prod):
+def product_docker(env_dev, env_prod):
     """Shows the status of all Docker containers for the active product and its features."""
     if env_dev and env_prod:
         click.secho("❌ Cannot specify both --dev and --prod.", fg="red")
@@ -193,4 +193,4 @@ def product_status(env_dev, env_prod):
         click.echo()
 
 
-cli_command = product_status
+cli_command = product_docker

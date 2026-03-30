@@ -74,7 +74,7 @@ BLOCKED_STATES: dict[str, set[str]] = {
     "feature:remove": {"migrated", "active"},  # must rollback first
     "feature:detach": {"migrated", "active"},  # must rollback first
     "feature:edit": {"migrated", "active"},  # must rollback first
-    "feature:upgrade": {"migrated", "active"},  # must rollback first
+    "feature:upgrade": set(),  # always ok — only updates cache + pyproject + symlink
     "feature:rename": {"migrated", "active"},  # must rollback first
     "db:migrate": set(),  # needs "installed" min (handled by require_state)
     "db:upgrade": set(),  # needs "installed" min

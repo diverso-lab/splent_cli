@@ -17,13 +17,24 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 
 def _get_latest_tag(namespace, repo) -> str | None:
-    """Fetch the latest tag from GitHub. Returns None if unreachable or no tags exist."""
-    api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags"
+    """Fetch the highest semver tag from GitHub. Returns None if unreachable or no tags."""
+    api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
     try:
         r = requests.get(api_url, timeout=5)
         r.raise_for_status()
         tags = r.json()
-        return tags[0]["name"] if tags else None
+        if not tags:
+            return None
+        versions = []
+        for tag in tags:
+            name = tag.get("name", "")
+            m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", name)
+            if m:
+                versions.append((int(m.group(1)), int(m.group(2)), int(m.group(3)), name))
+        if not versions:
+            return tags[0]["name"]
+        versions.sort(reverse=True)
+        return versions[0][3]
     except (requests.RequestException, KeyError, IndexError, ValueError):
         return None
 

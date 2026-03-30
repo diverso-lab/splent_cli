@@ -18,8 +18,9 @@ from splent_cli.commands.check.check_infra import check_infra
 from splent_cli.commands.feature.feature_status import feature_status
 from splent_cli.commands.version import version as version_cmd
 from splent_cli.commands.database.db_status import db_status
-from splent_cli.commands.product.product_status import product_status
+from splent_cli.commands.product.product_status import product_docker
 from splent_cli.commands.check.check_product import check_product
+from splent_cli.commands.feature.feature_outdated import feature_outdated
 
 
 # (name, command, requires_db, network_only)
@@ -31,9 +32,10 @@ CHECKS = [
     ("check:deps", check_deps, False, False),
     ("check:product", check_product, False, False),
     ("feature:status", feature_status, False, False),
+    ("feature:outdated", feature_outdated, False, True),
     ("check:docker", check_docker, False, False),
     ("check:infra", check_infra, False, False),
-    ("product:status", product_status, False, False),
+    ("product:docker", product_docker, False, False),
     ("db:status", db_status, True, False),
     ("check:github", check_github, False, True),
     ("check:pypi", check_pypi, False, True),
@@ -48,18 +50,20 @@ def doctor(fast):
 
     \b
     Runs in order:
-      1. version           — Workspace version snapshot
-      2. check:env         — Python, env vars, CLI/framework versions
-      3. check:pyproject   — pyproject.toml parsing, deps, UVL
-      4. check:features    — cache, symlinks, pip install, git state
-      5. check:product     — env vars, config overwrites, blueprint registration
-      6. feature:status    — lifecycle state of all features
-      7. check:docker      — Docker daemon, compose, containers
-      7. check:infra       — Docker infrastructure (ports, services, networks)
-      8. product:status    — Docker container status for the product
-      9. db:status         — Migration status for all features
-     10. check:github      — GitHub credentials and API access
-     11. check:pypi        — PyPI credentials and upload access
+      1. version            — Workspace version snapshot
+      2. check:env          — Python, env vars, CLI/framework versions
+      3. check:pyproject    — pyproject.toml parsing, deps, UVL
+      4. check:features     — cache, symlinks, pip install, git state
+      5. check:deps         — dependency resolution
+      6. check:product      — env vars, config overwrites, blueprint registration
+      7. feature:status     — lifecycle state of all features
+      8. feature:outdated   — check for newer feature versions on GitHub
+      9. check:docker       — Docker daemon, compose, containers
+     10. check:infra        — Docker infrastructure (ports, services, networks)
+     11. product:docker     — Docker container status for the product
+     12. db:status          — Migration status for all features
+     13. check:github       — GitHub credentials and API access
+     14. check:pypi         — PyPI credentials and upload access
 
     \b
     Each is a standalone command you can run independently:

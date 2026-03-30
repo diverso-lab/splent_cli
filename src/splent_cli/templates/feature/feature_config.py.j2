@@ -1,0 +1,17 @@
+"""
+{{ short_name }} feature configuration.
+
+Injects environment variables into Flask app.config.
+Add your feature's env vars here so the framework can track them.
+
+To regenerate from source code: splent feature:inject-config {{ feature_name }}
+"""
+
+import os
+
+
+def inject_config(app):
+    app.config.update({
+        # Add your feature's env vars here, e.g.:
+        # "MY_VAR": os.getenv("MY_VAR", "default_value"),
+    })

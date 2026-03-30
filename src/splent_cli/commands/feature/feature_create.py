@@ -99,6 +99,7 @@ def make_feature(full_name):
     # --- File mappings ---
     src_files_and_templates = {
         "__init__.py": "feature/feature_init.py.j2",
+        "config.py": "feature/feature_config.py.j2",
         "routes.py": "feature/feature_routes.py.j2",
         "models.py": "feature/feature_models.py.j2",
         "repositories.py": "feature/feature_repositories.py.j2",

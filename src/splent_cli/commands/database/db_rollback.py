@@ -82,11 +82,32 @@ def db_rollback(feature, steps, cascade):
     # Verify feature exists in the product
     declared = [e for e in (get_features_from_pyproject() or [])]
     feature_found = any(feature in e for e in declared)
-    if not feature_found:
-        click.secho(f"❌ Feature '{feature}' is not declared in this product.", fg="red")
-        raise SystemExit(1)
 
     mdir = MigrationManager.get_feature_migration_dir(feature)
+
+    if not feature_found:
+        # Check if it's an orphan (DB entry but not declared)
+        try:
+            all_status = MigrationManager.get_all_status(app)
+            has_db_entry = any(f == feature for f, _ in all_status)
+        except Exception:
+            has_db_entry = False
+
+        if has_db_entry:
+            click.secho(
+                f"  ⚠️  Feature '{feature}' is not declared but has a DB entry (orphan).",
+                fg="yellow",
+            )
+            if not click.confirm("  Remove the orphan entry from splent_migrations?", default=False):
+                click.echo("  ❎ Cancelled.")
+                raise SystemExit(1)
+            MigrationManager.delete_feature_status(app, feature)
+            click.secho(f"  ✅ Removed '{feature}' from splent_migrations.", fg="green")
+            return
+        else:
+            click.secho(f"❌ Feature '{feature}' is not declared in this product.", fg="red")
+            raise SystemExit(1)
+
     if not mdir or not os.path.isdir(mdir):
         click.secho(f"  ℹ️  Feature '{feature}' has no migrations — nothing to roll back.", fg="yellow")
         return
