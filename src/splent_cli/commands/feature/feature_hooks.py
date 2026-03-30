@@ -11,6 +11,7 @@ import click
 from pathlib import Path
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -38,7 +39,7 @@ def _resolve_feature(
 
     if "/" in base:
         ns_raw, name = base.split("/", 1)
-        ns = ns_raw.replace("-", "_")
+        ns = normalize_namespace(ns_raw)
     else:
         ns = DEFAULT_NAMESPACE
         name = base
@@ -93,6 +94,7 @@ def _parse_hooks(hooks_path: Path) -> list[dict]:
 )
 @click.argument("feature_ref")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON array.")
+@context.requires_product
 def feature_hooks(feature_ref, as_json):
     """
     List all template hook registrations declared in a feature's hooks.py.

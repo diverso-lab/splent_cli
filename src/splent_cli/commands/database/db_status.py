@@ -5,6 +5,7 @@ import click
 from flask import current_app
 
 from splent_cli.utils.decorators import requires_db
+from splent_cli.services import context
 from splent_framework.managers.migration_manager import MigrationManager
 
 
@@ -46,6 +47,7 @@ def _get_filesystem_head(mdir: str) -> str | None:
     "db:status",
     short_help="Show migration status for all features.",
 )
+@context.requires_product
 def db_status():
     """Show migration status: DB revision vs filesystem head for each feature."""
     app = current_app

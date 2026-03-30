@@ -46,13 +46,9 @@ def product_up(dev, prod):
 
     failed: list[str] = []
 
-    def launch(name, docker_dir):
-        compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
-        compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
-        compose_file = (
-            compose_preferred if os.path.exists(compose_preferred) else compose_fallback
-        )
-        if not os.path.exists(compose_file):
+    def launch(name, base_path):
+        compose_file = compose.resolve_file(base_path, env)
+        if compose_file is None:
             click.echo(f"⚠️ No docker-compose file for {name}")
             return
         project_name = compose.project_name(name, env)
@@ -81,7 +77,8 @@ def product_up(dev, prod):
     ws = str(context.workspace())
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
-        launch(clean, compose.feature_docker_dir(ws, clean))
+        feat_docker = compose.feature_docker_dir(ws, clean)
+        launch(clean, os.path.dirname(feat_docker))
 
     if failed:
         click.secho(
@@ -92,7 +89,7 @@ def product_up(dev, prod):
         raise SystemExit(1)
 
     # Launch product last — only if all feature services started successfully
-    launch(product, os.path.join(product_path, "docker"))
+    launch(product, product_path)
 
     if failed:
         raise SystemExit(1)

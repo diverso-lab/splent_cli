@@ -76,15 +76,9 @@ def product_down(dev, prod, v):
     # --dev: stop development containers
     env = "dev"
 
-    def shutdown(name, svc_docker_dir):
-        compose_preferred = os.path.join(svc_docker_dir, f"docker-compose.{env}.yml")
-        compose_fallback = os.path.join(svc_docker_dir, "docker-compose.yml")
-        compose_file = (
-            compose_preferred
-            if os.path.exists(compose_preferred)
-            else compose_fallback
-        )
-        if not os.path.exists(compose_file):
+    def shutdown(name, base_path):
+        compose_file = compose.resolve_file(base_path, env)
+        if compose_file is None:
             return
         project_name = compose.project_name(name, env)
 
@@ -94,7 +88,7 @@ def product_down(dev, prod, v):
         subprocess.run(args, check=False)
         click.echo(f"🛑  {name}: stopped successfully")
 
-    shutdown(product, docker_dir)
+    shutdown(product, product_path)
 
     py = os.path.join(product_path, "pyproject.toml")
     if not os.path.exists(py):
@@ -107,7 +101,8 @@ def product_down(dev, prod, v):
 
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
-        shutdown(clean, compose.feature_docker_dir(workspace, clean))
+        feat_docker = compose.feature_docker_dir(workspace, clean)
+        shutdown(clean, os.path.dirname(feat_docker))
 
     click.secho("🛑 Development environment stopped.", fg="green")
 

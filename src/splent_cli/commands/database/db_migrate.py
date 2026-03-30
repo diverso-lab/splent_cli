@@ -5,6 +5,7 @@ from flask import current_app
 from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
 
 from splent_cli.utils.decorators import requires_db
+from splent_cli.services import context
 from splent_cli.utils.lifecycle import (
     advance_state,
     resolve_feature_key_from_entry,
@@ -52,6 +53,7 @@ def _is_empty_migration(path: str) -> bool:
     short_help="Generate and apply migrations (all features or a single one).",
 )
 @click.argument("feature", required=False, default=None)
+@context.requires_product
 def db_migrate(feature):
     """
     Generate new migration files for features that have schema changes,

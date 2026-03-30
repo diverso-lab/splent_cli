@@ -24,6 +24,7 @@ from splent_cli.commands.feature.feature_drift import _resolve_cache_path
     help="Show what would change without writing any files.",
 )
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
+@context.requires_product
 def feature_sync_template(feature_identifier, dry_run, yes):
     """
     Update SPLENT-owned scaffold files in a feature to match the current

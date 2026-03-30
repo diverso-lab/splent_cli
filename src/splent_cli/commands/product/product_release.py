@@ -105,6 +105,7 @@ def release_docker_image(product, version, docker_dir):
 )
 @click.argument("version")
 @click.option("--product", default=None, help="Override SPLENT_APP.")
+@context.requires_product
 def product_release(version, product):
     validate_product_release_env()
 

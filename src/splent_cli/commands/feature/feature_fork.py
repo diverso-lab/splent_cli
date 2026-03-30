@@ -5,6 +5,7 @@ import requests
 from splent_cli.commands.feature.feature_clone import feature_clone
 from splent_cli.utils.cache_utils import make_feature_writable
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 @click.command(
@@ -63,7 +64,7 @@ def feature_fork(feature_name, version):
     ctx.invoke(feature_clone, full_name=f"{github_user}/{feature_name}@{version}")
 
     # Forked features are meant to be edited — unlock the cached copy
-    ns_safe = github_user.replace("-", "_").replace(".", "_")
+    ns_safe = normalize_namespace(github_user)
     workspace = str(context.workspace())
     forked_path = os.path.join(
         workspace, ".splent_cache", "features", ns_safe, f"{feature_name}@{version}"

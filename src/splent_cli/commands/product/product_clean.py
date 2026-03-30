@@ -6,13 +6,9 @@ from splent_cli.services import compose, context
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
-def _docker_down(name: str, docker_dir: str, env: str):
-    compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
-    compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
-    compose_file = (
-        compose_preferred if os.path.exists(compose_preferred) else compose_fallback
-    )
-    if not os.path.exists(compose_file):
+def _docker_down(name: str, base_path: str, env: str):
+    compose_file = compose.resolve_file(base_path, env)
+    if compose_file is None:
         return
     project_name = compose.project_name(name, env)
     subprocess.run(
@@ -73,10 +69,11 @@ def product_clean(env_dev, env_prod, yes):
             data = tomllib.load(f)
         features = read_features_from_data(data, env)
 
-    _docker_down(product, os.path.join(product_path, "docker"), env)
+    _docker_down(product, product_path, env)
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
-        _docker_down(clean, compose.feature_docker_dir(workspace, clean), env)
+        feat_docker = compose.feature_docker_dir(workspace, clean)
+        _docker_down(clean, os.path.dirname(feat_docker), env)
 
     # ── 2. DB reset ──────────────────────────────────────────────────
     click.secho("\n🗄️  Resetting database...", fg="cyan")

@@ -26,6 +26,7 @@ Usage from any CLI command:
 
 import click
 
+from splent_cli.utils.feature_utils import normalize_namespace
 from splent_cli.utils.manifest import (
     STATES,
     get_feature_state,
@@ -205,7 +206,7 @@ def resolve_feature_key_from_entry(entry: str) -> tuple[str, str, str, str | Non
     raw = entry.strip()
     if "/" in raw:
         org_raw, rest = raw.split("/", 1)
-        ns = org_raw.replace("-", "_").replace(".", "_")
+        ns = normalize_namespace(org_raw)
     else:
         ns = "splent_io"
         rest = raw

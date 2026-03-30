@@ -66,6 +66,7 @@ def _print_diff_lines(diff: list[str]) -> None:
     is_flag=True,
     help="Show full unified diff for changed files.",
 )
+@context.requires_product
 def feature_drift(feature_identifier, verbose):
     """
     Compare SPLENT-owned files in a feature against the current templates.

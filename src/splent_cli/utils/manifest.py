@@ -36,6 +36,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from splent_cli.utils.feature_utils import normalize_namespace
+
 MANIFEST_FILENAME = "splent.manifest.json"
 SCHEMA_VERSION = "1"
 
@@ -92,7 +94,7 @@ def _save(product_path: str, product_name: str, data: dict) -> None:
 
 def feature_key(namespace: str, name: str, version: str | None = None) -> str:
     """Build the canonical manifest key for a feature."""
-    ns = namespace.replace("-", "_")
+    ns = normalize_namespace(namespace)
     return f"{ns}/{name}@{version}" if version else f"{ns}/{name}"
 
 
@@ -119,7 +121,7 @@ def set_feature_state(
     existing = data["features"].get(key, {})
 
     entry: dict = {
-        "namespace": namespace.replace("-", "_"),
+        "namespace": normalize_namespace(namespace),
         "name": name,
         "version": version,
         "mode": mode,

@@ -3,6 +3,7 @@ from flask import current_app
 from flask_migrate import upgrade as alembic_upgrade
 
 from splent_cli.utils.decorators import requires_db
+from splent_cli.services import context
 from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry
 from splent_framework.managers.migration_manager import MigrationManager
 from splent_framework.utils.feature_utils import get_features_from_pyproject
@@ -24,6 +25,7 @@ def _resolve_product():
     short_help="Apply pending migrations (all features or a single one).",
 )
 @click.argument("feature", required=False, default=None)
+@context.requires_product
 def db_upgrade(feature):
     app = current_app
 

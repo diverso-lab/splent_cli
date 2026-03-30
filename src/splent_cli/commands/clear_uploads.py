@@ -3,12 +3,14 @@ import shutil
 import os
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command(
     "clear:uploads",
     short_help="Clears the contents of the 'uploads' directory without removing the folder.",
 )
+@context.requires_product
 def clear_uploads():
     uploads_dir = PathUtils.get_uploads_dir()
 

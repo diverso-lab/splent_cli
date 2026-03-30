@@ -3,9 +3,64 @@
 from splent_framework.utils.feature_utils import get_features_from_pyproject  # noqa: F401
 
 
+DEFAULT_NAMESPACE = "splent-io"
+
+
 def get_normalize_feature_name_in_splent_format(name: str) -> str:
     """Add the splent_feature_ prefix if not already present."""
     return name if name.startswith("splent_feature_") else f"splent_feature_{name}"
+
+
+def normalize_namespace(ns: str) -> str:
+    """Normalize a namespace to a filesystem-safe Python identifier.
+
+    ``"splent-io"`` → ``"splent_io"``
+    ``"my.org"``    → ``"my_org"``
+    """
+    return ns.replace("-", "_").replace(".", "_")
+
+
+def parse_feature_entry(entry: str) -> tuple[str, str, str | None]:
+    """Parse a feature entry from pyproject.toml into (namespace_safe, name, version | None).
+
+    Accepted formats::
+
+        splent-io/splent_feature_auth@v1.2.7  →  ("splent_io", "splent_feature_auth", "v1.2.7")
+        splent-io/splent_feature_auth         →  ("splent_io", "splent_feature_auth", None)
+        splent_feature_auth@v1.2.7            →  ("splent_io", "splent_feature_auth", "v1.2.7")
+        splent_feature_auth                   →  ("splent_io", "splent_feature_auth", None)
+    """
+    base, _, version = entry.partition("@")
+    if "/" in base:
+        ns_raw, name = base.split("/", 1)
+    else:
+        ns_raw = DEFAULT_NAMESPACE
+        name = base
+    return normalize_namespace(ns_raw), name, version or None
+
+
+def load_product_pyproject(product_dir: str) -> dict:
+    """Load and return the parsed pyproject.toml dict for a product directory.
+
+    Raises FileNotFoundError if the file does not exist.
+    """
+    import os
+    import tomllib
+
+    path = os.path.join(product_dir, "pyproject.toml")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"pyproject.toml not found: {path}")
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def load_product_features(product_dir: str, env: str | None = None) -> list[str]:
+    """Read and return the merged feature list from a product's pyproject.toml.
+
+    Convenience wrapper around load_product_pyproject + read_features_from_data.
+    """
+    data = load_product_pyproject(product_dir)
+    return read_features_from_data(data, env)
 
 
 def _read_list(data: dict, key: str) -> list[str]:

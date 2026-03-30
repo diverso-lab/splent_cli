@@ -5,11 +5,14 @@ import docker
 import signal
 import psutil
 
+from splent_cli.services import context
+
 
 @click.command(
     "locust", short_help="Launches Locust for load testing based on the environment."
 )
 @click.argument("module", required=False)
+@context.requires_product
 def locust(module):
     # Absolute paths
     working_dir = os.getenv("WORKING_DIR", "")

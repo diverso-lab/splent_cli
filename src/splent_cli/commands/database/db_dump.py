@@ -4,12 +4,15 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 
+from splent_cli.services import context
+
 
 @click.command(
     "db:dump",
     short_help="Creates a dump of the MariaDB database with credentials from .env.",
 )
 @click.argument("filename", required=False)
+@context.requires_product
 def db_dump(filename):
     load_dotenv()
 

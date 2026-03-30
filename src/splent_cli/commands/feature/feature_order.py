@@ -14,6 +14,7 @@ says so.
 
 import json
 import os
+from collections import defaultdict
 from pathlib import Path
 
 import click
@@ -40,6 +41,28 @@ def _uvl_path(product_dir: str) -> str | None:
     except Exception:
         pass
     return None
+
+
+def _build_reverse_map(requires_map: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Return {package_name: [packages that depend on it]}."""
+    reverse: dict[str, list[str]] = defaultdict(list)
+    for requirer, deps in requires_map.items():
+        for dep in deps:
+            reverse[dep].append(requirer)
+    return dict(reverse)
+
+
+def _closure(start: str, graph: dict[str, list[str]], declared: set[str]) -> list[str]:
+    """Transitive closure over *graph* starting from *start*, limited to *declared* features."""
+    seen: set[str] = set()
+    queue = list(graph.get(start, []))
+    while queue:
+        current = queue.pop(0)
+        if current in seen or current not in declared:
+            continue
+        seen.add(current)
+        queue.extend(graph.get(current, []))
+    return sorted(seen)
 
 
 def _build_requires_map(uvl: str | None) -> dict[str, list[str]]:
@@ -101,7 +124,13 @@ def _parse_entry(entry: str) -> tuple[str, str, str | None]:
     default=False,
     help="Shorthand for --no-namespace --no-version.",
 )
-def feature_order(as_json, no_namespace, no_version, short):
+@click.option(
+    "--reverse",
+    "reverse_feature",
+    default=None,
+    help="Show what breaks if you remove this feature (reverse deps).",
+)
+def feature_order(as_json, no_namespace, no_version, short, reverse_feature):
     no_namespace = no_namespace or short
     no_version = no_version or short
     """
@@ -110,6 +139,9 @@ def feature_order(as_json, no_namespace, no_version, short):
     after their dependencies.
 
     The 'Requires' column shows direct feature dependencies from the UVL constraints.
+
+    With --reverse FEATURE, shows the transitive set of features that would
+    break if FEATURE were removed (reverse dependency closure).
     """
     product = context.require_app()
     workspace = str(context.workspace())
@@ -128,6 +160,61 @@ def feature_order(as_json, no_namespace, no_version, short):
     uvl = _uvl_path(product_dir)
     ordered = FeatureLoadOrderResolver().resolve(features_raw, uvl)
     requires_map = _build_requires_map(uvl)
+
+    # ── Reverse mode ──────────────────────────────────────────────
+    if reverse_feature is not None:
+        if not uvl or not os.path.isfile(uvl):
+            click.secho("❌ No UVL file found — cannot compute reverse dependencies.", fg="red")
+            raise SystemExit(1)
+
+        # Normalize: accept both "auth" and "splent_feature_auth"
+        target = reverse_feature
+        if target.startswith("splent_feature_"):
+            target = target[len("splent_feature_"):]
+
+        # Package name for display
+        pkg_target = f"splent_feature_{target}"
+
+        # Build declared feature set (short names)
+        declared_pkgs = set()
+        for entry in ordered:
+            _, name, _ = _parse_entry(entry)
+            declared_pkgs.add(name)
+
+        if pkg_target not in declared_pkgs:
+            click.secho(f"❌ '{reverse_feature}' is not declared in this product.", fg="red")
+            raise SystemExit(1)
+
+        reverse_map = _build_reverse_map(requires_map)
+        affected = _closure(pkg_target, reverse_map, declared_pkgs)
+
+        click.echo()
+        click.secho(f"  Reverse dependencies — {product}", bold=True)
+        click.echo(click.style(f"  UVL: {os.path.basename(uvl)}", fg="bright_black"))
+        click.echo()
+
+        if not affected:
+            click.secho(f"  ✓ No features depend on {pkg_target}.", fg="green")
+            click.echo(f"  It can be safely removed.")
+        else:
+            click.secho(
+                f"  ⚠ Removing {pkg_target} would break {len(affected)} feature(s):",
+                fg="red",
+                bold=True,
+            )
+            click.echo()
+
+            # Show direct vs transitive
+            direct = set(reverse_map.get(pkg_target, []))
+            for feat in affected:
+                marker = "direct" if feat in direct else "transitive"
+                color = "red" if marker == "direct" else "yellow"
+                click.echo(f"    {click.style('•', fg=color)} {feat}  ({marker})")
+
+        click.echo()
+        return
+
+    # ── Normal mode (load order) ──────────────────────────────────
 
     # Build output rows
     rows = []

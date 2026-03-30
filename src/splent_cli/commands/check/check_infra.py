@@ -104,19 +104,14 @@ def check_infra():
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
         bare_name = clean.split("/")[-1] if "/" in clean else clean
-        docker_dir = compose.feature_docker_dir(workspace, bare_name)
-        for fname in [f"docker-compose.{env}.yml", "docker-compose.yml"]:
-            cf = os.path.join(docker_dir, fname)
-            if os.path.isfile(cf):
-                compose_files.append((bare_name, cf))
-                break
+        feat_base = os.path.dirname(compose.feature_docker_dir(workspace, bare_name))
+        cf = compose.resolve_file(feat_base, env)
+        if cf:
+            compose_files.append((bare_name, cf))
 
-    product_docker_dir = os.path.join(product_path, "docker")
-    for fname in [f"docker-compose.{env}.yml", "docker-compose.yml"]:
-        cf = os.path.join(product_docker_dir, fname)
-        if os.path.isfile(cf):
-            compose_files.append((product, cf))
-            break
+    cf = compose.resolve_file(product_path, env)
+    if cf:
+        compose_files.append((product, cf))
 
     # --- Check 1: Port conflicts between declarations ---
     click.echo(click.style("  Ports", bold=True))

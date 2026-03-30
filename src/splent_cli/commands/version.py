@@ -1,12 +1,12 @@
 import os
 import json
 import hashlib
+import tomllib
 import click
 import importlib.metadata
 
-import tomllib
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import load_product_features, normalize_namespace
 
 
 def _pkg_version(name: str) -> str | None:
@@ -53,25 +53,13 @@ def _product_version(app_path: str) -> str | None:
         return None
 
 
-def _declared_features(app_path: str) -> list:
-    pyproject_path = os.path.join(app_path, "pyproject.toml")
-    if not os.path.exists(pyproject_path):
-        return []
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-        return read_features_from_data(data)
-    except (OSError, tomllib.TOMLDecodeError):
-        return []
-
-
 def _feature_location(workspace: str, ref: str) -> str:
     """Return 'cache', 'workspace', or 'missing'."""
     if "/" in ref:
         ns, rest = ref.split("/", 1)
     else:
         ns, rest = "splent_io", ref
-    ns_fs = ns.replace("-", "_")
+    ns_fs = normalize_namespace(ns)
     if "@" in rest:
         name, version = rest.split("@", 1)
         path = os.path.join(
@@ -127,7 +115,10 @@ def version(as_json: bool) -> None:
     if app_name:
         app_path = os.path.join(workspace, app_name)
         app_v = _product_version(app_path)
-        features = _declared_features(app_path)
+        try:
+            features = load_product_features(app_path)
+        except (FileNotFoundError, OSError):
+            features = []
         for ref in features:
             name, ver = _parse_feature_ref(ref)
             location = _feature_location(workspace, ref)

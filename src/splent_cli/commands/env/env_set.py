@@ -93,18 +93,6 @@ def set_pypi_interactive():
     remind_source()
 
 
-def set_developer_interactive():
-    click.echo("Enable SSH usage for SPLENT feature development?")
-
-    answer = click.prompt("(y/n)", type=click.Choice(["y", "n"], case_sensitive=False))
-    enabled = "true" if answer == "y" else "false"
-
-    set_var("SPLENT_USE_SSH", enabled)
-
-    click.secho(f"✔ SPLENT_USE_SSH set to {enabled}", fg="green")
-    remind_source()
-
-
 # -------------------------
 # ROOT COMMAND
 # -------------------------
@@ -146,11 +134,6 @@ def env_set_pypi():
     set_pypi_interactive()
 
 
-@env_set_group.command("developer")
-def env_set_developer():
-    set_developer_interactive()
-
-
 # -------------------------
 # WIZARD
 # -------------------------
@@ -162,8 +145,7 @@ def run_wizard():
         click.echo("1. Set mode (dev/prod)")
         click.echo("2. Configure GitHub credentials")
         click.echo("3. Configure PyPI token")
-        click.echo("4. Configure developer SSH mode")
-        click.echo("5. Exit")
+        click.echo("4. Exit")
         click.echo("--------------------------------")
 
         choice = click.prompt("Choose an option", type=int)
@@ -175,8 +157,6 @@ def run_wizard():
         elif choice == 3:
             set_pypi_interactive()
         elif choice == 4:
-            set_developer_interactive()
-        elif choice == 5:
             click.echo("Leaving wizard.")
             break
         else:

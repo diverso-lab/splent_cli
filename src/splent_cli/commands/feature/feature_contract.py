@@ -19,6 +19,7 @@ from pathlib import Path
 
 from splent_cli.services import context
 from splent_cli.commands.feature.feature_release import infer_contract, write_contract
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -49,7 +50,7 @@ def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
     """Resolve a feature: workspace root first, then cache."""
     if "/" in feature_ref:
         ns_raw, rest = feature_ref.split("/", 1)
-        ns = ns_raw.replace("-", "_").replace(".", "_")
+        ns = normalize_namespace(ns_raw)
     else:
         ns = DEFAULT_NAMESPACE
         rest = feature_ref
@@ -199,6 +200,7 @@ def _print_diff(current: dict, inferred: dict) -> bool:
     is_flag=True,
     help="Write the inferred contract to pyproject.toml (default: dry-run only).",
 )
+@context.requires_product
 def feature_contract(feature_ref, write):
     """
     Infer the feature contract from source code at any time during development.

@@ -167,7 +167,8 @@ class TestWriteCsvconfFull:
 # ---------------------------------------------------------------------------
 
 class TestReadSplentApp:
-    def test_returns_app_name(self, tmp_path):
+    def test_returns_app_name(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("SPLENT_APP", raising=False)
         app_dir = tmp_path / "myapp"
         app_dir.mkdir()
         (tmp_path / ".env").write_text("SPLENT_APP=myapp\n")

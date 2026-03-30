@@ -3,6 +3,7 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 from splent_cli.utils.manifest import feature_key, set_feature_state
 
 
@@ -28,7 +29,7 @@ def feature_add(full_name):
         raise SystemExit(1)
 
     namespace, feature_name = full_name.split("/", 1)
-    org_safe = namespace.replace("-", "_")
+    org_safe = normalize_namespace(namespace)
 
     workspace = str(context.workspace())
     product = context.require_app()

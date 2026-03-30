@@ -6,6 +6,7 @@ from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import text, MetaData
 
 from splent_cli.utils.decorators import requires_db
+from splent_cli.services import context
 from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry
 from splent_framework.db import db
 from splent_framework.managers.migration_manager import (
@@ -23,6 +24,7 @@ from splent_cli.commands.clear_uploads import clear_uploads
     short_help="Drop all tables and re-apply migrations from scratch.",
 )
 @click.option("-y", "--yes", is_flag=True, help="Confirm without prompting.")
+@context.requires_product
 def db_reset(yes):
     """
     Full database reset: drops ALL tables (data, alembic tracking,

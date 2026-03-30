@@ -1,13 +1,12 @@
 import json
 import os
-import tomllib
 import urllib.error
 import urllib.request
 
 import click
 
 from splent_cli.services import compose
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import load_product_features
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -115,7 +114,7 @@ def _status_label(declared: str | None, gh_versions: list[str]) -> tuple[str, st
 # ── Pyproject helpers ─────────────────────────────────────────────────────────
 
 
-def _read_product_features() -> list[str]:
+def _load_active_product_features() -> list[str]:
     """Return raw feature entries from the active product's pyproject.toml."""
     try:
         from splent_cli.services import context
@@ -124,12 +123,10 @@ def _read_product_features() -> list[str]:
         product = context.require_app()
     except SystemExit:
         return []
-    pyproject_path = os.path.join(workspace, product, "pyproject.toml")
-    if not os.path.exists(pyproject_path):
+    try:
+        return load_product_features(os.path.join(workspace, product))
+    except FileNotFoundError:
         return []
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
-    return read_features_from_data(data)
 
 
 def _declared_version(features: list[str], feature_name: str) -> str | None:
@@ -364,7 +361,7 @@ def feature_versions(
 
     # ── Status ────────────────────────────────────────────────────────────────
     if show_status:
-        features = _read_product_features()
+        features = _load_active_product_features()
         declared = _declared_version(features, feature_name)
         latest_gh = gh_versions[0] if gh_versions else None
         label, color = _status_label(declared, gh_versions)
@@ -418,7 +415,7 @@ def feature_versions(
 
 
 def _cmd_all(token: str | None, show_status: bool) -> None:
-    features = _read_product_features()
+    features = _load_active_product_features()
     if not features:
         click.secho(
             "❌ No features found. Make sure a product is selected and pyproject.toml exists.",

@@ -3,10 +3,13 @@ import subprocess
 from dotenv import load_dotenv
 import os
 
+from splent_cli.services import context
+
 
 @click.command(
     "db:console", short_help="Opens a MariaDB console with credentials from .env."
 )
+@context.requires_product
 def db_console():
     load_dotenv()
 

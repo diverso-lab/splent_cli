@@ -3,6 +3,8 @@ import click
 import subprocess
 from dotenv import load_dotenv
 
+from splent_cli.services import context
+
 
 @click.command(
     "db:restore",
@@ -10,6 +12,7 @@ from dotenv import load_dotenv
 )
 @click.argument("filename")
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
+@context.requires_product
 def db_restore(filename, yes):
     """
     Restore the database from FILENAME (a .sql dump).

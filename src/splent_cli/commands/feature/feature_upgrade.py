@@ -10,7 +10,7 @@ import click
 from packaging.version import Version, InvalidVersion
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
 
 
 # ── GitHub helpers ────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ def _read_features(pyproject_path: Path) -> list[dict]:
         if "/" in ref:
             ns_part, rest = ref.split("/", 1)
             ns_github = ns_part
-            ns_fs = ns_part.replace("-", "_")
+            ns_fs = normalize_namespace(ns_part)
         else:
             ns_github = "splent-io"
             ns_fs = "splent_io"
@@ -97,12 +97,8 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
     if target.exists():
         return
     ns_github = ns_fs.replace("_", "-")
-    use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
-    url = (
-        f"git@github.com:{ns_github}/{name}.git"
-        if use_ssh
-        else f"https://github.com/{ns_github}/{name}.git"
-    )
+    from splent_cli.utils.git_url import build_git_url
+    url, _ = build_git_url(ns_github, name)
     click.echo(f"  ⬇️  Cloning {ns_fs}/{name}@{version}...")
     subprocess.run(
         ["git", "clone", "--branch", version, "--depth", "1", url, str(target)],

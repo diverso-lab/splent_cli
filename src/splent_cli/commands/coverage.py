@@ -3,6 +3,7 @@ import subprocess
 import os
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command(
@@ -11,6 +12,7 @@ from splent_cli.utils.path_utils import PathUtils
 )
 @click.argument("module_name", required=False)
 @click.option("--html", is_flag=True, help="Generates an HTML coverage report.")
+@context.requires_product
 def coverage(module_name, html):
     modules_dir = PathUtils.get_modules_dir()
     test_path = modules_dir

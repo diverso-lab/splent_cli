@@ -19,6 +19,7 @@ from splent_cli.commands.feature.feature_status import feature_status
 from splent_cli.commands.version import version as version_cmd
 from splent_cli.commands.database.db_status import db_status
 from splent_cli.commands.product.product_status import product_status
+from splent_cli.commands.check.check_product import check_product
 
 
 # (name, command, requires_db, network_only)
@@ -28,6 +29,7 @@ CHECKS = [
     ("check:pyproject", check_pyproject, False, False),
     ("check:features", check_features, False, False),
     ("check:deps", check_deps, False, False),
+    ("check:product", check_product, False, False),
     ("feature:status", feature_status, False, False),
     ("check:docker", check_docker, False, False),
     ("check:infra", check_infra, False, False),
@@ -50,8 +52,9 @@ def doctor(fast):
       2. check:env         — Python, env vars, CLI/framework versions
       3. check:pyproject   — pyproject.toml parsing, deps, UVL
       4. check:features    — cache, symlinks, pip install, git state
-      5. feature:status    — lifecycle state of all features
-      6. check:docker      — Docker daemon, compose, containers
+      5. check:product     — env vars, config overwrites, blueprint registration
+      6. feature:status    — lifecycle state of all features
+      7. check:docker      — Docker daemon, compose, containers
       7. check:infra       — Docker infrastructure (ports, services, networks)
       8. product:status    — Docker container status for the product
       9. db:status         — Migration status for all features

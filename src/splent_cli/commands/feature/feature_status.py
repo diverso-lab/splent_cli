@@ -15,28 +15,15 @@ States
 """
 
 import os
-import tomllib
 import click
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import load_product_features
 from splent_cli.utils.manifest import (
     read_manifest,
     manifest_exists,
     STATE_COLORS,
     STATES,
 )
-
-
-def _read_pyproject_features(product_path: str) -> list[str]:
-    """Read all feature entries from pyproject.toml (base + env-specific)."""
-    pyproject = os.path.join(product_path, "pyproject.toml")
-    if not os.path.exists(pyproject):
-        return []
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
-    from splent_cli.utils.feature_utils import read_features_from_data
-
-    env = os.getenv("SPLENT_ENV")
-    return read_features_from_data(data, env)
 
 
 def _state_badge(state: str) -> str:
@@ -105,7 +92,10 @@ def feature_status(as_json):
         # Filter: only show features declared in pyproject.toml
         from splent_cli.utils.lifecycle import resolve_feature_key_from_entry
 
-        pyproject_entries = _read_pyproject_features(product_path)
+        try:
+            pyproject_entries = load_product_features(product_path, os.getenv("SPLENT_ENV"))
+        except FileNotFoundError:
+            pyproject_entries = []
         active_keys = set()
         for entry in pyproject_entries:
             key, _, _, _ = resolve_feature_key_from_entry(entry)
@@ -189,7 +179,10 @@ def feature_status(as_json):
         )
         click.echo(click.style(f"  {'─' * 66}", fg="bright_black"))
 
-        entries = _read_pyproject_features(product_path)
+        try:
+            entries = load_product_features(product_path, os.getenv("SPLENT_ENV"))
+        except FileNotFoundError:
+            entries = []
         if not entries:
             click.echo("  No features found in pyproject.toml.")
             click.echo()

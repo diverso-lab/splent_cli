@@ -2,13 +2,13 @@
 import pytest
 
 from splent_cli.commands.version import (
-    _declared_features,
     _feature_location,
     _fingerprint,
     _parse_feature_ref,
     _product_version,
     _pyproject_version,
 )
+from splent_cli.utils.feature_utils import load_product_features
 
 
 class TestPyprojectVersion:
@@ -53,20 +53,24 @@ class TestDeclaredFeatures:
             b'[tool.splent]\n'
             b'features = ["ns/feat_a@v1", "ns/feat_b"]\n'
         )
-        result = _declared_features(str(tmp_path))
+        result = load_product_features(str(tmp_path))
         assert "ns/feat_a@v1" in result
         assert "ns/feat_b" in result
 
     def test_returns_empty_list_when_no_pyproject(self, tmp_path):
-        assert _declared_features(str(tmp_path / "missing")) == []
+        import pytest
+        with pytest.raises(FileNotFoundError):
+            load_product_features(str(tmp_path / "missing"))
 
     def test_returns_empty_list_on_malformed_toml(self, tmp_path):
+        import pytest
         (tmp_path / "pyproject.toml").write_bytes(b"[bad toml\n")
-        assert _declared_features(str(tmp_path)) == []
+        with pytest.raises(Exception):
+            load_product_features(str(tmp_path))
 
     def test_returns_empty_list_when_no_features_key(self, tmp_path):
         (tmp_path / "pyproject.toml").write_bytes(b'[project]\nname = "x"\n')
-        assert _declared_features(str(tmp_path)) == []
+        assert load_product_features(str(tmp_path)) == []
 
 
 class TestFeatureLocation:

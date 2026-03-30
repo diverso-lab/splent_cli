@@ -10,6 +10,7 @@ from splent_cli.services import context
 @click.option(
     "--shell", is_flag=True, help="Output shell commands for eval."
 )
+@context.requires_product
 def product_deselect(shell):
     """Clear SPLENT_APP from .env, entering detached mode."""
     workspace = context.workspace()

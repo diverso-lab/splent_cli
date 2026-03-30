@@ -8,6 +8,7 @@ from splent_cli.services import context
 
 @click.command("selenium", help="Executes Selenium tests based on the environment.")
 @click.argument("module", required=False)
+@context.requires_product
 def selenium(module):
     # Absolute paths
     working_dir = str(context.workspace())

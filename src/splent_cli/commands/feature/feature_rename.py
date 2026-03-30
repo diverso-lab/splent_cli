@@ -5,6 +5,7 @@ import tomli_w
 import click
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import (
+    normalize_namespace,
     read_features_from_data,
     write_features_to_data,
 )
@@ -19,6 +20,7 @@ from splent_cli.utils.feature_utils import (
 @click.option(
     "--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io')."
 )
+@context.requires_product
 def feature_rename(old_name, new_name, namespace):
     """
     Safe rename for local, non-versioned, non-remote features.
@@ -33,7 +35,7 @@ def feature_rename(old_name, new_name, namespace):
     # -----------------------------
     github_user = os.getenv("GITHUB_USER")
     org = namespace or github_user or "splent-io"
-    org_safe = org.replace("-", "_")
+    org_safe = normalize_namespace(org)
 
     workspace = str(context.workspace())
     cache_root = os.path.join(workspace, ".splent_cache", "features", org_safe)

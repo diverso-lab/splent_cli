@@ -12,6 +12,7 @@ import click
 from pathlib import Path
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -33,7 +34,7 @@ def _resolve_editable(feature_ref: str, workspace: str) -> tuple[Path, str, str]
 
     if "/" in base:
         ns_raw, name = base.split("/", 1)
-        ns = ns_raw.replace("-", "_")
+        ns = normalize_namespace(ns_raw)
     else:
         ns = DEFAULT_NAMESPACE
         name = base
@@ -139,6 +140,7 @@ def _update_contract(pyproject_path: Path, slot: str) -> None:
 @click.argument("feature_ref")
 @click.argument("slot")
 @click.argument("function_name")
+@context.requires_product
 def feature_hook_add(feature_ref, slot, function_name):
     """
     Add a new template hook registration to a feature's hooks.py.

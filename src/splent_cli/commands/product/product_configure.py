@@ -11,6 +11,7 @@ import tomllib
 import click
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 def _load_spl_model(catalog_dir: str, spl_name: str):
@@ -261,7 +262,7 @@ def product_configure():
             continue
 
         # Try cache first
-        org_safe = org.replace("-", "_")
+        org_safe = normalize_namespace(org)
         org_cache = os.path.join(cache_dir, org_safe)
         version = None
         if os.path.isdir(org_cache):

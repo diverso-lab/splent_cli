@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.utils.feature_utils import normalize_namespace
 from splent_cli.services import context
 
 try:
@@ -55,7 +56,7 @@ def make_feature(full_name):
         raise SystemExit(1)
 
     namespace, feature_name = full_name.split("/", 1)
-    org_safe = namespace.replace("-", "_")
+    org_safe = normalize_namespace(namespace)
 
     # --- Target directory (workspace root for editable features) ---
     workspace = str(context.workspace())

@@ -3,13 +3,13 @@ import click
 import shutil
 import tomllib
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 
 def _get_namespace_safe(ns: str):
-    return ns.replace("-", "_")
+    return normalize_namespace(ns)
 
 
 def _find_products_using_editable(workspace, feature_name, ns_safe):
@@ -46,6 +46,7 @@ def _find_products_using_editable(workspace, feature_name, ns_safe):
 )
 @click.argument("feature_name", required=True)
 @click.option("--namespace", default=DEFAULT_NAMESPACE, help="Feature namespace.")
+@context.requires_product
 def feature_discard(feature_name, namespace):
     """
     Delete the editable version of a feature:

@@ -10,7 +10,7 @@ import click
 import tomllib
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
 
 
 def _pkg_installed(name: str) -> bool:
@@ -72,7 +72,7 @@ def check_features():
         # Parse entry
         if "/" in entry:
             org_raw, rest = entry.split("/", 1)
-            org_safe = org_raw.replace("-", "_").replace(".", "_")
+            org_safe = normalize_namespace(org_raw)
         else:
             org_safe = "splent_io"
             rest = entry

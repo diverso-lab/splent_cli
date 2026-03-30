@@ -18,6 +18,7 @@ import tomllib
 import click
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
@@ -88,7 +89,7 @@ def _read_contract(feature_path: str) -> dict | None:
 def _resolve_feature_path(
     workspace: str, product: str, org: str, package: str
 ) -> str | None:
-    org_safe = org.replace("-", "_").replace(".", "_")
+    org_safe = normalize_namespace(org)
     features_dir = os.path.join(workspace, product, "features", org_safe)
     if not os.path.isdir(features_dir):
         return None

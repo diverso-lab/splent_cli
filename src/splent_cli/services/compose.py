@@ -6,6 +6,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from splent_cli.utils.feature_utils import normalize_namespace
+
 
 def project_name(name: str, env: str) -> str:
     """Generate a safe Docker Compose project name from product/feature name and env."""
@@ -59,7 +61,7 @@ def normalize_feature_ref(feat: str) -> str:
         feat = f"splent_io/{feat}"
     else:
         org, rest = feat.split("/", 1)
-        feat = f"{org.replace('-', '_').replace('.', '_')}/{rest}"
+        feat = f"{normalize_namespace(org)}/{rest}"
     return feat
 
 
@@ -86,7 +88,7 @@ def parse_feature_identifier(identifier: str) -> tuple[str, str, str, str]:
         feature_name = identifier
 
     namespace_github = namespace.replace("_", "-")
-    namespace_fs = namespace.replace("-", "_").replace(".", "_")
+    namespace_fs = normalize_namespace(namespace)
 
     return namespace, namespace_github, namespace_fs, feature_name
 

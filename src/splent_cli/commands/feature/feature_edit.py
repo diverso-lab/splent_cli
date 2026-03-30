@@ -106,14 +106,8 @@ def _git_out(path: str, *args) -> subprocess.CompletedProcess:
 # GIT → ensure main branch editable
 # =====================================================================
 def ensure_git_main(path: str, ns_git: str, name: str):
-    token = os.getenv("GITHUB_TOKEN")
-    use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
-    if use_ssh:
-        remote_url = f"git@github.com:{ns_git}/{name}.git"
-    elif token:
-        remote_url = f"https://{token}@github.com/{ns_git}/{name}.git"
-    else:
-        remote_url = f"https://github.com/{ns_git}/{name}.git"
+    from splent_cli.utils.git_url import build_git_url
+    remote_url, _ = build_git_url(ns_git, name)
     r = _git_out(path, "remote", "get-url", "origin")
     if r.returncode == 0:
         _git_check(path, "remote", "set-url", "origin", remote_url)

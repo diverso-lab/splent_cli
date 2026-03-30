@@ -10,6 +10,7 @@ from pathlib import Path
 
 from splent_cli.commands.feature.feature_attach import feature_attach
 from splent_cli.services import context, release
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -81,7 +82,7 @@ def resolve_feature_path(feature_ref: str, version_arg: str, workspace: str):
 
     # Fallback: legacy location in cache (for backwards compat)
     cache_base = os.path.join(
-        workspace, ".splent_cache", "features", ns.replace("-", "_")
+        workspace, ".splent_cache", "features", normalize_namespace(ns)
     )
     base_dir = os.path.join(cache_base, name)
 
@@ -207,7 +208,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
       requires: features, env_vars
     """
     feature_root = Path(feature_path)
-    src_dir = feature_root / "src" / namespace.replace("-", "_") / feature_name
+    src_dir = feature_root / "src" / normalize_namespace(namespace) / feature_name
 
     routes = _extract_routes(src_dir / "routes.py")
     blueprints = _extract_blueprints(src_dir / "__init__.py")
@@ -413,26 +414,15 @@ def _semver_wizard(ns_github: str, feature_name: str) -> str:
 # =====================================================================
 def create_versioned_snapshot(namespace, feature_name, version, workspace):
     org_github = namespace.replace("_", "-")
-    namespace_fs = namespace.replace("-", "_").replace(".", "_")
+    namespace_fs = normalize_namespace(namespace)
 
     cache_root = os.path.join(workspace, ".splent_cache", "features", namespace_fs)
     snapshot_path = os.path.join(cache_root, f"{feature_name}@{version}")
 
-    token = os.getenv("GITHUB_TOKEN")
-    use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
-    if use_ssh:
-        clone_url = f"git@github.com:{org_github}/{feature_name}.git"
-    elif token:
-        clone_url = f"https://{token}@github.com/{org_github}/{feature_name}.git"
-    else:
-        clone_url = f"https://github.com/{org_github}/{feature_name}.git"
+    from splent_cli.utils.git_url import build_git_url
+    clone_url, display_url = build_git_url(org_github, feature_name)
 
     click.echo(f"📥 Creating versioned snapshot: {snapshot_path}")
-    display_url = (
-        f"git@github.com:{org_github}/{feature_name}.git"
-        if use_ssh
-        else f"https://github.com/{org_github}/{feature_name}.git"
-    )
     click.echo(f"🔗 GitHub repo: {display_url}")
 
     try:
@@ -472,6 +462,7 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
 @click.argument("feature_ref")
 @click.argument("version", required=False, default=None)
 @click.option("--attach", is_flag=True)
+@context.requires_product
 def feature_release(feature_ref, version, attach):
     validate_environment()
 

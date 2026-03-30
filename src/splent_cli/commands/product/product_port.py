@@ -179,6 +179,7 @@ def get_runtime_ports(container_name: str):
 
 @click.command("product:port", short_help="Show the product URL and PORT.")
 @click.option("--env", "env_flag", help="Environment to inspect (dev/prod).")
+@context.requires_product
 def product_port(env_flag):
     """
     Show the real port where the product web service is running.

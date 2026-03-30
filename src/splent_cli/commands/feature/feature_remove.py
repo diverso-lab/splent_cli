@@ -4,6 +4,7 @@ import tomli_w
 import click
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import (
+    normalize_namespace,
     read_features_from_data,
     write_features_to_data,
 )
@@ -43,7 +44,7 @@ def feature_remove(feature_name, namespace, force):
         namespace, feature_name = feature_name.split("/", 1)
 
     org = namespace or "splent-io"
-    org_safe = org.replace("-", "_").replace(".", "_")
+    org_safe = normalize_namespace(org)
 
     product_path = os.path.join(workspace, product)
 

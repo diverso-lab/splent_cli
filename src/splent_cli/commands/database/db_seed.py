@@ -4,7 +4,8 @@ import os
 import click
 
 from splent_cli.utils.decorators import requires_db
-from splent_cli.utils.feature_utils import get_features_from_pyproject
+from splent_cli.services import context
+from splent_cli.utils.feature_utils import get_features_from_pyproject, normalize_namespace
 from splent_framework.seeders.BaseSeeder import BaseSeeder
 from splent_framework.managers.feature_order import FeatureLoadOrderResolver
 from splent_framework.utils.pyproject_reader import PyprojectReader
@@ -52,7 +53,7 @@ def get_installed_seeders(specific_module=None):
         base_name = feature.split("@")[0]
         if "/" in base_name:
             org_raw, base_name = base_name.split("/", 1)
-            org_safe = org_raw.replace("-", "_").replace(".", "_")
+            org_safe = normalize_namespace(org_raw)
         else:
             org_safe = "splent_io"
         module_name = f"{org_safe}.{base_name}.seeders"
@@ -122,6 +123,7 @@ def _truncate_data():
 )
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
 @click.argument("module", required=False)
+@context.requires_product
 def db_seed(reset, yes, module):
     if reset:
         if yes or click.confirm(

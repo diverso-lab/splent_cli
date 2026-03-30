@@ -23,6 +23,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
@@ -51,7 +52,7 @@ def _resolve_feature(
 
     if "/" in base:
         ns_raw, name = base.split("/", 1)
-        ns = ns_raw.replace("-", "_")
+        ns = normalize_namespace(ns_raw)
     else:
         ns = DEFAULT_NAMESPACE
         name = base
@@ -76,7 +77,7 @@ def _parse_pyproject_entry(entry: str) -> tuple[str, str, str | None]:
     base, _, version = entry.partition("@")
     if "/" in base:
         ns_raw, name = base.split("/", 1)
-        ns = ns_raw.replace("-", "_")
+        ns = normalize_namespace(ns_raw)
     else:
         ns = DEFAULT_NAMESPACE
         name = base

@@ -4,7 +4,7 @@ import shutil
 import click
 from splent_cli.services import context
 from splent_cli.commands.feature.feature_clone import feature_clone
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
 from splent_cli.utils.cache_utils import make_feature_writable
 
 
@@ -55,7 +55,7 @@ def product_sync(ctx, force):
             else:
                 ns_raw = "splent-io"
                 name = entry
-            ns_safe = ns_raw.replace("-", "_").replace(".", "_")
+            ns_safe = normalize_namespace(ns_raw)
 
             feature_root = os.path.join(workspace, name)
             if not os.path.exists(feature_root):
@@ -85,7 +85,7 @@ def product_sync(ctx, force):
             click.secho(f"⚠️  Skipping '{entry}': no version specified.", fg="yellow")
             continue
 
-        namespace_safe = namespace.replace("-", "_").replace(".", "_")
+        namespace_safe = normalize_namespace(namespace)
 
         cache_dir = os.path.join(
             workspace, ".splent_cache", "features", namespace_safe, f"{repo}@{version}"
@@ -164,7 +164,7 @@ def _clean_stale_symlinks(features_dir: str, declared: list[str]) -> None:
             ns_raw, rest = entry.split("/", 1)
         else:
             ns_raw, rest = "splent-io", entry
-        ns_safe = ns_raw.replace("-", "_").replace(".", "_")
+        ns_safe = normalize_namespace(ns_raw)
 
         name, _, version = rest.partition("@")
         if version:

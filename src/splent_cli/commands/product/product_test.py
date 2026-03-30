@@ -1,90 +1,88 @@
 """
 product:test — Run all feature tests for a product.
 
-Can be used in detached mode (with product name argument) or with the
-active product. Designed for batch testing across multiple products.
+Works in both modes:
+  - Attached: tests the active product (or override with --product).
+  - Detached: requires --product.
+
+Multiple --product flags can be passed to test several products in a single run.
 """
 
 import os
 import subprocess
-import sys
 
 import click
-import tomllib
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import load_product_features
+
+
+def _run_product_tests(product, workspace, levels, verbose):
+    """Run feature:test for a single product. Returns the exit code."""
+    product_path = os.path.join(workspace, product)
+
+    try:
+        features = load_product_features(product_path, os.getenv("SPLENT_ENV", "dev"))
+    except FileNotFoundError:
+        click.secho(f"❌ Product not found: {product}", fg="red")
+        return 1
+
+    if not features:
+        click.secho(f"  ℹ️  {product}: no features declared.", fg="yellow")
+        return 0
+
+    click.secho(
+        f"\n  ▶  {product}  ({len(features)} features)",
+        fg="cyan",
+        bold=True,
+    )
+
+    cmd = ["splent", "feature:test"]
+    cmd.extend(levels)
+    if verbose:
+        cmd.append("-v")
+
+    env_vars = dict(os.environ)
+    env_vars["SPLENT_APP"] = product
+
+    result = subprocess.run(cmd, env=env_vars)
+    return result.returncode
 
 
 @click.command(
     "product:test",
     short_help="Run all feature tests for a product.",
 )
-@click.argument("product_name", required=False)
+@click.option(
+    "--product", "products", multiple=True,
+    help="Product(s) to test. Can be repeated. Defaults to active product.",
+)
 @click.option("--unit", "level_unit", is_flag=True, help="Run unit tests only.")
 @click.option("--integration", "level_integration", is_flag=True, help="Run integration tests only.")
 @click.option("--functional", "level_functional", is_flag=True, help="Run functional tests only.")
 @click.option("-v", "verbose", is_flag=True, help="Verbose output.")
-def product_test(product_name, level_unit, level_integration, level_functional, verbose):
-    """Run all feature tests for a product.
+def product_test(products, level_unit, level_integration, level_functional, verbose):
+    """Run all feature tests for one or more products.
 
     \b
-    Requires detached mode (no SPLENT_APP selected):
-        splent product:test sample_splent_app --unit
-
-    \b
-    This is a convenience wrapper around `splent feature:test` that
-    tests ALL features declared in the product's pyproject.toml.
-    Designed for batch testing across multiple products.
+    Examples:
+        splent product:test                              # active product
+        splent product:test --product my_app             # explicit product
+        splent product:test --product app_a --product app_b --unit
     """
-    if not context.is_detached():
-        click.secho(
-            f"❌ A product is currently selected: {context.active_app()}\n"
-            f"   product:test requires detached mode.\n"
-            f"   Run: splent product:deselect\n"
-            f"   Or use: splent feature:test --unit",
-            fg="red",
-        )
-        raise SystemExit(1)
-
-    product = product_name
-    if not product:
-        click.secho(
-            "❌ No product specified.\n"
-            "   Usage: splent product:test <product_name> [--unit|--integration|--functional]",
-            fg="red",
-        )
-        raise SystemExit(1)
+    if not products:
+        active = context.active_app()
+        if not active:
+            click.secho(
+                "❌ No product selected and no --product given.\n"
+                "   Run: splent product:select <name>  or pass --product <name>",
+                fg="red",
+            )
+            raise SystemExit(1)
+        products = (active,)
 
     workspace = str(context.workspace())
-    product_path = os.path.join(workspace, product)
-    pyproject_path = os.path.join(product_path, "pyproject.toml")
 
-    if not os.path.isfile(pyproject_path):
-        click.secho(f"❌ Product not found: {product}", fg="red")
-        raise SystemExit(1)
-
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
-
-    env = os.getenv("SPLENT_ENV", "dev")
-    features = read_features_from_data(data, env)
-
-    if not features:
-        click.secho("ℹ️  No features declared.", fg="yellow")
-        return
-
-    click.echo(
-        click.style(
-            f"\n🧪 product:test — {product} ({len(features)} features)\n",
-            bold=True,
-        )
-    )
-
-    # Build splent feature:test command
-    cmd = ["splent", "feature:test"]
-
-    # Level flags
     levels = []
     if level_unit:
         levels.append("--unit")
@@ -92,23 +90,24 @@ def product_test(product_name, level_unit, level_integration, level_functional, 
         levels.append("--integration")
     if level_functional:
         levels.append("--functional")
-    # Default: unit + integration + functional (same as feature:test default)
 
-    cmd.extend(levels)
-    if verbose:
-        cmd.append("-v")
+    click.secho(f"\n🧪 product:test — {len(products)} product(s)", bold=True)
 
-    # Set SPLENT_APP for the subprocess if running in detached mode
-    env_vars = dict(os.environ)
-    env_vars["SPLENT_APP"] = product
+    failed = []
+    for product in products:
+        rc = _run_product_tests(product, workspace, levels, verbose)
+        if rc != 0:
+            failed.append(product)
 
-    result = subprocess.run(cmd, env=env_vars)
-
-    if result.returncode != 0:
-        click.secho(f"\n❌ product:test failed for {product}.", fg="red")
-        raise SystemExit(result.returncode)
-
-    click.secho(f"\n✅ product:test passed for {product}.", fg="green")
+    click.echo()
+    if not failed:
+        click.secho(f"✅ All {len(products)} product(s) passed.", fg="green")
+    else:
+        click.secho(
+            f"❌ {len(failed)}/{len(products)} product(s) failed: {', '.join(failed)}",
+            fg="red",
+        )
+        raise SystemExit(1)
 
 
 cli_command = product_test

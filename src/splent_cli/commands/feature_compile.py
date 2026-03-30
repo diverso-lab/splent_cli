@@ -9,6 +9,7 @@ from splent_cli.services import compose, context
 from splent_cli.utils.feature_utils import (
     get_features_from_pyproject,
     get_normalize_feature_name_in_splent_format,
+    normalize_namespace,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ def _compile_in_container(container_id, feature, watch, production, workspace, p
     parts = feature.split("/")
     if len(parts) == 2:
         org_raw, name_version = parts
-        org_safe = org_raw.replace("-", "_").replace(".", "_")
+        org_safe = normalize_namespace(org_raw)
     else:
         org_safe, name_version = "splent_io", parts[0]
 

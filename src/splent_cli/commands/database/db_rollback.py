@@ -5,6 +5,7 @@ from flask import current_app
 from flask_migrate import downgrade as alembic_downgrade
 
 from splent_cli.utils.decorators import requires_db
+from splent_cli.services import context
 from splent_cli.utils.lifecycle import advance_state, resolve_feature_key_from_entry
 from splent_framework.managers.migration_manager import MigrationManager
 from splent_framework.managers.feature_order import FeatureLoadOrderResolver
@@ -72,6 +73,7 @@ def _find_dependents(feature: str, product_dir: str) -> list[str]:
 @click.option(
     "--cascade", is_flag=True, help="Also rollback dependent features."
 )
+@context.requires_product
 def db_rollback(feature, steps, cascade):
     app = current_app
     product_path = PathUtils.get_app_base_dir()

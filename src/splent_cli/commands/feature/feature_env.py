@@ -3,7 +3,7 @@ import subprocess
 import tomllib
 import click
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
 
 
 @click.command(
@@ -62,7 +62,7 @@ def feature_env(feature_name, generate, env_name):
 
     # Derive org_safe from the entry itself (e.g. "splent_io/splent_feature_auth@v1")
     if "/" in feature_entry:
-        org_safe = feature_entry.split("/", 1)[0].replace("-", "_").replace(".", "_")
+        org_safe = normalize_namespace(feature_entry.split("/", 1)[0])
         entry_basename = feature_entry.split("/", 1)[1]
     else:
         org_safe = "splent_io"
