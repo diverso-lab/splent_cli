@@ -222,6 +222,10 @@ def check_product():
         click.echo()
         return
 
+    # Check for stale contracts before reading them
+    from splent_cli.utils.contract_freshness import check_and_refresh_contracts
+    check_and_refresh_contracts(workspace, features)
+
     _check_env_vars(workspace, product_path, features, _ok, _fail, _warn)
     _check_symlinks(product_path, features, _ok, _fail, _warn)
     _check_config_overwrites(_ok, _fail, _warn)

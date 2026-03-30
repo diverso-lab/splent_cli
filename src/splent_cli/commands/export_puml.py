@@ -800,6 +800,15 @@ def export_puml(
     click.echo(f"📖 Reading UVL model: {uvl_path}")
     uvl_data = _parse_uvl(uvl_path)
 
+    # Check for stale contracts
+    from splent_cli.utils.contract_freshness import check_and_refresh_contracts
+    from splent_cli.utils.feature_utils import load_product_features
+    try:
+        features_raw = load_product_features(product_dir, os.getenv("SPLENT_ENV"))
+        check_and_refresh_contracts(workspace, features_raw)
+    except FileNotFoundError:
+        pass
+
     # Resolve feature paths
     feature_paths: dict[str, str] = {}
     for feat in uvl_data["features"]:

@@ -71,6 +71,10 @@ def feature_xray(feature_ref, filter_cat, validate):
     env = os.getenv("SPLENT_ENV", "dev")
     features = read_features_from_data(data, env)
 
+    # Check for stale contracts
+    from splent_cli.utils.contract_freshness import check_and_refresh_contracts
+    check_and_refresh_contracts(workspace, features)
+
     # Collect data for all features
     feature_data = {}  # bare_name -> {extensible, refinement, contract}
     for feat in features:

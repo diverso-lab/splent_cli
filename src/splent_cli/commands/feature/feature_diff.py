@@ -537,6 +537,15 @@ def feature_diff(feature_ref_a, feature_ref_b, check_all, as_json, min_severity)
         product = context.require_app()
         product_dir = os.path.join(workspace, product)
 
+        # Check for stale contracts before reading them
+        from splent_cli.utils.contract_freshness import check_and_refresh_contracts
+        from splent_cli.utils.feature_utils import load_product_features
+        try:
+            features_raw = load_product_features(product_dir, os.getenv("SPLENT_ENV"))
+            check_and_refresh_contracts(workspace, features_raw)
+        except FileNotFoundError:
+            pass
+
         labeled_paths = _resolve_all_product_features(product_dir, workspace)
         if not labeled_paths:
             click.echo("  No features resolved.")
