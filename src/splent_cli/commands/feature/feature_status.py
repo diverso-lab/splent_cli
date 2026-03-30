@@ -61,7 +61,9 @@ def _progress_bar(state: str, has_migrations: bool = True) -> str:
     short_help="Show lifecycle state of all features in the active product.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Output raw manifest as JSON.")
-def feature_status(as_json):
+@click.option("--integrity", is_flag=True, help="Verify manifest against actual system state.")
+@click.option("--fix", "do_fix", is_flag=True, help="Fix detected integrity issues.")
+def feature_status(as_json, integrity, do_fix):
     """
     Show the lifecycle state of every feature tracked in splent.manifest.json.
 
@@ -170,6 +172,57 @@ def feature_status(as_json):
                     fg="bright_black",
                 )
             )
+
+        # ── Integrity check ──────────────────────────────────────────
+        if integrity or do_fix:
+            from splent_cli.utils.integrity import check_feature_integrity, fix_feature
+
+            click.echo()
+            click.secho("  Integrity check", bold=True)
+            click.echo(click.style(f"  {'─' * 66}", fg="bright_black"))
+
+            total_ok = total_fail = 0
+
+            for key, entry in sorted(features.items()):
+                name = entry.get("name", key)
+                ns_safe = entry.get("namespace", "splent_io")
+                version = entry.get("version")
+                state = entry.get("state", "declared")
+
+                results = check_feature_integrity(
+                    product_path, ns_safe, name, version, state
+                )
+
+                has_issues = any(not r["ok"] for r in results)
+                name_color = "red" if has_issues else "green"
+                click.echo(f"\n  {click.style(name, fg=name_color, bold=True)}")
+
+                for r in results:
+                    if r["ok"]:
+                        total_ok += 1
+                        click.echo(
+                            click.style("    [✔] ", fg="green")
+                            + f"{r['check']}: {r['detail']}"
+                        )
+                    else:
+                        total_fail += 1
+                        click.echo(
+                            click.style("    [✖] ", fg="red")
+                            + f"{r['check']}: {r['detail']}"
+                        )
+
+                if has_issues and do_fix:
+                    issues = [r for r in results if not r["ok"]]
+                    fix_feature(product_path, workspace, ns_safe, name, version, issues)
+
+            click.echo()
+            if total_fail == 0:
+                click.secho(f"  ✅ All {total_ok} checks passed.", fg="green")
+            else:
+                click.secho(
+                    f"  {total_ok} passed, {total_fail} failed.",
+                    fg="red" if total_fail else "green",
+                )
 
     else:
         # No manifest — fallback to pyproject.toml
