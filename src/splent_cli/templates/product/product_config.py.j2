@@ -1,42 +1,37 @@
 """
-Default configuration for this SPLENT product
+Configuration for {{ product_name }}.
 
-You can customize these classes as needed.
-SPLENT will always use this file, falling back to the framework
-only if you remove a config class.
+Each class extends the framework's base configuration. Only override
+what your product needs — everything else is inherited automatically.
+
+Hierarchy (later layers win):
+  1. Framework defaults (Config base class)
+  2. This file (product config)
+  3. Feature inject_config() calls
 """
 
+import os
+
 from splent_framework.configuration.default_config import (
-    Config as BaseConfig,
-    _build_db_uri,
+    DevelopmentConfig as BaseDev,
+    TestingConfig as BaseTest,
+    ProductionConfig as BaseProd,
 )
 
 
-class DevelopmentConfig(BaseConfig):
-    DEBUG = True
-    TEMPLATES_AUTO_RELOAD = True
-
-    def __init__(self):
-        super().__init__()
-        self.SQLALCHEMY_DATABASE_URI = _build_db_uri("MARIADB_DATABASE", "default_db")
+class DevelopmentConfig(BaseDev):
+    # Add product-specific dev settings here.
+    # Example: EXPLAIN_TEMPLATE_LOADING = True
+    pass
 
 
-class TestingConfig(BaseConfig):
-    TESTING = True
-    WTF_CSRF_ENABLED = False
-    SESSION_TYPE = "filesystem"
-    SESSION_FILE_DIR = "/tmp/flask_sessions"
-
-    def __init__(self):
-        super().__init__()
-        self.SQLALCHEMY_DATABASE_URI = _build_db_uri(
-            "MARIADB_TEST_DATABASE", "default_test_db"
-        )
+class TestingConfig(BaseTest):
+    # Add product-specific test settings here.
+    # Example: PRESERVE_CONTEXT_ON_EXCEPTION = False
+    pass
 
 
-class ProductionConfig(BaseConfig):
-    DEBUG = False
-
-    def __init__(self):
-        super().__init__()
-        self.SQLALCHEMY_DATABASE_URI = _build_db_uri("MARIADB_DATABASE", "default_db")
+class ProductionConfig(BaseProd):
+    # Add product-specific production settings here.
+    # Example: SESSION_COOKIE_SECURE = True
+    pass

@@ -1,1 +1,12 @@
-console.log("Hi, I am a script loaded from {{ feature_name }} module");
+// Entry point for {{ feature_name }} frontend assets.
+// Add your JavaScript here. Webpack compiles this into assets/dist/{{ feature_name }}.bundle.js
+//
+// To load the compiled bundle in the product layout, register it in hooks.py:
+//
+//   from splent_framework.hooks.template_hooks import register_template_hook
+//   from flask import url_for
+//
+//   def {{ short_name }}_scripts():
+//       return '<script src="' + url_for("{{ short_name }}.assets", subfolder="dist", filename="{{ feature_name }}.bundle.js") + '"></script>'
+//
+//   register_template_hook("layout.scripts", {{ short_name }}_scripts)

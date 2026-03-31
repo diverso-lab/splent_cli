@@ -1,21 +1,27 @@
-from splent_framework.hooks.template_hooks import register_template_hook
-from flask import url_for
+"""
+Template hooks for {{ feature_name }}.
 
+Register hooks here to inject HTML into the product's layout slots.
+Only register layout.scripts if this feature has compiled frontend assets.
 
-# ── Script hooks ─────────────────────────────────────────────────────────────
-# Register the feature's compiled bundle so it loads on every page
-# via the layout.scripts hook in the product's base_template.html.
+Examples:
 
-def {{ short_name }}_scripts():
-    return (
-        '<script src="'
-        + url_for(
-            "{{ short_name }}.assets",
-            subfolder="dist",
-            filename="{{ feature_name }}.bundle.js",
+    from splent_framework.hooks.template_hooks import register_template_hook
+    from flask import render_template, url_for
+
+    # Inject a sidebar fragment
+    def my_sidebar():
+        return render_template("hooks/sidebar_items.html")
+
+    register_template_hook("layout.authenticated_sidebar", my_sidebar)
+
+    # Inject the compiled JS bundle (only if assets/dist/ exists)
+    def {{ short_name }}_scripts():
+        return (
+            '<script src="'
+            + url_for("{{ short_name }}.assets", subfolder="dist", filename="{{ feature_name }}.bundle.js")
+            + '"></script>'
         )
-        + '"></script>'
-    )
 
-
-register_template_hook("layout.scripts", {{ short_name }}_scripts)
+    register_template_hook("layout.scripts", {{ short_name }}_scripts)
+"""
