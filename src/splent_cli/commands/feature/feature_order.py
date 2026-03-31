@@ -31,7 +31,9 @@ def _uvl_path(product_dir: str) -> str | None:
         spl_name = reader.splent_config.get("spl")
         if spl_name:
             workspace = os.getenv("WORKING_DIR", "/workspace")
-            catalog_uvl = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+            catalog_uvl = os.path.join(
+                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
+            )
             if os.path.isfile(catalog_uvl):
                 return catalog_uvl
         # 2. Legacy: [tool.splent.uvl].file
@@ -164,13 +166,15 @@ def feature_order(as_json, no_namespace, no_version, short, reverse_feature):
     # ── Reverse mode ──────────────────────────────────────────────
     if reverse_feature is not None:
         if not uvl or not os.path.isfile(uvl):
-            click.secho("❌ No UVL file found — cannot compute reverse dependencies.", fg="red")
+            click.secho(
+                "❌ No UVL file found — cannot compute reverse dependencies.", fg="red"
+            )
             raise SystemExit(1)
 
         # Normalize: accept both "auth" and "splent_feature_auth"
         target = reverse_feature
         if target.startswith("splent_feature_"):
-            target = target[len("splent_feature_"):]
+            target = target[len("splent_feature_") :]
 
         # Package name for display
         pkg_target = f"splent_feature_{target}"
@@ -182,7 +186,9 @@ def feature_order(as_json, no_namespace, no_version, short, reverse_feature):
             declared_pkgs.add(name)
 
         if pkg_target not in declared_pkgs:
-            click.secho(f"❌ '{reverse_feature}' is not declared in this product.", fg="red")
+            click.secho(
+                f"❌ '{reverse_feature}' is not declared in this product.", fg="red"
+            )
             raise SystemExit(1)
 
         reverse_map = _build_reverse_map(requires_map)
@@ -195,7 +201,7 @@ def feature_order(as_json, no_namespace, no_version, short, reverse_feature):
 
         if not affected:
             click.secho(f"  ✓ No features depend on {pkg_target}.", fg="green")
-            click.echo(f"  It can be safely removed.")
+            click.echo("  It can be safely removed.")
         else:
             click.secho(
                 f"  ⚠ Removing {pkg_target} would break {len(affected)} feature(s):",

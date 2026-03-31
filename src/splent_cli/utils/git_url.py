@@ -15,8 +15,15 @@ def _ssh_available() -> bool:
     """Check if SSH access to github.com works (key loaded, agent running)."""
     try:
         result = subprocess.run(
-            ["ssh", "-T", "-o", "StrictHostKeyChecking=accept-new",
-             "-o", "ConnectTimeout=5", "git@github.com"],
+            [
+                "ssh",
+                "-T",
+                "-o",
+                "StrictHostKeyChecking=accept-new",
+                "-o",
+                "ConnectTimeout=5",
+                "git@github.com",
+            ],
             capture_output=True,
             text=True,
             timeout=10,

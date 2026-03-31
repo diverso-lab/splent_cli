@@ -77,6 +77,7 @@ def resolve_uvl_path(workspace: str, app_name: str, data: dict) -> str:
     spl_name = splent.get("spl")
     if spl_name:
         from splent_cli.commands.spl.spl_utils import _ensure_uvl
+
         return _ensure_uvl(spl_name)
 
     # 2. Legacy: product/uvl/{file}
@@ -88,8 +89,8 @@ def resolve_uvl_path(workspace: str, app_name: str, data: dict) -> str:
             return legacy_path
 
     raise click.ClickException(
-        f"UVL file not found. Set [tool.splent].spl in pyproject.toml "
-        f"or ensure [tool.splent.uvl].file points to an existing file."
+        "UVL file not found. Set [tool.splent].spl in pyproject.toml "
+        "or ensure [tool.splent.uvl].file points to an existing file."
     )
 
 
@@ -218,7 +219,10 @@ def run_uvl_check(workspace: str) -> tuple[bool, str]:
         try:
             local_uvl = resolve_uvl_path(workspace, app_name, data)
         except Exception:
-            return False, "UVL file not found. Check [tool.splent].spl or [tool.splent.uvl]."
+            return (
+                False,
+                "UVL file not found. Check [tool.splent].spl or [tool.splent.uvl].",
+            )
         universe, root_name = list_all_features_from_uvl(local_uvl)
         env = os.getenv("SPLENT_ENV", "dev")
         deps = read_features_from_data(data, env)
@@ -227,6 +231,7 @@ def run_uvl_check(workspace: str) -> tuple[bool, str]:
 
         # Activate parent features (abstract groups like session_type)
         from splent_cli.commands.product.product_validate import _infer_parents
+
         selected |= _infer_parents(local_uvl, selected)
 
         unknown = sorted(f for f in selected if f not in universe)

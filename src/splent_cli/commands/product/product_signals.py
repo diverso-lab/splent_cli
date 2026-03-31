@@ -19,9 +19,11 @@ def product_signals():
 
     os.environ.setdefault("SPLENT_ENV", "dev")
     from splent_cli.utils.dynamic_imports import get_app
-    app = get_app()
+
+    get_app()
 
     from splent_framework.signals.registry import get_registry
+
     registry = get_registry()
 
     if not registry:
@@ -36,9 +38,7 @@ def product_signals():
 
     col_signal = max(len(name) for name in registry)
     col_signal = max(col_signal, 6)
-    col_provider = max(
-        len(info["provider"]) for info in registry.values()
-    )
+    col_provider = max(len(info["provider"]) for info in registry.values())
     col_provider = max(col_provider, 8)
 
     header = f"  {'SIGNAL':<{col_signal}}  {'EMITTED BY':<{col_provider}}  LISTENERS"

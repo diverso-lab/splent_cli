@@ -291,8 +291,13 @@ def _check_config_py(feature_path, ns, name, inferred):
             f"  ⚠  config.py not found — {len(env_vars)} env var(s) detected but not injected into app.config.",
             fg="yellow",
         )
-        if click.confirm("     Run feature:inject-config to generate it?", default=True):
-            from splent_cli.commands.feature.feature_inject_config import feature_inject_config
+        if click.confirm(
+            "     Run feature:inject-config to generate it?", default=True
+        ):
+            from splent_cli.commands.feature.feature_inject_config import (
+                feature_inject_config,
+            )
+
             ctx = click.get_current_context()
             ctx.invoke(feature_inject_config, feature_ref=name, dry_run=False)
         return
@@ -309,7 +314,10 @@ def _check_config_py(feature_path, ns, name, inferred):
             fg="yellow",
         )
         if click.confirm("     Run feature:inject-config to update it?", default=True):
-            from splent_cli.commands.feature.feature_inject_config import feature_inject_config
+            from splent_cli.commands.feature.feature_inject_config import (
+                feature_inject_config,
+            )
+
             ctx = click.get_current_context()
             ctx.invoke(feature_inject_config, feature_ref=name, dry_run=False)
 

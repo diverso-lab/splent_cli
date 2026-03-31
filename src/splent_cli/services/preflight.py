@@ -5,12 +5,10 @@ Returns True if all checks pass, False otherwise.
 """
 
 import os
-import tomllib
 
 import click
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.commands.uvl.uvl_utils import run_uvl_check
 from splent_cli.commands.feature.feature_diff import run_all_product_check
 

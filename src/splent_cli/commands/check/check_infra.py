@@ -17,7 +17,8 @@ def _parse_compose_ports(compose_file: str) -> list[tuple[int, str, str]]:
     """Return [(host_port, service_name, source_label)] from a compose file."""
     result = subprocess.run(
         ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         return []
@@ -42,7 +43,8 @@ def _parse_compose_services(compose_file: str) -> list[tuple[str, str, str]]:
     """Return [(service_name, container_name_or_None, source_label)]."""
     result = subprocess.run(
         ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         return []
@@ -58,7 +60,10 @@ def _parse_compose_services(compose_file: str) -> list[tuple[str, str, str]]:
     return services
 
 
-@click.command("check:infra", short_help="Validate Docker infrastructure (ports, services, networks).")
+@click.command(
+    "check:infra",
+    short_help="Validate Docker infrastructure (ports, services, networks).",
+)
 def check_infra():
     """Check for port conflicts, duplicate services, container name collisions,
     and network availability across all features and the product."""
@@ -132,7 +137,8 @@ def check_infra():
     for port in all_ports:
         result = subprocess.run(
             ["docker", "ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Ports}}"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         for line in result.stdout.splitlines():
             parts = line.split("\t", 2)
@@ -170,9 +176,13 @@ def check_infra():
     cn_conflicts = {c: srcs for c, srcs in all_container_names.items() if len(srcs) > 1}
     if cn_conflicts:
         for cn, sources in sorted(cn_conflicts.items()):
-            _fail(f"Container name '{cn}' used by multiple features: {', '.join(sources)}")
+            _fail(
+                f"Container name '{cn}' used by multiple features: {', '.join(sources)}"
+            )
     else:
-        _ok(f"No container name collisions ({len(all_container_names)} named containers)")
+        _ok(
+            f"No container name collisions ({len(all_container_names)} named containers)"
+        )
 
     # --- Check 3: Network availability ---
     click.echo()
@@ -181,7 +191,8 @@ def check_infra():
     for label, cf in compose_files:
         result = subprocess.run(
             ["docker", "compose", "-f", cf, "config", "--format", "json"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             continue
@@ -196,24 +207,30 @@ def check_infra():
     if required_networks:
         existing_networks = subprocess.run(
             ["docker", "network", "ls", "--format", "{{.Name}}"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         ).stdout.splitlines()
         for net in sorted(required_networks):
             if net in existing_networks:
                 _ok(f"Network '{net}' exists")
             else:
-                _fail(f"External network '{net}' does not exist (run: docker network create {net})")
+                _fail(
+                    f"External network '{net}' does not exist (run: docker network create {net})"
+                )
     else:
         _ok("No external networks required")
 
     # --- Summary ---
     click.echo()
-    total = ok + fail + warn
     if fail:
-        click.secho(f"  {fail} check(s) failed, {warn} warning(s), {ok} passed.", fg="red")
+        click.secho(
+            f"  {fail} check(s) failed, {warn} warning(s), {ok} passed.", fg="red"
+        )
         raise SystemExit(1)
     elif warn:
-        click.secho(f"  All passed with {warn} warning(s) ({ok} checks OK).", fg="yellow")
+        click.secho(
+            f"  All passed with {warn} warning(s) ({ok} checks OK).", fg="yellow"
+        )
     else:
         click.secho(f"  All {ok} checks passed.", fg="green")
     click.echo()

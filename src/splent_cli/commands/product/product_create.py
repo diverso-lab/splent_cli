@@ -46,7 +46,9 @@ def copy_raw_file(template_name, filename):
 
 @click.command("product:create", help="Creates a new product with a given name.")
 @click.argument("name")
-@click.option("--spl", "spl_name", default=None, help="SPL to derive from (from splent_catalog/).")
+@click.option(
+    "--spl", "spl_name", default=None, help="SPL to derive from (from splent_catalog/)."
+)
 @click.option(
     "--features-file", type=click.Path(exists=True), help="Path to features.txt"
 )
@@ -58,7 +60,8 @@ def make_product(name, spl_name, features_file):
 
     if not spl_name and catalog_dir.is_dir():
         available = sorted(
-            d.name for d in catalog_dir.iterdir()
+            d.name
+            for d in catalog_dir.iterdir()
             if d.is_dir() and (d / f"{d.name}.uvl").is_file()
         )
         if available:
@@ -66,7 +69,7 @@ def make_product(name, spl_name, features_file):
             click.echo(click.style("  Available SPLs:", bold=True))
             for i, s in enumerate(available, 1):
                 click.echo(f"    {i}. {s}")
-            click.echo(f"    0. No SPL (empty product)")
+            click.echo("    0. No SPL (empty product)")
             click.echo()
             choice = click.prompt("  Select SPL", type=int, default=0)
             if 1 <= choice <= len(available):
@@ -83,7 +86,11 @@ def make_product(name, spl_name, features_file):
     # Check for port collisions with existing products
     workspace_path = context.workspace()
     for existing in workspace_path.iterdir():
-        if not existing.is_dir() or existing.name == name or existing.name.startswith("."):
+        if (
+            not existing.is_dir()
+            or existing.name == name
+            or existing.name.startswith(".")
+        ):
             continue
         dev_compose = existing / "docker" / "docker-compose.dev.yml"
         if not dev_compose.is_file():

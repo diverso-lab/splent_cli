@@ -6,34 +6,36 @@ from splent_cli.services import context
 
 
 # Keys that Flask sets internally and are not interesting to show by default
-_FLASK_INTERNAL_KEYS = frozenset({
-    "APPLICATION_ROOT",
-    "DEBUG",
-    "ENV",
-    "EXPLAIN_TEMPLATE_LOADING",
-    "JSONIFY_MIMETYPE",
-    "JSONIFY_PRETTYPRINT_REGULAR",
-    "MAX_CONTENT_LENGTH",
-    "MAX_COOKIE_SIZE",
-    "PERMANENT_SESSION_LIFETIME",
-    "PREFERRED_URL_SCHEME",
-    "PROPAGATE_EXCEPTIONS",
-    "SECRET_KEY",
-    "SEND_FILE_MAX_AGE_DEFAULT",
-    "SERVER_NAME",
-    "SESSION_COOKIE_DOMAIN",
-    "SESSION_COOKIE_HTTPONLY",
-    "SESSION_COOKIE_NAME",
-    "SESSION_COOKIE_PATH",
-    "SESSION_COOKIE_SAMESITE",
-    "SESSION_COOKIE_SECURE",
-    "SESSION_REFRESH_EACH_REQUEST",
-    "TEMPLATES_AUTO_RELOAD",
-    "TESTING",
-    "TRAP_BAD_REQUEST_ERRORS",
-    "TRAP_HTTP_EXCEPTIONS",
-    "USE_X_SENDFILE",
-})
+_FLASK_INTERNAL_KEYS = frozenset(
+    {
+        "APPLICATION_ROOT",
+        "DEBUG",
+        "ENV",
+        "EXPLAIN_TEMPLATE_LOADING",
+        "JSONIFY_MIMETYPE",
+        "JSONIFY_PRETTYPRINT_REGULAR",
+        "MAX_CONTENT_LENGTH",
+        "MAX_COOKIE_SIZE",
+        "PERMANENT_SESSION_LIFETIME",
+        "PREFERRED_URL_SCHEME",
+        "PROPAGATE_EXCEPTIONS",
+        "SECRET_KEY",
+        "SEND_FILE_MAX_AGE_DEFAULT",
+        "SERVER_NAME",
+        "SESSION_COOKIE_DOMAIN",
+        "SESSION_COOKIE_HTTPONLY",
+        "SESSION_COOKIE_NAME",
+        "SESSION_COOKIE_PATH",
+        "SESSION_COOKIE_SAMESITE",
+        "SESSION_COOKIE_SECURE",
+        "SESSION_REFRESH_EACH_REQUEST",
+        "TEMPLATES_AUTO_RELOAD",
+        "TESTING",
+        "TRAP_BAD_REQUEST_ERRORS",
+        "TRAP_HTTP_EXCEPTIONS",
+        "USE_X_SENDFILE",
+    }
+)
 
 
 def _short_value(value, max_len: int = 50) -> str:
@@ -68,9 +70,15 @@ def _source_color(label: str) -> str:
     "product:config",
     short_help="Show the resolved configuration with origin tracing.",
 )
-@click.option("--all", "show_all", is_flag=True, help="Include Flask internal defaults.")
-@click.option("--feature", "filter_feature", default=None, help="Filter by feature name.")
-@click.option("--key", "filter_key", default=None, help="Filter by config key (substring match).")
+@click.option(
+    "--all", "show_all", is_flag=True, help="Include Flask internal defaults."
+)
+@click.option(
+    "--feature", "filter_feature", default=None, help="Filter by feature name."
+)
+@click.option(
+    "--key", "filter_key", default=None, help="Filter by config key (substring match)."
+)
 @context.requires_product
 def product_config(show_all, filter_feature, filter_key):
     """Show the final resolved configuration of the active product.
@@ -85,6 +93,7 @@ def product_config(show_all, filter_feature, filter_key):
     # Boot the app to trigger all config loading with tracing
     os.environ.setdefault("SPLENT_ENV", "dev")
     from splent_cli.utils.dynamic_imports import get_app
+
     app = get_app()
 
     trace: dict = app.extensions.get("splent_config_trace", {})
@@ -127,10 +136,6 @@ def product_config(show_all, filter_feature, filter_key):
 
     # Header
     env = os.getenv("SPLENT_ENV", "dev")
-    features_count = len([
-        v for v in trace.values()
-        if v.get("source", "").startswith("splent_io.")
-    ])
     feature_sources = set()
     for v in trace.values():
         src = v.get("source", "")
@@ -163,8 +168,7 @@ def product_config(show_all, filter_feature, filter_key):
             new_src = _source_label(info)
             new_val = _short_value(info.get("value", "?"), 30)
             click.echo(
-                f"     {key}: {prev_val} ({prev_src}) "
-                f"\u2192 {new_val} ({new_src})"
+                f"     {key}: {prev_val} ({prev_src}) \u2192 {new_val} ({new_src})"
             )
 
     click.echo()

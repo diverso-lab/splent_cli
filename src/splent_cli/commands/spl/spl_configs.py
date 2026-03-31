@@ -14,7 +14,9 @@ from splent_cli.services import context
     short_help="Show all valid product configurations from the SPL's UVL model.",
 )
 @click.argument("spl_name")
-@click.option("--count", is_flag=True, help="Only show the total number of configurations.")
+@click.option(
+    "--count", is_flag=True, help="Only show the total number of configurations."
+)
 @click.option(
     "--with-sat",
     is_flag=True,
@@ -73,10 +75,7 @@ def spl_configs(spl_name, count, with_sat):
             + click.style(", ".join(sorted(dead)), fg="red")
         )
     if optional:
-        click.echo(
-            "  Optional: "
-            + ", ".join(optional)
-        )
+        click.echo("  Optional: " + ", ".join(optional))
     click.echo()
 
     if count:

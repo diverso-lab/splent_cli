@@ -54,7 +54,9 @@ class SPLENTCLI(click.Group):
                     self._feature_cmds_cache[group.name] = group
         except Exception as e:
             if os.getenv("SPLENT_DEBUG"):
-                click.secho(f"  ⚠ Feature commands not loaded: {e}", fg="yellow", err=True)
+                click.secho(
+                    f"  ⚠ Feature commands not loaded: {e}", fg="yellow", err=True
+                )
         return self._feature_cmds_cache
 
     def get_command(self, ctx, cmd_name):
@@ -92,8 +94,10 @@ class SPLENTCLI(click.Group):
         all_cmds = self.list_commands(ctx)
         groups = {
             "🌿 Feature Management": [
-                cmd for cmd in all_cmds
-                if cmd.startswith("feature:") and cmd not in self._load_feature_commands()
+                cmd
+                for cmd in all_cmds
+                if cmd.startswith("feature:")
+                and cmd not in self._load_feature_commands()
             ],
             "🏗️ Product Management": [
                 cmd for cmd in all_cmds if cmd.startswith("product:")
@@ -116,8 +120,7 @@ class SPLENTCLI(click.Group):
                 if cmd.startswith(("linter", "test", "coverage", "locust"))
             ],
             "🔌 Feature Commands": [
-                cmd for cmd in all_cmds
-                if cmd in self._load_feature_commands()
+                cmd for cmd in all_cmds if cmd in self._load_feature_commands()
             ],
         }
         for title, cmds in groups.items():

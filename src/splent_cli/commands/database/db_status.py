@@ -67,6 +67,7 @@ def db_status():
     declared_features = set(dirs.keys())
     try:
         from splent_framework.utils.pyproject_reader import PyprojectReader
+
         product_dir = os.path.join(str(context.workspace()), context.require_app())
         reader = PyprojectReader.for_product(product_dir)
         env = os.getenv("SPLENT_ENV")

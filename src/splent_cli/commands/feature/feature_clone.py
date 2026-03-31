@@ -30,7 +30,9 @@ def _get_latest_tag(namespace, repo) -> str | None:
             name = tag.get("name", "")
             m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", name)
             if m:
-                versions.append((int(m.group(1)), int(m.group(2)), int(m.group(3)), name))
+                versions.append(
+                    (int(m.group(1)), int(m.group(2)), int(m.group(3)), name)
+                )
         if not versions:
             return tags[0]["name"]
         versions.sort(reverse=True)
@@ -45,6 +47,7 @@ def _build_repo_url(namespace, repo):
     Returns a tuple (real_url, display_url) where display_url never contains a token.
     """
     from splent_cli.utils.git_url import build_git_url
+
     return build_git_url(namespace, repo)
 
 
@@ -67,8 +70,10 @@ def _parse_full_name(full_name: str):
 
 
 def _validate_identifier_part(value: str, label: str):
-    if not re.fullmatch(r'[a-zA-Z0-9_\-\.]+', value):
-        raise SystemExit(f"❌ Invalid {label}: '{value}'. Only letters, digits, - _ . allowed.")
+    if not re.fullmatch(r"[a-zA-Z0-9_\-\.]+", value):
+        raise SystemExit(
+            f"❌ Invalid {label}: '{value}'. Only letters, digits, - _ . allowed."
+        )
 
 
 # =====================================================================
@@ -148,6 +153,7 @@ def feature_clone(full_name):
         )
     except subprocess.CalledProcessError:
         import shutil
+
         shutil.rmtree(local_path, ignore_errors=True)
         click.secho(
             f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow"

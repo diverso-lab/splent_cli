@@ -21,11 +21,11 @@ def spl_create(name):
     # metadata.toml
     metadata_path = os.path.join(spl_dir, "metadata.toml")
     metadata_content = (
-        f'[spl]\n'
+        f"[spl]\n"
         f'name = "{name}"\n'
         f'description = ""\n'
-        f'\n'
-        f'[spl.uvl]\n'
+        f"\n"
+        f"[spl.uvl]\n"
         f'mirror = "uvlhub.io"\n'
         f'doi = ""\n'
         f'file = "{name}.uvl"\n'
@@ -35,13 +35,7 @@ def spl_create(name):
 
     # {name}.uvl
     uvl_path = os.path.join(spl_dir, f"{name}.uvl")
-    uvl_content = (
-        f"features\n"
-        f"    {name}\n"
-        f"        mandatory\n"
-        f"\n"
-        f"constraints\n"
-    )
+    uvl_content = f"features\n    {name}\n        mandatory\n\nconstraints\n"
     with open(uvl_path, "w") as f:
         f.write(uvl_content)
 

@@ -7,7 +7,7 @@ Add your feature's env vars here so the framework can track them.
 To regenerate from source code: splent feature:inject-config {{ feature_name }}
 """
 
-import os
+import os  # noqa: F401 — used when adding env vars below
 
 
 def inject_config(app):

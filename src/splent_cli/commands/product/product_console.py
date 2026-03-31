@@ -6,17 +6,11 @@ database session, and all feature models auto-imported.
 """
 
 import code
-import importlib
 import os
-import sys
 
 import click
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import (
-    load_product_features,
-    parse_feature_entry,
-)
 
 
 def _collect_models(app):
@@ -99,6 +93,7 @@ def product_console():
         # Try IPython first, fall back to standard REPL
         try:
             from IPython import embed
+
             print(banner)
             embed(user_ns=namespace, colors="neutral")
         except ImportError:

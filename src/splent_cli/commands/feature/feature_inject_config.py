@@ -8,7 +8,6 @@ extracts variable names and defaults, and generates a config.py with
 inject_config(app) that injects them into app.config.
 """
 
-import os
 import re
 from pathlib import Path
 
@@ -127,7 +126,9 @@ def _read_existing_vars(config_path: Path) -> set[str]:
     short_help="Generate or update config.py from env vars in source code.",
 )
 @click.argument("feature_ref")
-@click.option("--dry-run", is_flag=True, help="Show what would be generated without writing.")
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be generated without writing."
+)
 @context.requires_product
 def feature_inject_config(feature_ref, dry_run):
     """Scan a feature's source code for os.getenv / os.environ calls and

@@ -40,8 +40,14 @@ def product_restart(env_dev, env_prod):
 
     # Kill existing Flask/watchmedo/gunicorn processes
     subprocess.run(
-        ["docker", "exec", container_id, "bash", "-c",
-         "pkill -f 'flask run' ; pkill -f watchmedo ; pkill -f gunicorn ; sleep 1"],
+        [
+            "docker",
+            "exec",
+            container_id,
+            "bash",
+            "-c",
+            "pkill -f 'flask run' ; pkill -f watchmedo ; pkill -f gunicorn ; sleep 1",
+        ],
         capture_output=True,
     )
 

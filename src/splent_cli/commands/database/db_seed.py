@@ -5,7 +5,10 @@ import click
 
 from splent_cli.utils.decorators import requires_db
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import get_features_from_pyproject, normalize_namespace
+from splent_cli.utils.feature_utils import (
+    get_features_from_pyproject,
+    normalize_namespace,
+)
 from splent_framework.seeders.BaseSeeder import BaseSeeder
 from splent_framework.managers.feature_order import FeatureLoadOrderResolver
 from splent_framework.utils.pyproject_reader import PyprojectReader
@@ -26,7 +29,9 @@ def _resolve_feature_order(features_raw: list[str]) -> list[str]:
             reader = PyprojectReader.for_product(product_dir)
             spl_name = reader.splent_config.get("spl")
             if spl_name:
-                candidate = os.path.join(working_dir, "splent_catalog", spl_name, f"{spl_name}.uvl")
+                candidate = os.path.join(
+                    working_dir, "splent_catalog", spl_name, f"{spl_name}.uvl"
+                )
                 if os.path.isfile(candidate):
                     uvl_path = candidate
             if not uvl_path:

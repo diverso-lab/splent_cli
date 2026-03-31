@@ -20,6 +20,7 @@ import requests
 
 # ── Environment validation ────────────────────────────────────────────
 
+
 def validate_release_env(*, require_pypi: bool = True, require_docker: bool = False):
     """Check that the required credentials are available.
 
@@ -29,7 +30,9 @@ def validate_release_env(*, require_pypi: bool = True, require_docker: bool = Fa
     missing = []
 
     if not os.getenv("GITHUB_TOKEN"):
-        click.secho("  warn: GITHUB_TOKEN not set — GitHub release will be skipped", fg="yellow")
+        click.secho(
+            "  warn: GITHUB_TOKEN not set — GitHub release will be skipped", fg="yellow"
+        )
 
     if require_pypi:
         if not (os.getenv("TWINE_USERNAME") or os.getenv("PYPI_USERNAME")):
@@ -57,6 +60,7 @@ def validate_release_env(*, require_pypi: bool = True, require_docker: bool = Fa
 
 # ── Git helpers ───────────────────────────────────────────────────────
 
+
 def extract_repo(remote_url: str) -> str:
     """Extract 'org/repo' from a GitHub remote URL (HTTPS or SSH)."""
     patterns = [
@@ -75,12 +79,15 @@ def get_repo_from_path(cwd: str) -> str:
     """Read the remote.origin.url from git config and extract org/repo."""
     remote_url = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
-        capture_output=True, text=True, cwd=cwd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
     ).stdout.strip()
     return extract_repo(remote_url)
 
 
 # ── Version management ────────────────────────────────────────────────
+
 
 def update_version(pyproject_path: str, version: str):
     """Replace the version field in a pyproject.toml file."""
@@ -103,7 +110,9 @@ def commit_and_push(cwd: str, version: str, subject: str = "bump version"):
     """
     r = subprocess.run(
         ["git", "status", "--porcelain"],
-        capture_output=True, text=True, cwd=cwd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
     )
     if not r.stdout.strip():
         click.echo("  commit   working tree clean — nothing to commit")
@@ -113,15 +122,24 @@ def commit_and_push(cwd: str, version: str, subject: str = "bump version"):
         subprocess.run(["git", "add", "-A"], cwd=cwd, check=True, capture_output=True)
         subprocess.run(
             ["git", "commit", "-m", f"chore: {subject} to {version}"],
-            cwd=cwd, check=True, capture_output=True,
+            cwd=cwd,
+            check=True,
+            capture_output=True,
         )
         subprocess.run(
             ["git", "push", "origin", "main"],
-            cwd=cwd, check=True, capture_output=True,
+            cwd=cwd,
+            check=True,
+            capture_output=True,
         )
     except subprocess.CalledProcessError as e:
-        click.secho(f"  error: git operation failed: {e.stderr.strip() if e.stderr else e}", fg="red")
-        click.secho("  The version was bumped but not committed. Fix and retry.", fg="yellow")
+        click.secho(
+            f"  error: git operation failed: {e.stderr.strip() if e.stderr else e}",
+            fg="red",
+        )
+        click.secho(
+            "  The version was bumped but not committed. Fix and retry.", fg="yellow"
+        )
         raise SystemExit(1)
 
     click.echo("  commit   changes committed and pushed")
@@ -133,17 +151,24 @@ def create_and_push_tag(cwd: str, version: str):
     try:
         subprocess.run(
             ["git", "fetch", "origin", "--tags"],
-            cwd=cwd, check=True, capture_output=True,
+            cwd=cwd,
+            check=True,
+            capture_output=True,
         )
         tags = subprocess.run(
             ["git", "tag"],
-            capture_output=True, text=True, cwd=cwd, check=True,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=True,
         ).stdout.splitlines()
 
         if tag not in tags:
             subprocess.run(
                 ["git", "tag", "-a", tag, "-m", f"Release {tag}"],
-                cwd=cwd, check=True, capture_output=True,
+                cwd=cwd,
+                check=True,
+                capture_output=True,
             )
             click.echo(f"  tag      {tag} created")
         else:
@@ -151,7 +176,9 @@ def create_and_push_tag(cwd: str, version: str):
 
         subprocess.run(
             ["git", "push", "origin", tag],
-            cwd=cwd, check=True, capture_output=True,
+            cwd=cwd,
+            check=True,
+            capture_output=True,
         )
         click.echo(f"  tag      {tag} pushed to origin")
     except subprocess.CalledProcessError as e:
@@ -163,6 +190,7 @@ def create_and_push_tag(cwd: str, version: str):
 
 
 # ── GitHub release ────────────────────────────────────────────────────
+
 
 def create_github_release(repo: str, version: str, token: str | None):
     """Create a GitHub Release via API."""
@@ -205,10 +233,13 @@ def create_github_release(repo: str, version: str, token: str | None):
     elif resp.status_code == 422 and "already_exists" in resp.text:
         click.secho("  github   release already exists — skipping", fg="yellow")
     else:
-        click.secho(f"  github   release failed: {resp.status_code} {resp.text}", fg="yellow")
+        click.secho(
+            f"  github   release failed: {resp.status_code} {resp.text}", fg="yellow"
+        )
 
 
 # ── PyPI ──────────────────────────────────────────────────────────────
+
 
 def build_and_upload_pypi(path: str):
     """Build the package and upload to PyPI."""
@@ -217,10 +248,15 @@ def build_and_upload_pypi(path: str):
     try:
         subprocess.run(
             [sys.executable, "-m", "build"],
-            check=True, cwd=path, capture_output=True,
+            check=True,
+            cwd=path,
+            capture_output=True,
         )
     except subprocess.CalledProcessError as e:
-        click.secho(f"  error: package build failed: {e.stderr.strip() if e.stderr else ''}", fg="red")
+        click.secho(
+            f"  error: package build failed: {e.stderr.strip() if e.stderr else ''}",
+            fg="red",
+        )
         raise SystemExit(1)
 
     click.echo("  pypi     uploading...")
@@ -228,17 +264,26 @@ def build_and_upload_pypi(path: str):
         subprocess.run(
             [sys.executable, "-m", "twine", "upload", "dist/*"],
             env=os.environ.copy(),
-            check=True, cwd=path, capture_output=True,
+            check=True,
+            cwd=path,
+            capture_output=True,
         )
     except subprocess.CalledProcessError as e:
-        click.secho(f"  error: PyPI upload failed: {e.stderr.strip() if e.stderr else ''}", fg="red")
-        click.secho("  The package was built in dist/ — upload manually: twine upload dist/*", fg="yellow")
+        click.secho(
+            f"  error: PyPI upload failed: {e.stderr.strip() if e.stderr else ''}",
+            fg="red",
+        )
+        click.secho(
+            "  The package was built in dist/ — upload manually: twine upload dist/*",
+            fg="yellow",
+        )
         raise SystemExit(1)
 
     click.echo("  pypi     upload complete")
 
 
 # ── Semver wizard ─────────────────────────────────────────────────────
+
 
 def fetch_latest_tag(org: str, repo_name: str) -> str | None:
     """Return the highest semver tag from GitHub, or None.
@@ -267,7 +312,9 @@ def fetch_latest_tag(org: str, repo_name: str) -> str | None:
             name = tag.get("name", "")
             m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", name)
             if m:
-                versions.append((int(m.group(1)), int(m.group(2)), int(m.group(3)), name))
+                versions.append(
+                    (int(m.group(1)), int(m.group(2)), int(m.group(3)), name)
+                )
         if not versions:
             return batch[0]["name"]
         versions.sort(reverse=True)
@@ -323,9 +370,7 @@ def semver_wizard(org: str, repo_name: str) -> str:
         f"    {click.style('[3]', bold=True)} major  {click.style(major_v, fg='red')}"
         f"   breaking changes"
     )
-    click.echo(
-        f"    {click.style('[4]', bold=True)} cancel"
-    )
+    click.echo(f"    {click.style('[4]', bold=True)} cancel")
     click.echo()
 
     choice = click.prompt(
@@ -345,6 +390,7 @@ def semver_wizard(org: str, repo_name: str) -> str:
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────
+
 
 def run_release_pipeline(
     name: str,
@@ -395,6 +441,7 @@ def run_release_pipeline(
     create_github_release(repo, tag, os.getenv("GITHUB_TOKEN"))
 
     from splent_cli.commands.clear_cache import clean_build_artifacts
+
     clean_build_artifacts(path, quiet=True)
 
     build_and_upload_pypi(path)

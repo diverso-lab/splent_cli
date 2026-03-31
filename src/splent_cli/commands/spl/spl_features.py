@@ -21,7 +21,7 @@ def spl_features(spl_name, no_root):
     feats, root_name = _list_all_features_from_uvl(uvl_path)
 
     click.echo()
-    click.echo(f"SPL features")
+    click.echo("SPL features")
     click.echo(f"SPL      : {name}")
     click.echo(f"UVL      : {uvl_path}")
     click.echo(f"Features : {len(feats)}")

@@ -75,10 +75,12 @@ def feature_outdated(upgrade):
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")
 
     import tomllib
+
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
     from splent_cli.utils.feature_utils import read_features_from_data
+
     env = os.getenv("SPLENT_ENV")
     features = read_features_from_data(data, env)
 
@@ -108,7 +110,9 @@ def feature_outdated(upgrade):
     col_name = max(col_name, len("Feature"))
     col_ver = 12
 
-    click.echo(f"  {'Feature':<{col_name}}  {'Current':<{col_ver}}  {'Latest':<{col_ver}}  Status")
+    click.echo(
+        f"  {'Feature':<{col_name}}  {'Current':<{col_ver}}  {'Latest':<{col_ver}}  Status"
+    )
     click.echo(f"  {'-' * col_name}  {'-' * col_ver}  {'-' * col_ver}  {'-' * 12}")
 
     to_upgrade = []
@@ -131,7 +135,9 @@ def feature_outdated(upgrade):
                 status = click.style("✔ latest", fg="bright_black")
                 latest_col = f"{latest:<{col_ver}}"
 
-        click.echo(f"  {short:<{col_name}}  {current:<{col_ver}}  {latest_col}  {status}")
+        click.echo(
+            f"  {short:<{col_name}}  {current:<{col_ver}}  {latest_col}  {status}"
+        )
 
     click.echo()
 
@@ -140,13 +146,22 @@ def feature_outdated(upgrade):
         click.echo()
         return
 
-    click.secho(f"  {len(to_upgrade)} feature(s) can be updated.", fg="green", bold=True)
+    click.secho(
+        f"  {len(to_upgrade)} feature(s) can be updated.", fg="green", bold=True
+    )
     click.echo()
 
     if not upgrade:
-        click.secho("  splent feature:upgrade <feature>            update one", dim=True)
-        click.secho("  splent feature:outdated --upgrade           update all", dim=True)
-        click.secho("  splent cache:prune                          clean old cached versions", dim=True)
+        click.secho(
+            "  splent feature:upgrade <feature>            update one", dim=True
+        )
+        click.secho(
+            "  splent feature:outdated --upgrade           update all", dim=True
+        )
+        click.secho(
+            "  splent cache:prune                          clean old cached versions",
+            dim=True,
+        )
         click.echo()
         return
 

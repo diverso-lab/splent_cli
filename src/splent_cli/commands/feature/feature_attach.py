@@ -12,8 +12,18 @@ from splent_cli.utils.manifest import feature_key, set_feature_state
 )
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)
-@click.option("--dev", "env_scope", flag_value="dev", help="Add to features_dev (development only).")
-@click.option("--prod", "env_scope", flag_value="prod", help="Add to features_prod (production only).")
+@click.option(
+    "--dev",
+    "env_scope",
+    flag_value="dev",
+    help="Add to features_dev (development only).",
+)
+@click.option(
+    "--prod",
+    "env_scope",
+    flag_value="prod",
+    help="Add to features_prod (production only).",
+)
 def feature_attach(feature_identifier, version, env_scope):
     """
     Attach a cached feature version to the current product.
@@ -65,8 +75,10 @@ def feature_attach(feature_identifier, version, env_scope):
     )
 
     features_key = f"features_{env_scope}" if env_scope else "features"
-    features = read_features_from_data(data) if not env_scope else (
-        data.get("tool", {}).get("splent", {}).get(features_key, [])
+    features = (
+        read_features_from_data(data)
+        if not env_scope
+        else (data.get("tool", {}).get("splent", {}).get(features_key, []))
     )
 
     if full_name in features:

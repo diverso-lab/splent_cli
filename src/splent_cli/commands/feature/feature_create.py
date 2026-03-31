@@ -86,7 +86,7 @@ def make_feature(full_name):
     # Derive short name: splent_feature_notes → notes
     short_name = feature_name
     if short_name.startswith("splent_feature_"):
-        short_name = short_name[len("splent_feature_"):]
+        short_name = short_name[len("splent_feature_") :]
 
     template_ctx = {
         "feature_name": feature_name,

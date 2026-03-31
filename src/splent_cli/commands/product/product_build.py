@@ -71,13 +71,17 @@ def merge_compose(base, override, label=""):
     short_help="Build deployment artifacts: env, compose, and Docker image.",
 )
 @click.option("--no-image", is_flag=True, help="Skip Docker image build.")
-@click.option("--skip-preflight", is_flag=True, hidden=True, help="Skip pre-flight checks (used internally by product:derive).")
+@click.option(
+    "--skip-preflight",
+    is_flag=True,
+    hidden=True,
+    help="Skip pre-flight checks (used internally by product:derive).",
+)
 def product_build(no_image, skip_preflight):
     product = context.require_app()
     workspace = str(context.workspace())
     product_path = os.path.join(workspace, product)
     docker_path = os.path.join(product_path, "docker")
-    features_path = os.path.join(product_path, "features")
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.isdir(docker_path):

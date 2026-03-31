@@ -202,12 +202,17 @@ def check_deps():
         # 1. Catalog: [tool.splent].spl
         spl_name = reader.splent_config.get("spl")
         if spl_name:
-            uvl_path = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+            uvl_path = os.path.join(
+                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
+            )
         else:
             # 2. Legacy: [tool.splent.uvl].file
             uvl_file = reader.uvl_config.get("file")
             if not uvl_file:
-                click.secho("  [✖] No UVL configured. Set [tool.splent].spl or [tool.splent.uvl].file.", fg="red")
+                click.secho(
+                    "  [✖] No UVL configured. Set [tool.splent].spl or [tool.splent.uvl].file.",
+                    fg="red",
+                )
                 raise SystemExit(1)
             uvl_path = os.path.join(product_dir, "uvl", uvl_file)
     except (FileNotFoundError, RuntimeError) as e:
@@ -256,8 +261,6 @@ def check_deps():
             ok += 1
             continue
 
-        has_violation = False
-
         for imp in sorted(all_deps):
             imp_short = pkg_to_short.get(imp, imp)
             source = "imports" if imp in py_imports else "references (template)"
@@ -295,7 +298,6 @@ def check_deps():
                         )
                     )
                 violations += 1
-                has_violation = True
 
     click.echo()
     if violations:

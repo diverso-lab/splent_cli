@@ -70,7 +70,7 @@ def product_down(dev, prod, v):
         if remove_volumes:
             args += ["-v"]
         subprocess.run(args, check=False, cwd=docker_dir)
-        click.secho(f"🛑 Production deployment stopped.", fg="green")
+        click.secho("🛑 Production deployment stopped.", fg="green")
         return
 
     # --dev: stop development containers

@@ -14,9 +14,7 @@ from splent_cli.services import context
 def _resolve_spl_metadata(spl_name: str) -> dict:
     """Load metadata.toml for the given SPL."""
     workspace = str(context.workspace())
-    metadata_path = os.path.join(
-        workspace, "splent_catalog", spl_name, "metadata.toml"
-    )
+    metadata_path = os.path.join(workspace, "splent_catalog", spl_name, "metadata.toml")
     if not os.path.isfile(metadata_path):
         raise click.ClickException(f"Metadata not found: {metadata_path}")
     with open(metadata_path, "rb") as f:
@@ -51,9 +49,7 @@ def _fetch_uvl(spl_name: str, metadata: dict, target: str) -> None:
         raise click.ClickException(f"Failed to download UVL: {e}")
 
     if r.status_code != 200:
-        raise click.ClickException(
-            f"UVLHub returned {r.status_code} for {url}"
-        )
+        raise click.ClickException(f"UVLHub returned {r.status_code} for {url}")
 
     os.makedirs(os.path.dirname(target), exist_ok=True)
     with open(target, "w", encoding="utf-8") as f:

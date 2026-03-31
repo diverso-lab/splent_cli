@@ -102,7 +102,9 @@ def product_deploy(down, ci):
                 else:
                     missing_vars.append(key)
             else:
-                new_value = click.prompt(f"🔧 Value required for {key}", hide_input=False)
+                new_value = click.prompt(
+                    f"🔧 Value required for {key}", hide_input=False
+                )
                 env_vars[key] = new_value
 
     if missing_vars:

@@ -35,9 +35,13 @@ def spl_list():
             name = spl_data.get("name", entry)
             description = spl_data.get("description", "")
             uvl_file = spl_data.get("uvl", {}).get("file", "")
-            spls.append({"name": name, "description": description, "uvl_file": uvl_file})
+            spls.append(
+                {"name": name, "description": description, "uvl_file": uvl_file}
+            )
         except Exception:
-            spls.append({"name": entry, "description": "(unreadable metadata)", "uvl_file": ""})
+            spls.append(
+                {"name": entry, "description": "(unreadable metadata)", "uvl_file": ""}
+            )
 
     if not spls:
         click.secho("ℹ️  No SPLs found in splent_catalog/.", fg="yellow")

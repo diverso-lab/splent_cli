@@ -107,6 +107,7 @@ def _git_out(path: str, *args) -> subprocess.CompletedProcess:
 # =====================================================================
 def ensure_git_main(path: str, ns_git: str, name: str):
     from splent_cli.utils.git_url import build_git_url
+
     remote_url, _ = build_git_url(ns_git, name)
     r = _git_out(path, "remote", "get-url", "origin")
     if r.returncode == 0:
@@ -204,7 +205,7 @@ def _compile_assets(workspace: str, product_path: str, name: str):
     if not container_id:
         return
 
-    click.echo(f"     📦 Compiling assets...")
+    click.echo("     📦 Compiling assets...")
     product_root = f"/workspace/{product}"
     cmd = f"cd {shlex.quote(product_root)} && npx webpack --config {shlex.quote(webpack_file)} --mode development"
     result = subprocess.run(
@@ -213,9 +214,9 @@ def _compile_assets(workspace: str, product_path: str, name: str):
         text=True,
     )
     if result.returncode == 0:
-        click.echo(f"     ✔  Assets compiled.")
+        click.echo("     ✔  Assets compiled.")
     else:
-        click.secho(f"     ⚠  Asset compilation failed.", fg="yellow")
+        click.secho("     ⚠  Asset compilation failed.", fg="yellow")
 
 
 # =====================================================================
@@ -230,7 +231,6 @@ def _edit_one(
     force: bool = False,
 ):
     """Convert one pyproject feature entry to editable. Returns True on success."""
-    from splent_cli.utils.lifecycle import require_state, resolve_feature_key_from_entry
 
     _, ns_git, ns_fs, rest = compose.parse_feature_identifier(match)
     if "@" in rest:
@@ -265,6 +265,7 @@ def _edit_one(
 
     if not os.path.exists(editable_path):
         import shutil
+
         click.echo(f"     📦 Creating editable copy → {editable_path}")
         result = subprocess.run(["cp", "-r", versioned_path, editable_path])
         if result.returncode != 0:

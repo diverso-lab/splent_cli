@@ -1,9 +1,7 @@
 import click
 import shutil
-import os
 from pathlib import Path
 
-from splent_cli.utils.path_utils import PathUtils
 from splent_cli.services import context
 
 
@@ -47,7 +45,10 @@ def clean_build_artifacts(target_path: str | Path, *, quiet: bool = False):
             pass
 
     if not quiet:
-        click.secho(f"  Cleared build artifacts ({removed} __pycache__ dirs removed).", fg="green")
+        click.secho(
+            f"  Cleared build artifacts ({removed} __pycache__ dirs removed).",
+            fg="green",
+        )
 
 
 @click.command(
@@ -55,9 +56,7 @@ def clean_build_artifacts(target_path: str | Path, *, quiet: bool = False):
     short_help="Clear __pycache__, .pytest_cache and build artifacts from the workspace.",
 )
 def clear_cache():
-    if not click.confirm(
-        "Are you sure you want to clear caches and build artifacts?"
-    ):
+    if not click.confirm("Are you sure you want to clear caches and build artifacts?"):
         click.secho("  Cancelled.", fg="yellow")
         return
 

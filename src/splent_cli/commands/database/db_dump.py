@@ -65,9 +65,7 @@ def db_dump(filename):
         click.echo(click.style(f"Error creating database dump: {e}", fg="red"))
         if os.path.exists(filename):
             os.remove(filename)
-            click.echo(
-                click.style(f"Partial file removed: {filename}", fg="yellow")
-            )
+            click.echo(click.style(f"Partial file removed: {filename}", fg="yellow"))
 
 
 cli_command = db_dump

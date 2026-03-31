@@ -38,13 +38,14 @@ from splent_cli.utils.feature_utils import normalize_namespace
 @dataclass
 class SPLFeature:
     """A feature in the SPL model."""
+
     name: str
     org: str = "splent-io"
-    package: str = ""           # empty → abstract (no deployable artefact)
-    parent: str | None = None   # parent feature name (None for root)
+    package: str = ""  # empty → abstract (no deployable artefact)
+    parent: str | None = None  # parent feature name (None for root)
     groups: list[SPLGroup] = field(default_factory=list)
-    card_min: int = 1           # feature cardinality lower bound
-    card_max: int = 1           # feature cardinality upper bound
+    card_min: int = 1  # feature cardinality lower bound
+    card_max: int = 1  # feature cardinality upper bound
 
     @property
     def is_abstract(self) -> bool:
@@ -62,7 +63,8 @@ class SPLGroup:
         or          — <1..N> over N children: Σs(f,C) >= 1
         cardinality — <n..m> over N children: n <= Σs(f,C) <= m
     """
-    group_type: str             # "mandatory"|"optional"|"alternative"|"or"|"cardinality"
+
+    group_type: str  # "mandatory"|"optional"|"alternative"|"or"|"cardinality"
     children: list[str] = field(default_factory=list)
     card_min: int = 0
     card_max: int = 0
@@ -71,7 +73,8 @@ class SPLGroup:
 @dataclass
 class SPLConstraint:
     """A cross-tree constraint (UVL Fig. 7)."""
-    kind: str                   # "implies" | "excludes"
+
+    kind: str  # "implies" | "excludes"
     source: str
     target: str
 
@@ -79,6 +82,7 @@ class SPLConstraint:
 @dataclass
 class SPLModel:
     """Full SPL model — the only abstraction the configurator depends on."""
+
     root_name: str
     features: dict[str, SPLFeature] = field(default_factory=dict)
     constraints: list[SPLConstraint] = field(default_factory=list)
@@ -180,7 +184,8 @@ def _strip_feat(s: str) -> str:
 
 
 def _parse_constraints_from_uvl(
-    uvl_path: str, model: SPLModel,
+    uvl_path: str,
+    model: SPLModel,
 ) -> list[SPLConstraint]:
     """Parse cross-tree constraints directly from UVL text (Section 5.1).
 
@@ -198,7 +203,7 @@ def _parse_constraints_from_uvl(
     if not match:
         return constraints
 
-    section = text[match.end():]
+    section = text[match.end() :]
     for raw_line in section.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("//") or line.startswith("/*"):
@@ -211,7 +216,9 @@ def _parse_constraints_from_uvl(
         m = re.match(rf"^({_FEAT})\s*=>\s*({_FEAT})$", line)
         if m:
             constraints.append(
-                SPLConstraint("implies", _strip_feat(m.group(1)), _strip_feat(m.group(2)))
+                SPLConstraint(
+                    "implies", _strip_feat(m.group(1)), _strip_feat(m.group(2))
+                )
             )
             continue
 
@@ -227,7 +234,9 @@ def _parse_constraints_from_uvl(
         m = re.match(rf"^!\s*\(\s*({_FEAT})\s*&\s*({_FEAT})\s*\)$", line)
         if m:
             constraints.append(
-                SPLConstraint("excludes", _strip_feat(m.group(1)), _strip_feat(m.group(2)))
+                SPLConstraint(
+                    "excludes", _strip_feat(m.group(1)), _strip_feat(m.group(2))
+                )
             )
             continue
 
@@ -235,7 +244,9 @@ def _parse_constraints_from_uvl(
         m = re.match(rf"^!\s*({_FEAT})\s*\|\s*!\s*({_FEAT})$", line)
         if m:
             constraints.append(
-                SPLConstraint("excludes", _strip_feat(m.group(1)), _strip_feat(m.group(2)))
+                SPLConstraint(
+                    "excludes", _strip_feat(m.group(1)), _strip_feat(m.group(2))
+                )
             )
             continue
 
@@ -251,9 +262,7 @@ def _parse_feature_cardinalities(uvl_path: str) -> dict[str, tuple[int, int]]:
     result: dict[str, tuple[int, int]] = {}
     with open(uvl_path, "r") as f:
         for line in f:
-            m = re.search(
-                rf'({_FEAT})\s+cardinality\s+\[(\d+)\.\.(\d+)\]', line
-            )
+            m = re.search(rf"({_FEAT})\s+cardinality\s+\[(\d+)\.\.(\d+)\]", line)
             if m:
                 name = _strip_feat(m.group(1))
                 result[name] = (int(m.group(2)), int(m.group(3)))
@@ -590,10 +599,13 @@ def _prompt_cardinality(
         deps = deps_for(choice, model, mandatory, excluded)
         deps_str = _render_deps(deps, selected)
         needed = group.card_min - len(chosen)
-        remaining_available = len([
-            c for c in group.children[group.children.index(choice) + 1:]
-            if c not in excluded and c not in chosen
-        ])
+        remaining_available = len(
+            [
+                c
+                for c in group.children[group.children.index(choice) + 1 :]
+                if c not in excluded and c not in chosen
+            ]
+        )
         # Auto-select if remaining won't cover minimum
         if needed > 0 and remaining_available < needed:
             click.echo(
@@ -633,8 +645,7 @@ def _propagate_and_report(
     auto = new_sel - selected - mandatory
     for name in sorted(auto):
         click.echo(
-            f"{prefix}\u21b3 {name}"
-            + click.style("  (auto-selected)", fg="cyan")
+            f"{prefix}\u21b3 {name}" + click.style("  (auto-selected)", fg="cyan")
         )
     selected.update(new_sel - mandatory)
 
@@ -681,9 +692,7 @@ def _configure_subtree(
     for group in feat.groups:
         if group.group_type == "mandatory":
             for ch in group.children:
-                _configure_subtree(
-                    ch, selected, excluded, model, mandatory, indent
-                )
+                _configure_subtree(ch, selected, excluded, model, mandatory, indent)
 
     # ── Phase 2: selection groups (alternative/or/cardinality) ─
     for group in feat.groups:
@@ -699,9 +708,7 @@ def _configure_subtree(
             "cardinality": f"pick {group.card_min}..{group.card_max}",
         }
         click.secho(f"{prefix}{name}", bold=True, nl=False)
-        click.echo(click.style(
-            f"  ({label_map[group.group_type]})", fg="bright_black"
-        ))
+        click.echo(click.style(f"  ({label_map[group.group_type]})", fg="bright_black"))
 
         sub_indent = prefix + "  "
 
@@ -717,9 +724,7 @@ def _configure_subtree(
                 f"{sub_indent}\u2192 {click.style(chosen, fg='green', bold=True)}"
             )
             click.echo()
-            _configure_subtree(
-                chosen, selected, excluded, model, mandatory, indent + 2
-            )
+            _configure_subtree(chosen, selected, excluded, model, mandatory, indent + 2)
 
         elif group.group_type == "or":
             chosen_list = _prompt_or(
@@ -731,9 +736,7 @@ def _configure_subtree(
             )
             click.echo()
             for ch in chosen_list:
-                _configure_subtree(
-                    ch, selected, excluded, model, mandatory, indent + 2
-                )
+                _configure_subtree(ch, selected, excluded, model, mandatory, indent + 2)
 
         elif group.group_type == "cardinality":
             chosen_list = _prompt_cardinality(
@@ -745,9 +748,7 @@ def _configure_subtree(
             )
             click.echo()
             for ch in chosen_list:
-                _configure_subtree(
-                    ch, selected, excluded, model, mandatory, indent + 2
-                )
+                _configure_subtree(ch, selected, excluded, model, mandatory, indent + 2)
 
     # ── Phase 3: optional groups → prompt, recurse if selected ─
     has_optionals = any(
@@ -763,9 +764,7 @@ def _configure_subtree(
         for ch in group.children:
             # Already handled by mandatory set
             if ch in mandatory:
-                _configure_subtree(
-                    ch, selected, excluded, model, mandatory, indent
-                )
+                _configure_subtree(ch, selected, excluded, model, mandatory, indent)
                 continue
 
             # Already auto-selected by propagation
@@ -774,9 +773,7 @@ def _configure_subtree(
                     f"{prefix}\u2713 {ch}"
                     + click.style("  (auto-selected by dependency)", fg="cyan")
                 )
-                _configure_subtree(
-                    ch, selected, excluded, model, mandatory, indent + 2
-                )
+                _configure_subtree(ch, selected, excluded, model, mandatory, indent + 2)
                 continue
 
             # Blocked by constraint
@@ -820,9 +817,7 @@ def _configure_subtree(
                     selected, excluded, model, mandatory, prefix + "  "
                 )
                 # Recurse into the newly selected feature
-                _configure_subtree(
-                    ch, selected, excluded, model, mandatory, indent + 2
-                )
+                _configure_subtree(ch, selected, excluded, model, mandatory, indent + 2)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -889,17 +884,14 @@ def product_configure():
             continue
         feat = model.features[name]
         has_selection_group = any(
-            g.group_type in ("alternative", "or", "cardinality")
-            for g in feat.groups
+            g.group_type in ("alternative", "or", "cardinality") for g in feat.groups
         )
         if not has_selection_group:
             click.echo(f"    \u2713 {name}")
     click.echo()
 
     # ── Recursive tree walk for interactive configuration ──
-    _configure_subtree(
-        model.root_name, selected, excluded, model, mandatory, indent=4
-    )
+    _configure_subtree(model.root_name, selected, excluded, model, mandatory, indent=4)
 
     # ── Build final selection ──────────────────────────────
     all_selected, _ = propagate(selected, model, mandatory, excluded)
@@ -934,9 +926,7 @@ def product_configure():
     violations = check_excludes(all_selected, model)
     if violations:
         for src, tgt in violations:
-            click.secho(
-                f"  Conflict: {src} excludes {tgt}", fg="red"
-            )
+            click.secho(f"  Conflict: {src} excludes {tgt}", fg="red")
 
     # ── Validate with Flamapy ──────────────────────────────
     click.echo("  Validating configuration... ", nl=False)
@@ -1023,7 +1013,9 @@ def product_configure():
             try:
                 result = subprocess.run(
                     ["pip", "index", "versions", package],
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
                 )
                 if result.returncode == 0 and "(" in result.stdout:
                     pypi_ver = result.stdout.split("(")[1].split(")")[0].strip()

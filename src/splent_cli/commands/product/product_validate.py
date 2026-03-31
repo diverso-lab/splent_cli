@@ -9,13 +9,11 @@ from splent_cli.services import context
 from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
     load_pyproject as _load_pyproject,
-    get_feature_deps as _get_feature_deps,
     normalize_feature_name as _normalize_feature_name,
     resolve_uvl_path as _resolve_uvl_path,
     list_all_features_from_uvl as _list_all_features_from_uvl,
     write_csvconf_full as _write_csvconf_full,
     print_uvl_header as _print_uvl_header,
-    run_uvl_check as _run_uvl_check,
 )
 
 
@@ -62,7 +60,12 @@ def _infer_parents(uvl_path: str, selected: set[str]) -> set[str]:
     "product:validate",
     short_help="Validate the product configuration against the SPL.",
 )
-@click.option("--features", "feature_list", default=None, help="Comma-separated feature list to validate (instead of pyproject).")
+@click.option(
+    "--features",
+    "feature_list",
+    default=None,
+    help="Comma-separated feature list to validate (instead of pyproject).",
+)
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option("--print-config", is_flag=True, help="Print the generated 0/1 assignment")
 def product_validate(feature_list, pyproject, print_config):
@@ -91,6 +94,7 @@ def product_validate(feature_list, pyproject, print_config):
     else:
         # Pyproject mode — include env-specific features (dev/prod)
         from splent_cli.utils.feature_utils import read_features_from_data
+
         env = os.getenv("SPLENT_ENV", "dev")
         deps = read_features_from_data(data, env)
         selected = {_normalize_feature_name(d) for d in deps}

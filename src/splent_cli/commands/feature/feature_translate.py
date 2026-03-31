@@ -39,9 +39,12 @@ def _resolve_feature_src(workspace, ns_safe, name):
 def _run_pybabel(args, cwd):
     """Run pybabel command and return (success, output)."""
     import sys
-    cmd = [sys.executable, "-c",
-           "from babel.messages.frontend import main; main()",
-           ] + args
+
+    cmd = [
+        sys.executable,
+        "-c",
+        "from babel.messages.frontend import main; main()",
+    ] + args
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
         return False, result.stderr.strip()
@@ -129,8 +132,15 @@ def _compile_feature(feature_root, translations_dir, name):
     short_help="Extract, init, or compile translations for features.",
 )
 @click.argument("feature_ref", required=False)
-@click.option("--extract", "do_extract", is_flag=True, help="Extract translatable strings to .pot")
-@click.option("--init", "init_locale", default=None, help="Initialize a new locale (e.g. --init es)")
+@click.option(
+    "--extract", "do_extract", is_flag=True, help="Extract translatable strings to .pot"
+)
+@click.option(
+    "--init",
+    "init_locale",
+    default=None,
+    help="Initialize a new locale (e.g. --init es)",
+)
 @click.option("--compile", "do_compile", is_flag=True, help="Compile .po files to .mo")
 @context.requires_product
 def feature_translate(feature_ref, do_extract, init_locale, do_compile):
@@ -164,7 +174,7 @@ def feature_translate(feature_ref, do_extract, init_locale, do_compile):
         if feature_ref:
             short = feature_ref
             if short.startswith("splent_feature_"):
-                short = short[len("splent_feature_"):]
+                short = short[len("splent_feature_") :]
             if short not in name and f"splent_feature_{short}" != name:
                 continue
 

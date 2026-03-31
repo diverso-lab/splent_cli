@@ -24,26 +24,28 @@ def _parse_uvl_packages(uvl_path: str) -> dict[str, str]:
     return result
 
 
-def _build_table_to_feature(workspace: str, package_map: dict[str, str]) -> dict[str, str]:
+def _build_table_to_feature(
+    workspace: str, package_map: dict[str, str]
+) -> dict[str, str]:
     """Scan all features' models.py and return {table_name: short_name}.
 
     Uses SQLAlchemy convention: class MyModel → table 'my_model'.
     """
     table_map = {}
     for short, pkg in package_map.items():
-        models_candidates = [
-            os.path.join(workspace, pkg, "src", "splent_io", pkg, "models.py"),
-            os.path.join(workspace, ".splent_cache", "features", "splent_io"),
-        ]
         # Check workspace root
         models_path = os.path.join(workspace, pkg, "src", "splent_io", pkg, "models.py")
         if not os.path.isfile(models_path):
             # Check any cached version
-            cache_org = os.path.join(workspace, ".splent_cache", "features", "splent_io")
+            cache_org = os.path.join(
+                workspace, ".splent_cache", "features", "splent_io"
+            )
             if os.path.isdir(cache_org):
                 for entry in sorted(os.listdir(cache_org)):
                     if entry.startswith(f"{pkg}@"):
-                        candidate = os.path.join(cache_org, entry, "src", "splent_io", pkg, "models.py")
+                        candidate = os.path.join(
+                            cache_org, entry, "src", "splent_io", pkg, "models.py"
+                        )
                         if os.path.isfile(candidate):
                             models_path = candidate
                             break
@@ -87,14 +89,18 @@ def _scan_feature_deps(
 
             if f.endswith(".py"):
                 # Python imports
-                for match in re.findall(r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content):
+                for match in re.findall(
+                    r"(?:from|import)\s+splent_io\.(splent_feature_\w+)", content
+                ):
                     if match != feature_pkg and match in all_packages:
                         short = pkg_to_short.get(match)
                         if short:
                             deps.add(short)
 
                 # FK references: db.ForeignKey("table.column")
-                for fk_ref in re.findall(r'db\.ForeignKey\s*\(\s*["\'](\w+)\.\w+["\']', content):
+                for fk_ref in re.findall(
+                    r'db\.ForeignKey\s*\(\s*["\'](\w+)\.\w+["\']', content
+                ):
                     owner = table_to_feature.get(fk_ref)
                     if owner:
                         deps.add(owner)
@@ -117,7 +123,9 @@ def _scan_feature_deps(
 )
 @click.argument("spl_name")
 @click.argument("feature_package")
-@click.option("--org", default="splent-io", help="Feature organization (default: splent-io).")
+@click.option(
+    "--org", default="splent-io", help="Feature organization (default: splent-io)."
+)
 @context.requires_detached
 def spl_add_feature(spl_name, feature_package, org):
     """Add a feature to an SPL, scanning its code for dependency constraints.
@@ -137,11 +145,13 @@ def spl_add_feature(spl_name, feature_package, org):
     # Derive short name
     short_name = feature_package
     if short_name.startswith("splent_feature_"):
-        short_name = short_name[len("splent_feature_"):]
+        short_name = short_name[len("splent_feature_") :]
 
     # Check if already declared
     if feature_package in all_packages:
-        click.secho(f"  ℹ️  {short_name} is already declared in {spl_name}.", fg="yellow")
+        click.secho(
+            f"  ℹ️  {short_name} is already declared in {spl_name}.", fg="yellow"
+        )
         return
 
     click.echo()
@@ -154,7 +164,9 @@ def spl_add_feature(spl_name, feature_package, org):
     # Scan feature for dependencies
     feature_path = os.path.join(workspace, feature_package)
     if not os.path.isdir(feature_path):
-        click.secho(f"  ❌ Feature not found at workspace root: {feature_path}", fg="red")
+        click.secho(
+            f"  ❌ Feature not found at workspace root: {feature_path}", fg="red"
+        )
         raise SystemExit(1)
 
     click.echo("  Scanning for dependencies...")
@@ -194,14 +206,18 @@ def spl_add_feature(spl_name, feature_package, org):
         insert_idx = len(lines)
 
     # Insert feature declaration
-    feature_line = f"\t\toptional\n\t\t\t{short_name} {{org '{org}', package '{feature_package}'}}"
+    feature_line = (
+        f"\t\toptional\n\t\t\t{short_name} {{org '{org}', package '{feature_package}'}}"
+    )
     lines.insert(insert_idx, feature_line)
 
     # Insert constraints after "constraints" line
     if detected_deps and constraints_idx is not None:
         # constraints_idx shifted by 1 due to insertion above
         for dep in sorted(detected_deps):
-            constraints_idx += 2  # +1 for feature line (2 lines), +1 for each constraint
+            constraints_idx += (
+                2  # +1 for feature line (2 lines), +1 for each constraint
+            )
             lines.insert(constraints_idx, f"\t{short_name} => {dep}")
 
     with open(uvl_path, "w", encoding="utf-8") as f:
@@ -210,7 +226,9 @@ def spl_add_feature(spl_name, feature_package, org):
     click.echo()
     click.secho(f"  ✅ Feature '{short_name}' added to {spl_name}.", fg="green")
     if detected_deps:
-        click.echo(f"     Constraints: {', '.join(f'{short_name} => {d}' for d in sorted(detected_deps))}")
+        click.echo(
+            f"     Constraints: {', '.join(f'{short_name} => {d}' for d in sorted(detected_deps))}"
+        )
     click.echo()
 
 

@@ -80,6 +80,7 @@ def _render_timeline(product, product_path):
     all_features = manifest.get("features", {})
 
     from splent_cli.utils.lifecycle import resolve_feature_key_from_entry
+
     try:
         pyproject_entries = load_product_features(product_path, os.getenv("SPLENT_ENV"))
     except FileNotFoundError:
@@ -152,12 +153,16 @@ def _render_timeline(product, product_path):
         # Gap connector
         if prev_ts:
             try:
-                gap = (datetime.fromisoformat(ts) - datetime.fromisoformat(prev_ts)).total_seconds()
+                gap = (
+                    datetime.fromisoformat(ts) - datetime.fromisoformat(prev_ts)
+                ).total_seconds()
                 if gap > 2:
                     click.echo(click.style("            │", fg="bright_black"))
                     if gap > 30:
                         click.echo(
-                            click.style(f"            │  +{int(gap)}s", fg="bright_black")
+                            click.style(
+                                f"            │  +{int(gap)}s", fg="bright_black"
+                            )
                         )
                         click.echo(click.style("            │", fg="bright_black"))
             except (ValueError, TypeError):
@@ -183,14 +188,16 @@ def _render_timeline(product, product_path):
             if idx == 0:
                 time_label = click.style(f"  {time_str}  ", fg="bright_black")
             else:
-                time_label = click.style(f"           ", fg="bright_black")
+                time_label = click.style("           ", fg="bright_black")
 
             connector_styled = click.style(connector, fg="bright_black")
             node_styled = click.style(node_sym, fg=node_color, bold=True)
             name_styled = click.style(f" {short:<{name_col}}", fg=feat_color, bold=True)
             state_styled = click.style(state, fg=node_color)
 
-            click.echo(f"{time_label}{connector_styled}{node_styled}{name_styled}{state_styled}")
+            click.echo(
+                f"{time_label}{connector_styled}{node_styled}{name_styled}{state_styled}"
+            )
 
     # Final line
     click.echo(click.style("            │", fg="bright_black"))
@@ -199,9 +206,7 @@ def _render_timeline(product, product_path):
         + click.style("──●", fg="green", bold=True)
         + click.style(f" {len(feature_list)} feature(s) ", fg="green", bold=True)
         + click.style(
-            ", ".join(
-                click.style(s, fg=color_map[s]) for s, _ in feature_list
-            ),
+            ", ".join(click.style(s, fg=color_map[s]) for s, _ in feature_list),
         )
     )
 
@@ -222,9 +227,13 @@ def _render_timeline(product, product_path):
     short_help="Show lifecycle state of all features in the active product.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Output raw manifest as JSON.")
-@click.option("--integrity", is_flag=True, help="Verify manifest against actual system state.")
+@click.option(
+    "--integrity", is_flag=True, help="Verify manifest against actual system state."
+)
 @click.option("--fix", "do_fix", is_flag=True, help="Fix detected integrity issues.")
-@click.option("--timeline", is_flag=True, help="Show lifecycle timeline (GitKraken style).")
+@click.option(
+    "--timeline", is_flag=True, help="Show lifecycle timeline (GitKraken style)."
+)
 def feature_status(as_json, integrity, do_fix, timeline):
     """
     Show the lifecycle state of every feature tracked in splent.manifest.json.
@@ -261,7 +270,9 @@ def feature_status(as_json, integrity, do_fix, timeline):
         from splent_cli.utils.lifecycle import resolve_feature_key_from_entry
 
         try:
-            pyproject_entries = load_product_features(product_path, os.getenv("SPLENT_ENV"))
+            pyproject_entries = load_product_features(
+                product_path, os.getenv("SPLENT_ENV")
+            )
         except FileNotFoundError:
             pyproject_entries = []
         active_keys = set()

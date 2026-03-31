@@ -16,7 +16,6 @@ import click
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import (
     load_product_features,
-    normalize_namespace,
     parse_feature_entry,
 )
 
@@ -31,7 +30,9 @@ def _resolve_feature_pyproject(workspace, product_path, ns_safe, name, version):
 
     # 2. Product symlink
     dir_name = f"{name}@{version}" if version else name
-    candidate = os.path.join(product_path, "features", ns_safe, dir_name, "pyproject.toml")
+    candidate = os.path.join(
+        product_path, "features", ns_safe, dir_name, "pyproject.toml"
+    )
     if os.path.isfile(candidate):
         with open(candidate, "rb") as f:
             return tomllib.load(f)
@@ -85,7 +86,9 @@ def _check_env_vars(workspace, product_path, features, counters):
     per_feature: dict[str, list[str]] = {}
     for entry in features:
         ns_safe, name, version = parse_feature_entry(entry)
-        data = _resolve_feature_pyproject(workspace, product_path, ns_safe, name, version)
+        data = _resolve_feature_pyproject(
+            workspace, product_path, ns_safe, name, version
+        )
         if not data:
             continue
         env_vars = (
@@ -106,6 +109,7 @@ def _check_env_vars(workspace, product_path, features, counters):
     injected_keys: set[str] = set()
     try:
         from splent_cli.utils.dynamic_imports import get_app
+
         app = get_app()
         trace = app.extensions.get("splent_config_trace", {})
         injected_keys = set(trace.keys())
@@ -123,7 +127,9 @@ def _check_env_vars(workspace, product_path, features, counters):
     col_feat = 25
     col_src = 14
 
-    click.echo(f"  {'Variable':<{col_var}}  {'Feature(s)':<{col_feat}}  {'Source':<{col_src}}  Status")
+    click.echo(
+        f"  {'Variable':<{col_var}}  {'Feature(s)':<{col_feat}}  {'Source':<{col_src}}  Status"
+    )
     click.echo(f"  {'-' * col_var}  {'-' * col_feat}  {'-' * col_src}  {'-' * 10}")
 
     has_missing = False
@@ -142,7 +148,9 @@ def _check_env_vars(workspace, product_path, features, counters):
             has_missing = True
             counters["fail"] += 1
 
-        click.echo(f"  {var:<{col_var}}  {feats:<{col_feat}}  {src:<{col_src}}  {status}")
+        click.echo(
+            f"  {var:<{col_var}}  {feats:<{col_feat}}  {src:<{col_src}}  {status}"
+        )
 
     if not has_missing:
         counters["ok"] += 1
@@ -178,12 +186,16 @@ def _check_symlinks(product_path, features, counters):
             feat_label += f"@{version}"
 
         if os.path.islink(link) and not os.path.exists(link):
-            click.echo(f"  {feat_label:<{col_feat}}  {click.style('✖ broken', fg='red')}")
+            click.echo(
+                f"  {feat_label:<{col_feat}}  {click.style('✖ broken', fg='red')}"
+            )
             broken_count += 1
         elif os.path.exists(link):
             click.echo(f"  {feat_label:<{col_feat}}  {click.style('✔', fg='green')}")
         else:
-            click.echo(f"  {feat_label:<{col_feat}}  {click.style('— not linked', fg='bright_black')}")
+            click.echo(
+                f"  {feat_label:<{col_feat}}  {click.style('— not linked', fg='bright_black')}"
+            )
 
     if broken_count:
         counters["fail"] += broken_count
@@ -202,6 +214,7 @@ def _check_config_overwrites(counters):
 
     try:
         from splent_cli.utils.dynamic_imports import get_app
+
         app = get_app()
     except Exception:
         click.echo(click.style("  ⚠  Could not boot app — skipping", fg="yellow"))
@@ -212,7 +225,7 @@ def _check_config_overwrites(counters):
     overwrites = {k: v for k, v in trace.items() if v.get("action") == "overwritten"}
 
     if not overwrites:
-        click.echo(f"  No config key overwrites detected.")
+        click.echo("  No config key overwrites detected.")
         counters["ok"] += 1
     else:
         col_key = 25
@@ -247,6 +260,7 @@ def _check_blueprints(counters):
 
     try:
         from splent_cli.utils.dynamic_imports import get_app
+
         app = get_app()
     except Exception:
         click.echo(click.style("  ⚠  Could not boot app — skipping", fg="yellow"))
@@ -304,6 +318,7 @@ def check_product():
 
     # Check for stale contracts before reading them
     from splent_cli.utils.contract_freshness import check_and_refresh_contracts
+
     check_and_refresh_contracts(workspace, features)
 
     _check_env_vars(workspace, product_path, features, counters)

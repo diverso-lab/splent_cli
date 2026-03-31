@@ -20,6 +20,7 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 # ── Ref parsing ───────────────────────────────────────────────────────
 
+
 def parse_feature_ref(ref: str, default_ns: str = DEFAULT_NAMESPACE):
     m = re.match(r"^(?:(?P<ns>[^/@]+)/)?(?P<name>[^@]+?)(?:@(?P<ver>.+))?$", ref)
     if not m:
@@ -60,6 +61,7 @@ def resolve_feature_path(feature_ref: str, workspace: str):
 
 # ── Contract inference ────────────────────────────────────────────────
 
+
 def _extract_routes(routes_path: Path) -> list[str]:
     if not routes_path.exists():
         return []
@@ -97,7 +99,11 @@ def _extract_services(services_path: Path) -> list[str]:
         return []
     text = services_path.read_text()
     return sorted(
-        set(re.findall(r"""class\s+(\w+)\s*\([^)]*(?:BaseService|Service)[^)]*\)""", text))
+        set(
+            re.findall(
+                r"""class\s+(\w+)\s*\([^)]*(?:BaseService|Service)[^)]*\)""", text
+            )
+        )
     )
 
 
@@ -135,8 +141,12 @@ def _extract_signals(signals_path: Path) -> tuple[list[str], list[str]]:
     if not signals_path.exists():
         return [], []
     text = signals_path.read_text()
-    provided = sorted(set(re.findall(r"""define_signal\s*\(\s*['"]([^'"]+)['"]""", text)))
-    required = sorted(set(re.findall(r"""connect_signal\s*\(\s*['"]([^'"]+)['"]""", text)))
+    provided = sorted(
+        set(re.findall(r"""define_signal\s*\(\s*['"]([^'"]+)['"]""", text))
+    )
+    required = sorted(
+        set(re.findall(r"""connect_signal\s*\(\s*['"]([^'"]+)['"]""", text))
+    )
     return provided, required
 
 
@@ -147,7 +157,9 @@ def _extract_commands(commands_path: Path) -> list[str]:
     return sorted(set(re.findall(r"""@click\.command\s*\(\s*['"]([^'"]+)['"]""", text)))
 
 
-def _scan_dependencies(src_dir: Path, own_feature_name: str) -> tuple[list[str], list[str]]:
+def _scan_dependencies(
+    src_dir: Path, own_feature_name: str
+) -> tuple[list[str], list[str]]:
     required_features: set[str] = set()
     env_vars: set[str] = set()
 
@@ -165,7 +177,9 @@ def _scan_dependencies(src_dir: Path, own_feature_name: str) -> tuple[list[str],
             r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z][A-Z0-9_]+)['"]""", text
         ):
             env_vars.add(var)
-        for var in re.findall(r"""os\.environ\s*\[\s*['"]([A-Z][A-Z0-9_]+)['"]""", text):
+        for var in re.findall(
+            r"""os\.environ\s*\[\s*['"]([A-Z][A-Z0-9_]+)['"]""", text
+        ):
             env_vars.add(var)
 
     return sorted(required_features), sorted(env_vars)
@@ -286,12 +300,15 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
 
 # ── Compile assets ────────────────────────────────────────────────────
 
+
 def _compile_before_release(feature_name: str):
     click.echo("  compile  building frontend assets...")
     try:
         result = subprocess.run(
             ["splent", "feature:compile", feature_name],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode == 0:
             click.echo("  compile  done")
@@ -304,6 +321,7 @@ def _compile_before_release(feature_name: str):
 
 # ── Versioned snapshot ────────────────────────────────────────────────
 
+
 def create_versioned_snapshot(namespace, feature_name, version, workspace):
     namespace_fs = normalize_namespace(namespace)
     org_github = namespace.replace("_", "-")
@@ -312,6 +330,7 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
     snapshot_path = os.path.join(cache_root, f"{feature_name}@{version}")
 
     from splent_cli.utils.git_url import build_git_url
+
     clone_url, display_url = build_git_url(org_github, feature_name)
 
     click.echo(f"  snapshot cloning {feature_name}@{version}...")
@@ -319,25 +338,33 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
     try:
         subprocess.run(
             [
-                "git", "clone",
-                "--branch", version,
-                "--depth", "1",
+                "git",
+                "clone",
+                "--branch",
+                version,
+                "--depth",
+                "1",
                 clone_url,
                 snapshot_path,
             ],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
     except subprocess.CalledProcessError:
-        click.secho(f"  error: failed to clone snapshot for {feature_name}@{version}", fg="red")
+        click.secho(
+            f"  error: failed to clone snapshot for {feature_name}@{version}", fg="red"
+        )
         raise SystemExit(1)
 
     from splent_cli.utils.cache_utils import make_feature_readonly
+
     make_feature_readonly(snapshot_path)
 
     click.echo(f"  snapshot {snapshot_path} (read-only)")
 
 
 # ── Command ───────────────────────────────────────────────────────────
+
 
 @click.command(
     "feature:release",
@@ -362,6 +389,7 @@ def feature_release(feature_ref, version, attach):
     def _pre_commit(path, ver):
         click.echo("  contract updating from source code...")
         from splent_cli.commands.feature.feature_contract import update_contract
+
         update_contract(path, namespace, feature_name)
         click.echo("  contract written to pyproject.toml")
 

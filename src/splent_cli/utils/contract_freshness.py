@@ -88,15 +88,11 @@ def check_and_refresh_contracts(
         click.echo(f"    - {name}")
 
     if not interactive:
-        click.echo(
-            "    Run: splent feature:contract <feature> --write"
-        )
+        click.echo("    Run: splent feature:contract <feature> --write")
         click.echo()
         return []
 
-    update = click.confirm(
-        "\n  Update stale contracts now?", default=True
-    )
+    update = click.confirm("\n  Update stale contracts now?", default=True)
 
     if not update:
         click.echo()
@@ -106,6 +102,7 @@ def check_and_refresh_contracts(
     for name, ns_safe, feature_dir in stale:
         try:
             from splent_cli.commands.feature.feature_contract import update_contract
+
             update_contract(feature_dir, ns_safe, name)
             click.secho(f"    ✔ {name} contract updated.", fg="green")
             updated.append(name)

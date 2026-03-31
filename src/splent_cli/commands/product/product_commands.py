@@ -66,9 +66,7 @@ def product_commands():
     click.echo(
         f"  {'Feature':<{col_feat}}  {'Command':<{col_cmd}}  {'Flags':<{col_flags}}  Description"
     )
-    click.echo(
-        f"  {'-' * col_feat}  {'-' * col_cmd}  {'-' * col_flags}  {'-' * 30}"
-    )
+    click.echo(f"  {'-' * col_feat}  {'-' * col_cmd}  {'-' * col_flags}  {'-' * 30}")
 
     # Rows
     prev_feat = None

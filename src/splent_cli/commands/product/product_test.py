@@ -54,12 +54,21 @@ def _run_product_tests(product, workspace, levels, verbose):
     short_help="Run all feature tests for a product.",
 )
 @click.option(
-    "--product", "products", multiple=True,
+    "--product",
+    "products",
+    multiple=True,
     help="Product(s) to test. Can be repeated. Defaults to active product.",
 )
 @click.option("--unit", "level_unit", is_flag=True, help="Run unit tests only.")
-@click.option("--integration", "level_integration", is_flag=True, help="Run integration tests only.")
-@click.option("--functional", "level_functional", is_flag=True, help="Run functional tests only.")
+@click.option(
+    "--integration",
+    "level_integration",
+    is_flag=True,
+    help="Run integration tests only.",
+)
+@click.option(
+    "--functional", "level_functional", is_flag=True, help="Run functional tests only."
+)
 @click.option("-v", "verbose", is_flag=True, help="Verbose output.")
 def product_test(products, level_unit, level_integration, level_functional, verbose):
     """Run all feature tests for one or more products.

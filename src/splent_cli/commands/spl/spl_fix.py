@@ -270,9 +270,7 @@ def spl_fix(spl_name):
 
     if inversions:
         click.echo()
-        click.secho(
-            "  Inversions that need code refactoring:", fg="yellow", bold=True
-        )
+        click.secho("  Inversions that need code refactoring:", fg="yellow", bold=True)
         for importer, imported in inversions:
             click.echo(f"    - {importer} should NOT import from {imported}")
             click.echo(

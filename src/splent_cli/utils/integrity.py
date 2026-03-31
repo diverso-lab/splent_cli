@@ -30,7 +30,8 @@ def _check_pip(name):
     """Check that the feature is pip-installed."""
     result = subprocess.run(
         [sys.executable, "-m", "pip", "show", name],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         return False, "not pip-installed"
@@ -56,7 +57,8 @@ def _check_migrations(name, product_path):
 
     # Find head revision from filesystem
     migration_files = [
-        f for f in os.listdir(versions_dir)
+        f
+        for f in os.listdir(versions_dir)
         if f.endswith(".py") and not f.startswith("__")
     ]
     if not migration_files:
@@ -80,50 +82,67 @@ def check_feature_integrity(
 
     # 1. Symlink
     ok, detail = _check_symlink(product_path, ns_safe, name, version)
-    results.append({
-        "check": "Symlink",
-        "ok": ok,
-        "detail": detail or "OK",
-    })
+    results.append(
+        {
+            "check": "Symlink",
+            "ok": ok,
+            "detail": detail or "OK",
+        }
+    )
 
     # 2. pip (only if manifest says installed or higher)
     if manifest_state in ("installed", "migrated", "active"):
         ok, detail = _check_pip(name)
-        results.append({
-            "check": "pip",
-            "ok": ok,
-            "detail": detail if ok else detail,
-        })
+        results.append(
+            {
+                "check": "pip",
+                "ok": ok,
+                "detail": detail if ok else detail,
+            }
+        )
     elif manifest_state == "declared":
         # Check if pip installed despite manifest saying declared
         ok, detail = _check_pip(name)
         if ok:
-            results.append({
-                "check": "pip",
-                "ok": True,
-                "detail": f"{detail} (manifest says declared — state behind)",
-                "state_fix": "installed",
-            })
+            results.append(
+                {
+                    "check": "pip",
+                    "ok": True,
+                    "detail": f"{detail} (manifest says declared — state behind)",
+                    "state_fix": "installed",
+                }
+            )
         else:
-            results.append({
-                "check": "pip",
-                "ok": True,  # Not an error if declared
-                "detail": "not installed (expected for declared state)",
-            })
+            results.append(
+                {
+                    "check": "pip",
+                    "ok": True,  # Not an error if declared
+                    "detail": "not installed (expected for declared state)",
+                }
+            )
 
     # 3. Migrations (only if manifest says migrated or active)
     if manifest_state in ("migrated", "active"):
         ok, detail = _check_migrations(name, product_path)
-        results.append({
-            "check": "Migrations",
-            "ok": ok,
-            "detail": detail,
-        })
+        results.append(
+            {
+                "check": "Migrations",
+                "ok": ok,
+                "detail": detail,
+            }
+        )
 
     return results
 
 
-def fix_feature(product_path: str, workspace: str, ns_safe: str, name: str, version: str | None, issues: list[dict]):
+def fix_feature(
+    product_path: str,
+    workspace: str,
+    ns_safe: str,
+    name: str,
+    version: str | None,
+    issues: list[dict],
+):
     """Attempt to fix detected issues."""
     fixed = []
 
@@ -134,17 +153,18 @@ def fix_feature(product_path: str, workspace: str, ns_safe: str, name: str, vers
         check = issue["check"]
 
         if check == "Symlink":
-            click.echo(f"    Fixing symlink → running product:sync...")
+            click.echo("    Fixing symlink → running product:sync...")
             result = subprocess.run(
                 [sys.executable, "-m", "splent_cli", "product:sync"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
                 env={**os.environ, "SPLENT_APP": os.path.basename(product_path)},
             )
             if result.returncode == 0:
                 fixed.append("symlink")
-                click.secho(f"    ✔ Symlink fixed.", fg="green")
+                click.secho("    ✔ Symlink fixed.", fg="green")
             else:
-                click.secho(f"    ✖ Could not fix symlink.", fg="red")
+                click.secho("    ✖ Could not fix symlink.", fg="red")
 
         elif check == "pip":
             feature_dir = os.path.join(workspace, name)
@@ -159,14 +179,17 @@ def fix_feature(product_path: str, workspace: str, ns_safe: str, name: str, vers
                 click.echo(f"    Fixing pip → installing {name}...")
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "-e", feature_dir, "-q"],
-                    capture_output=True, text=True,
+                    capture_output=True,
+                    text=True,
                 )
                 if result.returncode == 0:
                     fixed.append("pip")
-                    click.secho(f"    ✔ pip install fixed.", fg="green")
+                    click.secho("    ✔ pip install fixed.", fg="green")
                 else:
-                    click.secho(f"    ✖ pip install failed.", fg="red")
+                    click.secho("    ✖ pip install failed.", fg="red")
             else:
-                click.secho(f"    ✖ Cannot find feature directory to install from.", fg="red")
+                click.secho(
+                    "    ✖ Cannot find feature directory to install from.", fg="red"
+                )
 
     return fixed

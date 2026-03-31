@@ -28,7 +28,9 @@ def _source_color(label: str) -> str:
     "product:routes",
     short_help="Show all routes with feature attribution.",
 )
-@click.option("--feature", "filter_feature", default=None, help="Filter by feature name.")
+@click.option(
+    "--feature", "filter_feature", default=None, help="Filter by feature name."
+)
 @click.option("--group", is_flag=True, help="Group routes by feature.")
 @context.requires_product
 def product_routes(filter_feature, group):
@@ -40,6 +42,7 @@ def product_routes(filter_feature, group):
 
     os.environ.setdefault("SPLENT_ENV", "dev")
     from splent_cli.utils.dynamic_imports import get_app
+
     app = get_app()
 
     trace: dict = app.extensions.get("splent_blueprint_trace", {})
@@ -113,7 +116,9 @@ def product_routes(filter_feature, group):
         color = _source_color(feature)
         feature_styled = click.style(f"{feature:<{col_feature}}", fg=color)
         method_styled = click.style(f"{method:<{col_method}}", fg="magenta")
-        click.echo(f"  {path:<{col_route}}  {method_styled}  {feature_styled}  {endpoint}")
+        click.echo(
+            f"  {path:<{col_route}}  {method_styled}  {feature_styled}  {endpoint}"
+        )
 
     click.echo()
 

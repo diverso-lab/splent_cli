@@ -94,7 +94,10 @@ def product_clean(env_dev, env_prod, yes):
     if result.returncode == 0:
         click.secho("  ✔ Uploads cleared.", fg="green")
     else:
-        click.secho("  ⚠️  clear:uploads exited with errors — uploads may not be cleared.", fg="yellow")
+        click.secho(
+            "  ⚠️  clear:uploads exited with errors — uploads may not be cleared.",
+            fg="yellow",
+        )
 
     # ── 4. Clear log ─────────────────────────────────────────────────
     click.secho("\n📋 Clearing application log...", fg="cyan")
@@ -102,7 +105,9 @@ def product_clean(env_dev, env_prod, yes):
     if result.returncode == 0:
         click.secho("  ✔ Log cleared.", fg="green")
     else:
-        click.secho("  ⚠️  clear:log exited with errors — log may not be cleared.", fg="yellow")
+        click.secho(
+            "  ⚠️  clear:log exited with errors — log may not be cleared.", fg="yellow"
+        )
 
     click.echo()
     click.secho(

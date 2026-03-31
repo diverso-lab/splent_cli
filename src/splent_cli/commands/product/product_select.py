@@ -24,6 +24,7 @@ def select_app(app_name, shell):
     # Ensure .env exists
     if not os.path.exists(workspace_env_path):
         from pathlib import Path
+
         Path(workspace_env_path).touch()
 
     # Update .env

@@ -98,6 +98,7 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
         return
     ns_github = ns_fs.replace("_", "-")
     from splent_cli.utils.git_url import build_git_url
+
     url, _ = build_git_url(ns_github, name)
     click.echo(f"  ⬇️  Cloning {ns_fs}/{name}@{version}...")
     subprocess.run(

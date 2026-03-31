@@ -41,7 +41,10 @@ def _release_docker_image(product: str, version: str, docker_dir: str):
     try:
         subprocess.run(
             ["docker", "login", "-u", username, "--password-stdin"],
-            input=password, text=True, check=True, capture_output=True,
+            input=password,
+            text=True,
+            check=True,
+            capture_output=True,
         )
     except subprocess.CalledProcessError:
         click.secho("  error: Docker Hub login failed", fg="red")
@@ -51,9 +54,12 @@ def _release_docker_image(product: str, version: str, docker_dir: str):
     try:
         subprocess.run(
             [
-                "docker", "build",
-                "-t", f"{image_name}:{version}",
-                "-t", f"{image_name}:latest",
+                "docker",
+                "build",
+                "-t",
+                f"{image_name}:{version}",
+                "-t",
+                f"{image_name}:latest",
                 docker_dir,
             ],
             check=True,

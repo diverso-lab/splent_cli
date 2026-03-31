@@ -58,8 +58,7 @@ def requires_product(fn):
     def wrapper(*args, **kwargs):
         if is_detached():
             click.secho(
-                "❌ No product selected.\n"
-                "   Run: splent product:select <name>",
+                "❌ No product selected.\n   Run: splent product:select <name>",
                 fg="red",
             )
             raise SystemExit(1)

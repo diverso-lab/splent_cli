@@ -22,7 +22,9 @@ def _splent_list(data: dict, key: str) -> list[str]:
 
 def _short_name(name: str) -> str:
     """Strip the ``splent_feature_`` prefix for display."""
-    return name[len("splent_feature_"):] if name.startswith("splent_feature_") else name
+    return (
+        name[len("splent_feature_") :] if name.startswith("splent_feature_") else name
+    )
 
 
 def _feature_env_tag(entry: str, dev_set: set[str], prod_set: set[str]) -> str:
@@ -82,7 +84,7 @@ def product_sync(ctx, force):
 
     # ── Header ──────────────────────────────────────────────
     click.echo()
-    click.secho(f"  product:sync", fg="cyan", bold=True, nl=False)
+    click.secho("  product:sync", fg="cyan", bold=True, nl=False)
     click.echo(f"  {product}")
     click.echo()
 
@@ -138,9 +140,7 @@ def product_sync(ctx, force):
             cache_dir = os.path.join(
                 workspace, ".splent_cache", "features", ns_safe, f"{repo}@{version}"
             )
-            product_features_dir = os.path.join(
-                workspace, product, "features", ns_safe
-            )
+            product_features_dir = os.path.join(workspace, product, "features", ns_safe)
             link_path = os.path.join(product_features_dir, f"{repo}@{version}")
 
             # Force reclone

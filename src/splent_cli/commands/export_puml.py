@@ -803,6 +803,7 @@ def export_puml(
     # Check for stale contracts
     from splent_cli.utils.contract_freshness import check_and_refresh_contracts
     from splent_cli.utils.feature_utils import load_product_features
+
     try:
         features_raw = load_product_features(product_dir, os.getenv("SPLENT_ENV"))
         check_and_refresh_contracts(workspace, features_raw)
@@ -841,9 +842,7 @@ def export_puml(
             if not os.path.isdir(src_root):
                 continue
             for org_dir in os.listdir(src_root):
-                models_path = os.path.join(
-                    src_root, org_dir, package, "models.py"
-                )
+                models_path = os.path.join(src_root, org_dir, package, "models.py")
                 if os.path.isfile(models_path):
                     parsed = _parse_models(models_path)
                     if parsed:

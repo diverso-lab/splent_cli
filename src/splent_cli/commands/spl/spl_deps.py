@@ -58,7 +58,7 @@ def spl_deps(feature, spl_name, reverse):
     deps = _closure(feature, graph)
 
     click.echo()
-    click.echo(f"SPL deps")
+    click.echo("SPL deps")
     click.echo(f"SPL      : {name}")
     click.echo(f"UVL      : {uvl_path}")
     click.echo(f"Features : {len(universe)}")

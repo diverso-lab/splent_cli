@@ -28,7 +28,9 @@ def _find_dependents(feature: str, product_dir: str) -> list[str]:
         uvl_path = None
         spl_name = reader.splent_config.get("spl")
         if spl_name:
-            candidate = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+            candidate = os.path.join(
+                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
+            )
             if os.path.isfile(candidate):
                 uvl_path = candidate
         if not uvl_path:
@@ -70,9 +72,7 @@ def _find_dependents(feature: str, product_dir: str) -> list[str]:
 @click.option(
     "--steps", default=1, show_default=True, help="Number of migrations to roll back."
 )
-@click.option(
-    "--cascade", is_flag=True, help="Also rollback dependent features."
-)
+@click.option("--cascade", is_flag=True, help="Also rollback dependent features.")
 @context.requires_product
 def db_rollback(feature, steps, cascade):
     app = current_app
@@ -98,18 +98,25 @@ def db_rollback(feature, steps, cascade):
                 f"  ⚠️  Feature '{feature}' is not declared but has a DB entry (orphan).",
                 fg="yellow",
             )
-            if not click.confirm("  Remove the orphan entry from splent_migrations?", default=False):
+            if not click.confirm(
+                "  Remove the orphan entry from splent_migrations?", default=False
+            ):
                 click.echo("  ❎ Cancelled.")
                 raise SystemExit(1)
             MigrationManager.delete_feature_status(app, feature)
             click.secho(f"  ✅ Removed '{feature}' from splent_migrations.", fg="green")
             return
         else:
-            click.secho(f"❌ Feature '{feature}' is not declared in this product.", fg="red")
+            click.secho(
+                f"❌ Feature '{feature}' is not declared in this product.", fg="red"
+            )
             raise SystemExit(1)
 
     if not mdir or not os.path.isdir(mdir):
-        click.secho(f"  ℹ️  Feature '{feature}' has no migrations — nothing to roll back.", fg="yellow")
+        click.secho(
+            f"  ℹ️  Feature '{feature}' has no migrations — nothing to roll back.",
+            fg="yellow",
+        )
         return
 
     # Check for dependent features
@@ -159,8 +166,13 @@ def db_rollback(feature, steps, cascade):
                         if name == dep:
                             target = "installed" if dep_rev is None else "migrated"
                             advance_state(
-                                product_path, product_name, key,
-                                to=target, namespace=ns, name=name, version=version,
+                                product_path,
+                                product_name,
+                                key,
+                                to=target,
+                                namespace=ns,
+                                name=name,
+                                version=version,
                             )
                             break
                 except Exception as e:
@@ -184,8 +196,13 @@ def db_rollback(feature, steps, cascade):
             if name == feature:
                 target = "installed" if revision is None else "migrated"
                 advance_state(
-                    product_path, product_name, key,
-                    to=target, namespace=ns, name=name, version=version,
+                    product_path,
+                    product_name,
+                    key,
+                    to=target,
+                    namespace=ns,
+                    name=name,
+                    version=version,
                 )
                 break
     except Exception as e:

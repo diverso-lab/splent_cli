@@ -17,9 +17,7 @@ import tomli_w
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import (
-    normalize_namespace,
     parse_feature_entry,
-    read_features_from_data,
     write_features_to_data,
 )
 
@@ -33,10 +31,12 @@ def _latest_cached_version(cache_base: str, feature_name: str) -> str | None:
     prefix = f"{feature_name}@"
     for entry in os.listdir(cache_base):
         if entry.startswith(prefix):
-            tag = entry[len(prefix):]
+            tag = entry[len(prefix) :]
             m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", tag)
             if m:
-                versions.append((int(m.group(1)), int(m.group(2)), int(m.group(3)), tag))
+                versions.append(
+                    (int(m.group(1)), int(m.group(2)), int(m.group(3)), tag)
+                )
 
     if not versions:
         return None
@@ -74,8 +74,6 @@ def feature_pin(dry_run):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    env = os.getenv("SPLENT_ENV")
-
     click.echo()
     click.secho("  feature:pin", fg="cyan", bold=True)
     click.echo()
@@ -102,7 +100,9 @@ def feature_pin(dry_run):
 
             if not latest:
                 short = name.removeprefix("splent_feature_")
-                click.secho(f"  ⚠  {short:<20} no cached version found — skipping", fg="yellow")
+                click.secho(
+                    f"  ⚠  {short:<20} no cached version found — skipping", fg="yellow"
+                )
                 updated.append(entry)
                 continue
 
@@ -125,7 +125,9 @@ def feature_pin(dry_run):
 
     if dry_run:
         click.echo()
-        click.secho(f"  Dry run — {pinned_count} feature(s) would be pinned.", fg="yellow")
+        click.secho(
+            f"  Dry run — {pinned_count} feature(s) would be pinned.", fg="yellow"
+        )
         click.echo()
         return
 

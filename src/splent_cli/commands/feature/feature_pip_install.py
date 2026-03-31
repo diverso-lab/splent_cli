@@ -80,7 +80,9 @@ def feature_pip_install():
         if result.returncode == 0:
             click.echo(f"  ✅ {spec}")
         else:
-            click.secho(f"  ❌ {spec}: {result.stderr.strip().splitlines()[-1]}", fg="red")
+            click.secho(
+                f"  ❌ {spec}: {result.stderr.strip().splitlines()[-1]}", fg="red"
+            )
             failed.append(spec)
 
     click.echo()
@@ -90,7 +92,9 @@ def feature_pip_install():
             click.echo(f"   - {f}")
         raise SystemExit(1)
     else:
-        click.secho(f"✅ All {len(features)} feature(s) installed from PyPI.", fg="green")
+        click.secho(
+            f"✅ All {len(features)} feature(s) installed from PyPI.", fg="green"
+        )
 
 
 cli_command = feature_pip_install
