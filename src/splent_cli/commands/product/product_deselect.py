@@ -8,11 +8,17 @@ from splent_cli.services import context
     short_help="Deselect the active product (enter detached mode).",
 )
 @click.option("--shell", is_flag=True, help="Output shell commands for eval.")
-@context.requires_product
 def product_deselect(shell):
     """Clear SPLENT_APP from .env, entering detached mode."""
     workspace = context.workspace()
     workspace_env_path = str(workspace / ".env")
+
+    if context.is_detached():
+        if shell:
+            print("unset SPLENT_APP")
+        else:
+            click.echo("  Already in detached mode.")
+        return
 
     # Remove SPLENT_APP from .env file
     if os.path.exists(workspace_env_path):
@@ -23,11 +29,10 @@ def product_deselect(shell):
             f.writelines(new_lines)
 
     if shell:
-        # For: eval $(splent product:deselect --shell)
         print("unset SPLENT_APP")
     else:
-        click.echo("✅ Product deselected.")
-        click.echo("   Run: unset SPLENT_APP")
+        click.echo("  Product deselected.")
+        click.echo("  Run: unset SPLENT_APP")
 
 
 cli_command = product_deselect

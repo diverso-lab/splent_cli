@@ -32,18 +32,20 @@ def resolve_file(product_path: str, env: str) -> str | None:
 def feature_docker_dir(workspace: str, feature: str) -> str:
     """Return the docker/ directory for a feature.
 
+    Accepts refs like 'splent_io/splent_feature_redis@v1.5.4' or bare 'splent_feature_redis'.
     Checks workspace root first (editable features), then falls back
     to the .splent_cache (pinned features).
     """
-    # Extract bare name (strip org prefix if present)
+    # Extract bare name (strip org prefix and version)
     name = feature.split("/")[-1] if "/" in feature else feature
+    bare_name = name.split("@")[0]
 
     # Editable feature at workspace root
-    root_docker = os.path.join(workspace, name, "docker")
+    root_docker = os.path.join(workspace, bare_name, "docker")
     if os.path.isdir(root_docker):
         return root_docker
 
-    # Pinned feature in cache
+    # Pinned feature in cache (needs full ref with org and version)
     return os.path.join(workspace, ".splent_cache", "features", feature, "docker")
 
 

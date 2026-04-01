@@ -192,9 +192,7 @@ def product_env(generate, merge, env_name, process_all):
         feature_env_paths = []
         for feature in features:
             clean_ref = compose.normalize_feature_ref(feature)
-            bare_name = clean_ref.split("/")[-1] if "/" in clean_ref else clean_ref
-            bare_name = bare_name.split("@")[0]  # strip version
-            docker_dir_f = compose.feature_docker_dir(workspace, bare_name)
+            docker_dir_f = compose.feature_docker_dir(workspace, clean_ref)
 
             candidates_f = [
                 os.path.join(docker_dir_f, ".env"),

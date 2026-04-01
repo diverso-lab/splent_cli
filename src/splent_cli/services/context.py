@@ -58,7 +58,7 @@ def requires_product(fn):
     def wrapper(*args, **kwargs):
         if is_detached():
             click.secho(
-                "❌ No product selected.\n   Run: splent product:select <name>",
+                "  No product selected. Run: splent product:select <name>",
                 fg="red",
             )
             raise SystemExit(1)
@@ -78,8 +78,8 @@ def requires_detached(fn):
         app = active_app()
         if app:
             click.secho(
-                f"❌ A product is currently selected: {app}\n"
-                f"   Run: splent product:deselect",
+                f"  A product is currently selected: {app}\n"
+                f"  Run: splent product:deselect",
                 fg="red",
             )
             raise SystemExit(1)
