@@ -206,7 +206,27 @@ def db_rollback(feature, steps, cascade):
                 )
                 break
     except Exception as e:
-        click.secho(f"  ❌ {feature}: {e}", fg="red")
+        click.secho(f"  {feature}: {e}", fg="red")
+        raise SystemExit(1)
+
+    # Offer to delete migration files if fully rolled back to base
+    if revision is None:
+        versions_dir = os.path.join(mdir, "versions")
+        if os.path.isdir(versions_dir):
+            migration_files = [
+                f for f in os.listdir(versions_dir)
+                if f.endswith(".py") and not f.startswith("__")
+            ]
+            if migration_files and click.confirm(
+                f"  Delete {len(migration_files)} migration file(s)?",
+                default=False,
+            ):
+                for f in migration_files:
+                    os.remove(os.path.join(versions_dir, f))
+                click.echo(
+                    click.style("  deleted: ", dim=True)
+                    + f"{len(migration_files)} file(s)"
+                )
 
 
 cli_command = db_rollback

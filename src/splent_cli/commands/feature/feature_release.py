@@ -240,6 +240,16 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
     except Exception:
         pass
 
+    # Preserve any refinement section that comes after the contract
+    refinement_block = ""
+    ref_match = re.search(
+        r"((?:^# -- Refinement.*?\n)?^\[tool\.splent\.refinement\].*)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    if ref_match:
+        refinement_block = "\n" + ref_match.group(1).rstrip() + "\n"
+
     match = re.search(r"^# ── Feature Contract\b.*$", text, re.MULTILINE)
     if not match:
         match = re.search(r"^\[tool\.splent\.contract\b", text, re.MULTILINE)
@@ -251,7 +261,15 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
             return "[]"
         return "[" + ", ".join(f'"{i}"' for i in items) + "]"
 
-    if existing_extensible:
+    # Use existing extensible only if it has real content (not all empty)
+    has_real_extensible = existing_extensible and any([
+        existing_extensible.get("services"),
+        existing_extensible.get("templates"),
+        existing_extensible.get("models"),
+        existing_extensible.get("hooks"),
+        existing_extensible.get("routes"),
+    ])
+    if has_real_extensible:
         ext_services = existing_extensible.get("services", [])
         ext_templates = existing_extensible.get("templates", [])
         ext_models = existing_extensible.get("models", [])
@@ -295,7 +313,7 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         f"routes    = {'true' if ext_routes else 'false'}\n"
     )
 
-    path.write_text(text + contract_block)
+    path.write_text(text + contract_block + refinement_block)
 
 
 # ── Compile assets ────────────────────────────────────────────────────

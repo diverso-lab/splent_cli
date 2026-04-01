@@ -2,12 +2,11 @@ import os
 
 import click
 from flask import current_app
-from flask_migrate import migrate as alembic_migrate, upgrade as alembic_upgrade
+from flask_migrate import migrate as alembic_migrate
 
 from splent_cli.utils.decorators import requires_db
 from splent_cli.services import context
 from splent_cli.utils.lifecycle import (
-    advance_state,
     resolve_feature_key_from_entry,
     require_editable,
 )
@@ -53,8 +52,9 @@ def _is_empty_migration(path: str) -> bool:
     short_help="Generate and apply migrations (all features or a single one).",
 )
 @click.argument("feature", required=False, default=None)
+@click.option("-m", "message", default=None, help="Migration message (defaults to feature name).")
 @context.requires_product
-def db_migrate(feature):
+def db_migrate(feature, message):
     """
     Generate new migration files for features that have schema changes,
     then apply all pending migrations.
@@ -110,7 +110,7 @@ def db_migrate(feature):
         alembic_logger.setLevel(logging.WARNING)
 
         try:
-            alembic_migrate(directory=mdir, message=feat)
+            alembic_migrate(directory=mdir, message=message or feat)
         except Exception as e:
             if os.getenv("SPLENT_DEBUG"):
                 click.secho(
@@ -141,31 +141,6 @@ def db_migrate(feature):
                 )
         else:
             click.echo(click.style(f"  ✔ {feat}: up to date", fg="green"))
-
-        # Apply pending migrations
-        try:
-            alembic_upgrade(directory=mdir)
-            revision = MigrationManager.get_current_feature_revision(
-                feat, app.extensions["migrate"].db.engine
-            )
-            MigrationManager.update_feature_status(app, feat, revision)
-            click.echo(click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green"))
-
-            # Advance lifecycle state to "migrated"
-            info = entry_lookup.get(feat)
-            if info:
-                key, ns, name, version = info
-                advance_state(
-                    product_path,
-                    product_name,
-                    key,
-                    to="migrated",
-                    namespace=ns,
-                    name=name,
-                    version=version,
-                )
-        except Exception as e:
-            click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
 
 
 cli_command = db_migrate
