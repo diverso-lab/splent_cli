@@ -115,15 +115,33 @@ def product_build(no_image, skip_preflight):
         pydata = tomllib.load(f)
     declared_features = read_features_from_data(pydata, "prod")
 
+    # Check for editable (non-versioned) features — these can't be installed from PyPI
+    editable = [f for f in declared_features if "@" not in f.split("/")[-1]]
+    if editable:
+        names = ", ".join(
+            f.split("/")[-1] if "/" in f else f for f in editable
+        )
+        click.secho(
+            f"  The following features are editable (not versioned):\n"
+            f"    {names}\n\n"
+            f"  Production builds install features from PyPI. Editable features\n"
+            f"  have no published version and will fail during the Docker build.\n"
+            f"  Release them first (splent feature:release) or remove them\n"
+            f"  from the product (splent feature:remove).",
+            fg="yellow",
+        )
+        if not click.confirm("\n  Continue anyway?", default=False):
+            raise SystemExit(1)
+        click.echo()
+
     seen_features: set[str] = set()
     for feat in declared_features:
         clean = compose.normalize_feature_ref(feat)
-        bare_name = clean.split("/")[-1] if "/" in clean else clean
-        if bare_name in seen_features:
+        if clean in seen_features:
             continue
-        seen_features.add(bare_name)
+        seen_features.add(clean)
 
-        f_docker = compose.feature_docker_dir(workspace, bare_name)
+        f_docker = compose.feature_docker_dir(workspace, clean)
         if not os.path.isdir(f_docker):
             continue
 
@@ -170,12 +188,11 @@ def product_build(no_image, skip_preflight):
     seen_compose: set[str] = set()
     for feat in declared_features:
         clean = compose.normalize_feature_ref(feat)
-        bare_name = clean.split("/")[-1] if "/" in clean else clean
-        if bare_name in seen_compose:
+        if clean in seen_compose:
             continue
-        seen_compose.add(bare_name)
+        seen_compose.add(clean)
 
-        f_docker = compose.feature_docker_dir(workspace, bare_name)
+        f_docker = compose.feature_docker_dir(workspace, clean)
         if not os.path.isdir(f_docker):
             continue
 
@@ -186,7 +203,8 @@ def product_build(no_image, skip_preflight):
         )
 
         feature_compose = load_compose_file(feature_compose_file)
-        compose_result = merge_compose(compose_result, feature_compose, label=bare_name)
+        label = clean.split("/")[-1] if "/" in clean else clean
+        compose_result = merge_compose(compose_result, feature_compose, label=label)
 
     # Check for port conflicts in merged result
     port_map: dict[str, list[str]] = {}  # "host_port" -> [service_names]

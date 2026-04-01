@@ -174,7 +174,7 @@ class TestProductBuildCommand:
         (feat_docker / ".env.example").write_text("AUTH_SECRET=abc\n")
         (feat_docker / "docker-compose.prod.yml").write_text("services:\n  auth:\n    image: auth\n")
 
-        result = runner.invoke(product_build, ["--skip-preflight"])
+        result = runner.invoke(product_build, ["--skip-preflight"], input="y\n")
         assert result.exit_code == 0
         content = (docker_dir / ".env.deploy.example").read_text()
         assert "AUTH_SECRET=abc" in content
