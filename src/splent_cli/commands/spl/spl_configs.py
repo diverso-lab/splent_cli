@@ -1,7 +1,5 @@
 import click
 
-from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
-
 from splent_cli.commands.spl.spl_utils import _resolve_spl
 from splent_cli.commands.uvl.uvl_utils import (
     list_all_features_from_uvl as _list_all_features_from_uvl,
@@ -32,6 +30,11 @@ def spl_configs(spl_name, count, with_sat):
     """
     name, uvl_path = _resolve_spl(spl_name)
     universe, root_name = _list_all_features_from_uvl(uvl_path)
+
+    from splent_cli.commands.uvl.uvl_utils import _require_flamapy
+
+    _require_flamapy()
+    from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
 
     fm = FLAMAFeatureModel(uvl_path)
 

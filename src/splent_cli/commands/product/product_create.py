@@ -44,6 +44,27 @@ def copy_raw_file(template_name, filename):
     shutil.copy(src, filename)
 
 
+def _has_uvl(spl_dir):
+    """Check if an SPL directory has a UVL file (direct or via metadata.toml)."""
+    # Direct: {name}/{name}.uvl
+    if (spl_dir / f"{spl_dir.name}.uvl").is_file():
+        return True
+    # Via metadata.toml → spl.uvl.file
+    meta = spl_dir / "metadata.toml"
+    if meta.is_file():
+        import tomllib
+
+        with open(meta, "rb") as f:
+            data = tomllib.load(f)
+        uvl_file = data.get("spl", {}).get("uvl", {}).get("file", "")
+        if uvl_file and (spl_dir / uvl_file).is_file():
+            return True
+        # metadata exists with a UVL reference — SPL is valid even if not yet fetched
+        if uvl_file:
+            return True
+    return False
+
+
 @click.command("product:create", help="Creates a new product with a given name.")
 @click.argument("name")
 @click.option(
@@ -54,26 +75,56 @@ def copy_raw_file(template_name, filename):
 )
 @context.requires_detached
 def make_product(name, spl_name, features_file):
-    # Resolve SPL: from --spl flag, interactive selection, or empty
     workspace_path = context.workspace()
     catalog_dir = workspace_path / "splent_catalog"
 
-    if not spl_name and catalog_dir.is_dir():
+    if not spl_name:
+        if not catalog_dir.is_dir():
+            raise click.ClickException(
+                "No splent_catalog/ found in workspace. Clone it first."
+            )
+
         available = sorted(
             d.name
             for d in catalog_dir.iterdir()
-            if d.is_dir() and (d / f"{d.name}.uvl").is_file()
+            if d.is_dir() and not d.name.startswith(".") and _has_uvl(d)
         )
-        if available:
-            click.echo()
-            click.echo(click.style("  Available SPLs:", bold=True))
-            for i, s in enumerate(available, 1):
-                click.echo(f"    {i}. {s}")
-            click.echo("    0. No SPL (empty product)")
-            click.echo()
-            choice = click.prompt("  Select SPL", type=int, default=0)
-            if 1 <= choice <= len(available):
-                spl_name = available[choice - 1]
+
+        if not available:
+            raise click.ClickException(
+                "No SPLs found in splent_catalog/. Create one with: splent spl:create"
+            )
+
+        click.echo()
+        click.echo(click.style("  Available SPLs:", bold=True))
+        for i, s in enumerate(available, 1):
+            click.echo(f"    {i}. {s}")
+        click.echo()
+        choice = click.prompt(
+            "  Select SPL", type=click.IntRange(1, len(available)), default=1
+        )
+        spl_name = available[choice - 1]
+
+    # Ensure the UVL file is present — download from UVLHub if needed
+    spl_dir = catalog_dir / spl_name
+    uvl_file = spl_dir / f"{spl_name}.uvl"
+    if not uvl_file.is_file():
+        meta = spl_dir / "metadata.toml"
+        if meta.is_file():
+            try:
+                from splent_cli.commands.spl.spl_utils import (
+                    _resolve_spl_metadata,
+                    _fetch_uvl,
+                )
+
+                metadata = _resolve_spl_metadata(spl_name)
+                _fetch_uvl(spl_name, metadata, str(uvl_file))
+            except Exception as e:
+                click.secho(
+                    f"  ⚠️  Could not download UVL: {e}\n"
+                    f"     Run 'splent spl:fetch {spl_name}' manually.",
+                    fg="yellow",
+                )
 
     env = setup_jinja_env()
     offset = zlib.crc32(name.encode("utf-8")) % 1000  # 0–999

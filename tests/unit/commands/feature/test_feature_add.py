@@ -84,7 +84,7 @@ class TestSuccessfulAdd:
     def test_success_message(self, runner, product_workspace_with_feature):
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         assert result.exit_code == 0
-        assert "added successfully" in result.output.lower() or "✅" in result.output
+        assert "done" in result.output.lower() or "added" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ class TestIdempotency:
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         assert result.exit_code == 0
-        assert "already present" in result.output.lower()
+        assert "already" in result.output.lower()
 
     def test_existing_symlink_replaced_not_errored(self, runner, product_workspace_with_feature, tmp_path):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])

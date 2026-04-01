@@ -14,27 +14,23 @@
 
 set -e
 
-echo "🚀 [Handle migrations] entrypoint starting..."
+echo ""
 
 TABLE_COUNT=$(mariadb -u "$MARIADB_USER" -p"$MARIADB_PASSWORD" -h "$MARIADB_HOSTNAME" -P 3306 -D "$MARIADB_DATABASE" -sse \
     "SELECT COUNT(*) FROM information_schema.tables
      WHERE table_schema = '$MARIADB_DATABASE'
      AND table_name NOT IN ('splent_migrations');")
 
-echo "Found $TABLE_COUNT user-defined tables in database."
-
 if [ "$TABLE_COUNT" -eq 0 ]; then
-    echo "Empty database, applying all feature migrations..."
+    echo "    empty database, applying migrations..."
     splent db:upgrade
     if [ "$RUN_DB_SEED" = "true" ]; then
-        echo "Seeding database..."
+        echo "    seeding database..."
         splent db:seed -y
-    else
-        echo "Skipping DB seeding (RUN_DB_SEED != true)"
     fi
 else
-    echo "Database already initialized, applying pending feature migrations..."
+    echo "    applying pending migrations..."
     splent db:upgrade
 fi
 
-echo "✅ [Handle migrations] entrypoint finished."
+echo ""

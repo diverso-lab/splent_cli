@@ -59,15 +59,17 @@ def db_upgrade(feature):
     import logging
 
     logging.getLogger("alembic").setLevel(logging.WARNING)
+    logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
 
     for feat, mdir in dirs.items():
         try:
+            logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
             alembic_upgrade(directory=mdir)
             revision = MigrationManager.get_current_feature_revision(
                 feat, app.extensions["migrate"].db.engine
             )
             MigrationManager.update_feature_status(app, feat, revision)
-            click.echo(click.style(f"  ✅ {feat} → {revision or 'head'}", fg="green"))
+            click.echo(click.style(f"    {feat} -> {revision or 'head'}", fg="green"))
 
             # Advance lifecycle state to "migrated"
             info = entry_lookup.get(feat)

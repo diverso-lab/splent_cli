@@ -261,26 +261,27 @@ def product_derive(mode):
     ctx = click.get_current_context()
 
     if mode == "dev":
-        click.echo("  sync     resolving feature symlinks...")
+        click.echo(
+            click.style("  sync     ", dim=True) + "resolving feature symlinks..."
+        )
         ctx.invoke(product_sync, force=False)
 
-        click.echo("  env      generating .env files (dev)")
+        click.echo(click.style("  env      ", dim=True) + "generating .env files")
         ctx.invoke(
             product_env, generate=True, merge=False, env_name="dev", process_all=True
         )
 
-        click.echo("  env      merging .env files (dev)")
+        click.echo(click.style("  env      ", dim=True) + "merging .env files")
         ctx.invoke(
             product_env, generate=False, merge=True, env_name="dev", process_all=False
         )
 
-        click.echo("  up       starting containers (dev)")
+        click.echo(click.style("  up       ", dim=True) + "starting containers")
         ctx.invoke(product_up, dev=True, prod=False)
 
-        click.echo("  run      launching application (dev)")
+        click.echo(click.style("  run      ", dim=True) + "launching application")
         ctx.invoke(product_runc, env_dev=True, env_prod=False)
 
-        click.echo("  ports    exposing host ports")
         ctx.invoke(product_port, env_flag="dev")
 
     elif mode == "prod":

@@ -11,8 +11,23 @@ from pathlib import Path
 import click
 import tomllib
 
-from flamapy.core.discover import DiscoverMetamodels
 from splent_cli.utils.feature_utils import read_features_from_data
+
+
+def _require_flamapy():
+    try:
+        import flamapy  # noqa: F401
+    except ImportError:
+        raise click.ClickException(
+            "flamapy is not installed. Install it with: pip install splent_cli[uvl]"
+        )
+
+
+def _discover_metamodels():
+    _require_flamapy()
+    from flamapy.core.discover import DiscoverMetamodels
+
+    return DiscoverMetamodels()
 
 
 def read_splent_app(workspace: str) -> str:
@@ -150,7 +165,7 @@ def list_all_features_from_uvl(uvl_path: str) -> tuple[list[str], str]:
     """
     Parse a UVL file and return (sorted_feature_names, root_name).
     """
-    dm = DiscoverMetamodels()
+    dm = _discover_metamodels()
     fm = dm.use_transformation_t2m(uvl_path, "fm")
 
     root = get_root_feature(fm)

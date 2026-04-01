@@ -276,6 +276,9 @@ def _parse_feature_cardinalities(uvl_path: str) -> dict[str, tuple[int, int]]:
 
 def _load_spl_model(catalog_dir: str, spl_name: str) -> SPLModel:
     """Load UVL via Flamapy and build an abstract SPLModel."""
+    from splent_cli.commands.uvl.uvl_utils import _require_flamapy
+
+    _require_flamapy()
     from flamapy.core.discover import DiscoverMetamodels
 
     uvl_path = os.path.join(catalog_dir, spl_name, f"{spl_name}.uvl")
@@ -930,6 +933,9 @@ def product_configure():
 
     # ── Validate with Flamapy ──────────────────────────────
     click.echo("  Validating configuration... ", nl=False)
+    from splent_cli.commands.uvl.uvl_utils import _require_flamapy
+
+    _require_flamapy()
     from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
     from splent_cli.commands.uvl.uvl_utils import (
         list_all_features_from_uvl,

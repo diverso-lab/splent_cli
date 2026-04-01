@@ -206,12 +206,14 @@ def product_port(env_flag):
     # 7. Print result
     host_ip = detect_host_ip()
 
-    click.echo(f"Product: {app}")
-    click.echo(f"Environment: {resolved_env}")
-    click.echo(f"Compose file: {compose_path.name}")
-    click.echo(f"Service: {service_name}")
-    click.echo(f"Container: {service_name}")
-    click.echo(f"Internal port: {internal_port}")
-    click.echo(f"External port: {external_port}")
     click.echo()
-    click.echo(f"URL: http://{host_ip}:{external_port}")
+    click.echo(click.style("  Product:  ", dim=True) + app)
+    click.echo(click.style("  Env:      ", dim=True) + resolved_env)
+    click.echo(
+        click.style("  Port:     ", dim=True) + f"{external_port} -> {internal_port}"
+    )
+    click.echo()
+    click.echo(
+        click.style("  URL: ", bold=True)
+        + click.style(f"http://{host_ip}:{external_port}", fg="cyan", bold=True)
+    )

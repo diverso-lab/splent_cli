@@ -405,6 +405,12 @@ def feature_release(feature_ref, version, attach):
         post_pypi_hook=_post_pypi,
     )
 
+    if not attach:
+        product = context.require_app()
+        attach = click.confirm(
+            f"\n  Attach {feature_name}@{tag} to {product}?", default=True
+        )
+
     if attach:
         click.echo("  attach   linking to product...")
         ctx = click.get_current_context()

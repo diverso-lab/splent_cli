@@ -3,6 +3,7 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context, compose
+from splent_cli.utils.feature_utils import hot_reinstall
 from splent_cli.utils.manifest import feature_key, set_feature_state
 
 
@@ -32,7 +33,7 @@ def feature_attach(feature_identifier, version, env_scope):
       If not, run: splent feature:clone <namespace>/<feature>@<version>
     - Updates pyproject.toml referencing feature@version.
     - Creates/updates the versioned symlink in features/<namespace>/.
-    - Updates the manifest state to 'declared'.
+    - Reinstalls the feature in the web container for hot reload.
     """
     product = context.require_app()
     ws = context.workspace()
@@ -47,22 +48,23 @@ def feature_attach(feature_identifier, version, env_scope):
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(pyproject_path):
-        click.echo("❌ pyproject.toml not found in product.")
+        click.secho("  pyproject.toml not found.", fg="red")
         raise SystemExit(1)
 
-    # --- 1️⃣ Verify feature exists in cache ---------------------------------
+    # ── Verify feature exists in cache ────────────────────────────────
     versioned_dir = os.path.join(cache_base, f"{feature_name}@{version}")
 
     if not os.path.exists(versioned_dir):
+        click.secho(f"  {feature_name}@{version} not found in cache.", fg="red")
         click.echo(
-            f"❌ Feature '{namespace}/{feature_name}@{version}' not found in cache.\n"
-            f"   Run first: splent feature:clone {namespace}/{feature_name}@{version}"
+            click.style("  clone it first: ", dim=True)
+            + f"splent feature:clone {namespace}/{feature_name}@{version}"
         )
         raise SystemExit(1)
 
-    click.echo(f"✅ Cache found → {versioned_dir}")
+    short = feature_name.replace("splent_feature_", "")
 
-    # --- 2️⃣ Update pyproject.toml ------------------------------------------
+    # ── Update pyproject.toml ─────────────────────────────────────────
     full_name = f"{namespace}/{feature_name}@{version}"
     bare_name = f"{namespace}/{feature_name}"
 
@@ -82,9 +84,9 @@ def feature_attach(feature_identifier, version, env_scope):
     )
 
     if full_name in features:
-        click.echo(f"ℹ️  Feature '{full_name}' already present in {features_key}.")
+        click.echo(f"  {short}@{version} already in {features_key}.")
     else:
-        # Replace bare entry (added by uvl:sync) or old versioned entry if present
+        # Replace bare entry or old versioned entry if present
         features = [
             f for f in features if f != bare_name and not f.startswith(f"{bare_name}@")
         ]
@@ -93,9 +95,9 @@ def feature_attach(feature_identifier, version, env_scope):
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
         scope_label = f" ({env_scope} only)" if env_scope else ""
-        click.echo(f"🧩 Updated {features_key} → {full_name}{scope_label}")
+        click.echo(f"  {short}@{version} attached{scope_label}")
 
-    # --- 3️⃣ Create/update symlink ------------------------------------------
+    # ── Create/update symlink ─────────────────────────────────────────
     product_features_dir = os.path.join(product_path, "features", namespace_fs)
     os.makedirs(product_features_dir, exist_ok=True)
 
@@ -105,9 +107,7 @@ def feature_attach(feature_identifier, version, env_scope):
     rel_target = os.path.relpath(versioned_dir, product_features_dir)
     os.symlink(rel_target, new_link)
 
-    click.echo(f"🔗 Linked {new_link} → {rel_target}")
-
-    # --- 4️⃣ Update manifest ------------------------------------------------
+    # ── Update manifest ───────────────────────────────────────────────
     key = feature_key(namespace_fs, feature_name, version)
     set_feature_state(
         product_path,
@@ -120,4 +120,11 @@ def feature_attach(feature_identifier, version, env_scope):
         mode="pinned",
     )
 
-    click.echo("🎯 Feature successfully attached.")
+    # ── Hot reinstall in web container ────────────────────────────────
+    # Symlink resolves to cache path — install from there
+    install_path = (
+        f"/workspace/{product}/features/{namespace_fs}/{feature_name}@{version}"
+    )
+    hot_reinstall(product_path, install_path, feature_name)
+
+    click.secho("  done.", fg="green")

@@ -14,7 +14,7 @@ if [ "$(id -u)" -eq 0 ]; then
   LOG_DIR="/var/log/splent"
 else
   if [ -z "${SPLENT_HOST_PROJECT_DIR:-}" ]; then
-    echo "❌ SPLENT_HOST_PROJECT_DIR not defined."
+    echo "  error: SPLENT_HOST_PROJECT_DIR not defined."
     exit 1
   fi
   LOG_DIR="${SPLENT_HOST_PROJECT_DIR}/.splent/logs"
@@ -26,30 +26,25 @@ touch "$LOG_FILE"
 
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "--------------------------------------------------"
-echo "SPLENT PROD ENTRYPOINT START"
-echo "User: $(whoami)"
-echo "Date: $(date)"
-echo "Log file: $LOG_FILE"
-echo "--------------------------------------------------"
+echo ""
 
 _last_cmd=""
 trap '_last_cmd=$BASH_COMMAND' DEBUG
-trap 'rc=$?; echo "❌ FAIL (rc=$rc) while running: ${_last_cmd}"; echo "   at ${BASH_SOURCE[0]}:${LINENO}"; exit $rc' ERR
+trap 'rc=$?; echo "  FAIL (rc=$rc) while running: ${_last_cmd}"; echo "    at ${BASH_SOURCE[0]}:${LINENO}"; exit $rc' ERR
 
 run_step () {
   local step="$1"
   local script="$2"
 
   echo ""
-  echo "==> [$step] $script"
+  echo "  [$step]"
   bash "$script"
   rc=$?
   if [ $rc -ne 0 ]; then
-  echo "❌ Step failed: [$step] (rc=$rc) $script"
+  echo "  FAIL [$step] (rc=$rc)"
   exit $rc
   fi
-  echo "✅ Step ok: [$step]"
+  echo "  ok [$step]"
 }
 
 # ---------------------------------------------------------------------------
@@ -61,7 +56,7 @@ ENV_DEPLOY="/workspace/{{ product_name }}/docker/.env.deploy"
 ENV_FILE="/workspace/{{ product_name }}/docker/.env"
 if [ -f "$ENV_DEPLOY" ]; then
   cp "$ENV_DEPLOY" "$ENV_FILE"
-  echo "📋 Synced .env.deploy → .env"
+  echo "  synced .env.deploy -> .env"
 fi
 
 # ---------------------------------------------------------------------------
@@ -74,4 +69,4 @@ run_step "04_handle_migrations"     "/workspace/{{ product_name }}/scripts/04_ha
 run_step "05_1_start_app_prod"      "/workspace/{{ product_name }}/scripts/05_1_start_app_prod.sh"
 
 echo ""
-echo "SPLENT PROD ENTRYPOINT FINISHED"
+echo "  entrypoint finished"

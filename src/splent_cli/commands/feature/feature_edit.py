@@ -9,62 +9,6 @@ from splent_cli.utils.cache_utils import make_feature_writable
 
 
 # =====================================================================
-# GITHUB WRITE ACCESS CHECK
-# =====================================================================
-def _has_write_access(ns_git: str, name: str) -> tuple[bool, str]:
-    """Check if the authenticated user has push access to ns_git/name.
-
-    Returns (has_access, reason_if_denied).
-    """
-    token = os.getenv("GITHUB_TOKEN")
-    github_user = os.getenv("GITHUB_USER", "(not set)")
-    if not token:
-        return False, (
-            f"GitHub user (env): {github_user}\n"
-            f"     Repo owner:      {ns_git}\n"
-            f"     GITHUB_TOKEN not set"
-        )
-
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"token {token}",
-        "User-Agent": "splent-cli",
-    }
-    try:
-        resp = requests.get(
-            f"https://api.github.com/repos/{ns_git}/{name}",
-            headers=headers,
-            timeout=5,
-        )
-        if resp.status_code == 404:
-            return False, (
-                f"GitHub user (env): {github_user}\n"
-                f"     Repo owner:      {ns_git}\n"
-                f"     Repo {ns_git}/{name} not found (404)"
-            )
-        if resp.status_code == 200:
-            perms = resp.json().get("permissions", {})
-            if perms.get("push", False):
-                return True, ""
-            return False, (
-                f"GitHub user (env): {github_user}\n"
-                f"     Repo owner:      {ns_git}\n"
-                f"     Push access: {perms.get('push', False)}"
-            )
-        return False, (
-            f"GitHub user (env): {github_user}\n"
-            f"     Repo owner:      {ns_git}\n"
-            f"     GitHub API returned {resp.status_code}"
-        )
-    except requests.RequestException as e:
-        return False, (
-            f"GitHub user (env): {github_user}\n"
-            f"     Repo owner:      {ns_git}\n"
-            f"     API error: {e}"
-        )
-
-
-# =====================================================================
 # CACHE PATH RESOLVER
 # =====================================================================
 def get_feature_paths(workspace: str, ns_fs: str, name: str, version: str | None):
@@ -140,39 +84,12 @@ def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
 
 
 # =====================================================================
-# HOT REINSTALL — pip install + Flask reload in the web container
+# HOT REINSTALL — delegated to shared utility
 # =====================================================================
 def _hot_reinstall(workspace: str, product_path: str, editable_path: str, name: str):
-    """Reinstall the feature via pip in the product's web container and trigger Flask reload."""
-    product = os.path.basename(product_path)
-    env = os.getenv("SPLENT_ENV", "dev")
-    docker_dir = os.path.join(product_path, "docker")
+    from splent_cli.utils.feature_utils import hot_reinstall
 
-    compose_file = compose.resolve_file(product_path, env)
-    if not compose_file:
-        return  # no docker-compose file — nothing to do
-
-    pname = compose.project_name(product, env)
-    container_id = compose.find_main_container(pname, compose_file, docker_dir)
-    if not container_id:
-        return  # container not running — nothing to do
-
-    # 1. pip install -e from the new path
-    click.echo(f"     🔄 Reinstalling {name} in web container...")
-    pip_cmd = (
-        f"pip install --no-cache-dir --root-user-action=ignore -q -e /workspace/{name}"
-    )
-    subprocess.run(
-        ["docker", "exec", container_id, "bash", "-c", pip_cmd],
-        capture_output=True,
-    )
-
-    # 2. Touch the app's __init__.py to trigger watchmedo auto-restart
-    init_py = f"/workspace/{product}/src/{product}/__init__.py"
-    subprocess.run(
-        ["docker", "exec", container_id, "bash", "-c", f"touch {init_py}"],
-        capture_output=True,
-    )
+    hot_reinstall(product_path, f"/workspace/{name}", name)
 
 
 # =====================================================================
@@ -205,7 +122,7 @@ def _compile_assets(workspace: str, product_path: str, name: str):
     if not container_id:
         return
 
-    click.echo("     📦 Compiling assets...")
+    click.echo(click.style("    compiling assets...", dim=True))
     product_root = f"/workspace/{product}"
     cmd = f"cd {shlex.quote(product_root)} && npx webpack --config {shlex.quote(webpack_file)} --mode development"
     result = subprocess.run(
@@ -213,10 +130,40 @@ def _compile_assets(workspace: str, product_path: str, name: str):
         capture_output=True,
         text=True,
     )
-    if result.returncode == 0:
-        click.echo("     ✔  Assets compiled.")
-    else:
-        click.secho("     ⚠  Asset compilation failed.", fg="yellow")
+    if result.returncode != 0:
+        click.secho("    asset compilation failed.", fg="yellow")
+
+
+# =====================================================================
+# WRITE ACCESS WARNING
+# =====================================================================
+def _warn_no_push_access(ns_git: str, name: str):
+    """Print a warning if the user cannot push to the repo. Non-blocking."""
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return  # no token = can't check, don't nag
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"token {token}",
+        "User-Agent": "splent-cli",
+    }
+    try:
+        resp = requests.get(
+            f"https://api.github.com/repos/{ns_git}/{name}",
+            headers=headers,
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            perms = resp.json().get("permissions", {})
+            if not perms.get("push", False):
+                click.secho(
+                    f"    note: no push access to {ns_git}/{name}\n"
+                    f"    use 'splent feature:fork' to work on your own copy",
+                    fg="yellow",
+                )
+    except requests.RequestException:
+        pass  # network error — don't block
 
 
 # =====================================================================
@@ -239,38 +186,26 @@ def _edit_one(
         name, version = rest, None
 
     if not version:
-        click.echo(f"  ℹ️  {match} — already editable, skipping.")
+        click.echo(click.style(f"  {name}", dim=True) + " already editable")
         return True
 
-    # Guard: require write access to the GitHub repo
-    if not force:
-        has_access, reason = _has_write_access(ns_git, name)
-        if not has_access:
-            click.secho(
-                f"  ❌ No write access to {ns_git}/{name}.\n"
-                f"     {reason}\n"
-                f"     To work on your own copy, use: splent feature:fork {ns_git}/{name}\n"
-                f"     Or use --force to bypass this check.",
-                fg="red",
-            )
-            return False
-
-    click.echo(f"  🧩 {ns_git}/{name}@{version}")
+    short = name.replace("splent_feature_", "")
+    click.echo(f"  {short} ({version}) -> editable")
 
     versioned_path, editable_path = get_feature_paths(workspace, ns_fs, name, version)
 
     if not os.path.exists(versioned_path):
-        click.secho(f"  ❌ Versioned cache not found: {versioned_path}", fg="red")
+        click.secho(f"    cached version not found: {versioned_path}", fg="red")
         return False
 
     if not os.path.exists(editable_path):
         import shutil
 
-        click.echo(f"     📦 Creating editable copy → {editable_path}")
+        click.echo(click.style("    copying to workspace root...", dim=True))
         result = subprocess.run(["cp", "-r", versioned_path, editable_path])
         if result.returncode != 0:
             shutil.rmtree(editable_path, ignore_errors=True)
-            click.secho("     ❌ Failed to copy feature to editable path.", fg="red")
+            click.secho("    failed to copy feature.", fg="red")
             return False
 
     # Always ensure editable copy is writable (cache files are read-only)
@@ -302,7 +237,10 @@ def _edit_one(
     # Compile webpack assets via the product's web container
     _compile_assets(workspace, product_path, name)
 
-    click.secho("     ✔  ready for editing.", fg="green")
+    # Non-blocking warning if user can't push
+    _warn_no_push_access(ns_git, name)
+
+    click.secho("    ready.", fg="green")
     return True
 
 
@@ -329,7 +267,7 @@ def feature_edit(feature_name, edit_all, force):
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(pyproject_path):
-        click.echo("❌ pyproject.toml not found.")
+        click.secho("  pyproject.toml not found.", fg="red")
         raise SystemExit(1)
 
     if not feature_name and not edit_all:
@@ -353,7 +291,7 @@ def feature_edit(feature_name, edit_all, force):
             None,
         )
         if not match:
-            click.echo(f"❌ Feature {feature_name} not found in pyproject.")
+            click.secho(f"  {feature_name} not found in pyproject.", fg="red")
             raise SystemExit(1)
 
         click.echo()
@@ -367,17 +305,20 @@ def feature_edit(feature_name, edit_all, force):
 
     click.echo()
     if already_editable:
-        click.secho(
-            f"  ℹ️  {len(already_editable)} feature(s) already editable — skipping.",
-            fg="bright_black",
+        click.echo(
+            click.style(
+                f"  {len(already_editable)} feature(s) already editable, skipping.",
+                dim=True,
+            )
         )
 
     if not versioned:
-        click.secho("  ✅ All features are already editable.", fg="green")
+        click.secho("  All features are already editable.", fg="green")
         click.echo()
         return
 
-    click.secho(f"  Converting {len(versioned)} feature(s) to editable:\n", fg="cyan")
+    click.echo(f"  Converting {len(versioned)} feature(s) to editable:")
+    click.echo()
     ok = 0
     for match in versioned:
         if _edit_one(workspace, product_path, pyproject_path, match, force=force):
@@ -385,7 +326,7 @@ def feature_edit(feature_name, edit_all, force):
         click.echo()
 
     click.secho(
-        f"  {ok}/{len(versioned)} feature(s) converted.",
+        f"  {ok}/{len(versioned)} converted.",
         fg="green" if ok == len(versioned) else "yellow",
     )
     click.echo()

@@ -24,7 +24,7 @@ def product_runc(env_dev, env_prod):
     # 1. MUTUAL EXCLUSION CHECK
     # -------------------------------------------------------------
     if env_dev and env_prod:
-        click.secho("❌ You cannot use --dev and --prod at the same time.", fg="red")
+        click.secho("  You cannot use --dev and --prod at the same time.", fg="red")
         raise SystemExit(1)
 
     # -------------------------------------------------------------
@@ -81,10 +81,9 @@ def product_runc(env_dev, env_prod):
     # 4. EXEC ENTRYPOINT
     # -------------------------------------------------------------
     if target_id:
-        click.echo(f"🧩 Executing entrypoint ({env}) in container {target_id[:12]}...")
         subprocess.run(
             ["docker", "exec", "-i", target_id, "bash", "-lc", f"bash {entrypoint}"]
         )
     else:
-        click.echo(f"⚠️ No containers found, running locally ({env})")
+        click.secho(f"  No containers found, running locally ({env})", fg="yellow")
         subprocess.run(["bash", entrypoint], cwd=docker_dir, check=False)

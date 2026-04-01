@@ -2,6 +2,95 @@
 # Kept here for backward compatibility with CLI commands that import from this module.
 from splent_framework.utils.feature_utils import get_features_from_pyproject  # noqa: F401
 
+import os
+import subprocess
+
+
+def hot_reinstall(product_path: str, install_path: str, name: str):
+    """Reinstall a feature via pip in the web container and trigger Flask reload.
+
+    Parameters
+    ----------
+    product_path : str
+        Absolute path to the product directory.
+    install_path : str
+        Container path to pip install -e from (e.g. /workspace/splent_feature_auth).
+    name : str
+        Feature package name (for logging).
+    """
+    import click
+    from splent_cli.services import compose
+
+    product = os.path.basename(product_path)
+    env = os.getenv("SPLENT_ENV", "dev")
+    docker_dir = os.path.join(product_path, "docker")
+
+    compose_file = compose.resolve_file(product_path, env)
+    if not compose_file:
+        return
+
+    pname = compose.project_name(product, env)
+    container_id = compose.find_main_container(pname, compose_file, docker_dir)
+    if not container_id:
+        return
+
+    click.echo(click.style("    reinstalling in web container...", dim=True))
+    pip_cmd = (
+        f"pip install --no-cache-dir --root-user-action=ignore -q -e {install_path}"
+    )
+    subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", pip_cmd],
+        capture_output=True,
+    )
+
+    # Touch the app's __init__.py to trigger watchmedo auto-restart
+    init_py = f"/workspace/{product}/src/{product}/__init__.py"
+    subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", f"touch {init_py}"],
+        capture_output=True,
+    )
+
+
+def hot_uninstall(product_path: str, name: str):
+    """Uninstall a feature via pip in the web container and trigger Flask reload.
+
+    Parameters
+    ----------
+    product_path : str
+        Absolute path to the product directory.
+    name : str
+        Feature package name (e.g. splent_feature_auth).
+    """
+    import click
+    from splent_cli.services import compose
+
+    product = os.path.basename(product_path)
+    env = os.getenv("SPLENT_ENV", "dev")
+    docker_dir = os.path.join(product_path, "docker")
+
+    compose_file = compose.resolve_file(product_path, env)
+    if not compose_file:
+        return
+
+    pname = compose.project_name(product, env)
+    container_id = compose.find_main_container(pname, compose_file, docker_dir)
+    if not container_id:
+        return
+
+    click.echo(click.style("    uninstalling from web container...", dim=True))
+    pip_cmd = f"pip uninstall -y -q {name}"
+    subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", pip_cmd],
+        capture_output=True,
+    )
+
+    # Touch the app's __init__.py to trigger watchmedo auto-restart
+    init_py = f"/workspace/{product}/src/{product}/__init__.py"
+    subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", f"touch {init_py}"],
+        capture_output=True,
+    )
+
 
 DEFAULT_NAMESPACE = "splent-io"
 

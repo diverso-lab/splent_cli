@@ -51,10 +51,10 @@ class TestSuccessfulAttach:
         cache_dir.mkdir(parents=True)
         return cache_dir
 
-    def test_reports_cache_found(self, runner, product_workspace):
+    def test_reports_attached(self, runner, product_workspace):
         self._setup_cache(product_workspace)
         result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
-        assert "Cache found" in result.output
+        assert "attached" in result.output.lower() or "done" in result.output.lower()
 
     def test_updates_pyproject(self, runner, product_workspace):
         self._setup_cache(product_workspace)
@@ -73,19 +73,14 @@ class TestSuccessfulAttach:
     def test_success_message(self, runner, product_workspace):
         self._setup_cache(product_workspace)
         result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
-        assert "successfully attached" in result.output
-
-    def test_reports_link_created(self, runner, product_workspace):
-        self._setup_cache(product_workspace)
-        result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
-        assert "Linked" in result.output
+        assert "done" in result.output.lower() or "attached" in result.output.lower()
 
     def test_idempotent_already_present(self, runner, product_workspace):
         self._setup_cache(product_workspace)
         runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
         result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
         assert result.exit_code == 0
-        assert "already present" in result.output
+        assert "already" in result.output.lower()
 
     def test_replaces_bare_entry_with_versioned(self, runner, product_workspace):
         # Write pyproject with bare entry (as uvl:sync would produce)

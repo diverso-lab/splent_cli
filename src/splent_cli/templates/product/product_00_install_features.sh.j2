@@ -10,7 +10,7 @@
 
 set -e
 
-echo "🚀 [Install features] entrypoint starting..."
+echo ""
 
 features=$(python3 -c '
 import os, tomllib
@@ -27,8 +27,7 @@ print("\n".join(feats))
 ')
 
 if [ -z "$features" ]; then
-    echo "ℹ️  No features declared."
-    echo "✅ [Install features] entrypoint finished."
+    echo "    no features declared."
     exit 0
 fi
 
@@ -70,7 +69,7 @@ for feature in $features; do
         done
 
         if [ -z "$found_path" ]; then
-            echo "⚠️  $feature not found locally. Skipping."
+            echo "    $feature not found locally, skipping."
             continue
         fi
 
@@ -98,7 +97,7 @@ for feature in $features; do
     done
 
     if [ -n "$found_path" ]; then
-        echo "📦 Installing $pkg_name..."
+        echo "    installing $pkg_name..."
         if pip install --no-cache-dir --root-user-action=ignore -e "$found_path" >/dev/null 2>&1; then
             installed=$((installed + 1))
             python3 -c "
@@ -109,11 +108,11 @@ product_path = os.path.join(os.getenv('WORKING_DIR', '/workspace'), os.getenv('S
 advance_state(product_path, os.getenv('SPLENT_APP', ''), key, to='installed', namespace=ns, name=name, version=ver)
 " 2>/dev/null || true
         else
-            echo "❌ Error installing $feature"
+            echo "    FAIL: error installing $feature"
         fi
     else
-        echo "⚠️  $feature not found. Skipping."
+        echo "    $feature not found, skipping."
     fi
 done
 
-echo "✅ [Install features] $installed installed, $skipped already up to date."
+echo "    $installed installed, $skipped already up to date."

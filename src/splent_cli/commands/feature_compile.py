@@ -103,7 +103,7 @@ def _compile_in_container(container_id, feature, watch, production, workspace, p
     if version:
         click.echo(
             click.style(
-                f"⏩ {feature} is pinned ({version}) — skipping.",
+                f"    {feature} is pinned ({version}), skipping.",
                 fg="bright_black",
             )
         )

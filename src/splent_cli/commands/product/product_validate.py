@@ -3,8 +3,6 @@ import sys
 
 import click
 
-from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
-
 from splent_cli.services import context
 from splent_cli.commands.uvl.uvl_utils import (
     read_splent_app as _read_splent_app,
@@ -23,10 +21,13 @@ def _infer_parents(uvl_path: str, selected: set[str]) -> set[str]:
     Abstract group nodes (like 'session_type') must be active when
     one of their children is selected.
     """
-    from splent_cli.commands.uvl.uvl_utils import get_root_feature, iter_children
-    from flamapy.core.discover import DiscoverMetamodels
+    from splent_cli.commands.uvl.uvl_utils import (
+        get_root_feature,
+        iter_children,
+        _discover_metamodels,
+    )
 
-    dm = DiscoverMetamodels()
+    dm = _discover_metamodels()
     fm = dm.use_transformation_t2m(uvl_path, "fm")
     root = get_root_feature(fm)
 
@@ -114,6 +115,11 @@ def product_validate(feature_list, pyproject, print_config):
     conf_path = _write_csvconf_full(universe, selected)
 
     try:
+        from splent_cli.commands.uvl.uvl_utils import _require_flamapy
+
+        _require_flamapy()
+        from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
+
         fm = FLAMAFeatureModel(local_uvl)
         ok = fm.satisfiable_configuration(conf_path, full_configuration=False)
     finally:

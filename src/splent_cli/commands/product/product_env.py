@@ -68,7 +68,7 @@ def product_env(generate, merge, env_name, process_all):
     product = context.require_app()
 
     if not env_name:
-        click.echo("❌ You must specify --dev or --prod.")
+        click.secho("  You must specify --dev or --prod.", fg="red")
         raise SystemExit(1)
 
     product_path = os.path.join(workspace, product)
@@ -76,29 +76,28 @@ def product_env(generate, merge, env_name, process_all):
     py_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(py_path):
-        click.echo(f"❌ pyproject.toml not found at {py_path}")
+        click.secho(f"  pyproject.toml not found at {py_path}", fg="red")
         raise SystemExit(1)
 
     if not os.path.exists(docker_dir):
-        click.echo(f"❌ docker directory not found at {docker_dir}")
+        click.secho(f"  docker directory not found at {docker_dir}", fg="red")
         raise SystemExit(1)
 
     if not (generate or merge):
-        click.echo("❌ You must specify either --generate or --merge.")
+        click.secho("  You must specify either --generate or --merge.", fg="red")
         raise SystemExit(1)
 
-    # ======================================================
-    # 1️⃣ GENERATE MODE
-    # ======================================================
+    # ── Generate mode ─────────────────────────────────────────────────────
     if generate:
         env_file = os.path.join(docker_dir, ".env")
         example_specific = os.path.join(docker_dir, f".env.{env_name}.example")
         example_generic = os.path.join(docker_dir, ".env.example")
 
-        click.echo(f"🚀 Generating .env for product '{product}' ({env_name})...")
-
         if os.path.exists(env_file):
-            click.echo(f"ℹ️  Existing .env found for {product}, skipping creation.")
+            click.echo(
+                click.style("  product ", dim=True)
+                + click.style(".env exists, skipping", dim=True)
+            )
         else:
             selected = (
                 example_specific
@@ -108,14 +107,15 @@ def product_env(generate, merge, env_name, process_all):
             if selected:
                 shutil.copyfile(selected, env_file)
                 click.echo(
-                    f"📄 Created {product}/docker/.env from {os.path.basename(selected)}"
+                    click.style("  product ", dim=True)
+                    + f".env created from {os.path.basename(selected)}"
                 )
             else:
-                click.echo(f"⚠️  No .env template found for {product} in {docker_dir}")
+                click.secho(
+                    f"  product  no .env template found in {docker_dir}", fg="yellow"
+                )
 
-        # If only product env is needed, stop here
         if not process_all:
-            click.echo("✅ Product .env generation complete.")
             return
 
         # Process all declared features
@@ -124,12 +124,8 @@ def product_env(generate, merge, env_name, process_all):
 
         features = read_features_from_data(data, env_name)
         if not features:
-            click.echo("ℹ️ No features declared in pyproject.toml.")
+            click.echo(click.style("  No features declared.", dim=True))
             return
-
-        click.echo(
-            f"🚀 Generating .env files for {len(features)} features ({env_name})...\n"
-        )
 
         created, skipped, no_template, failed = 0, 0, 0, 0
         for f_entry in features:
@@ -139,35 +135,29 @@ def product_env(generate, merge, env_name, process_all):
             output = result.stdout.strip()
             lines = [line.strip() for line in output.splitlines() if line.strip()]
             cleaned = "\n".join(lines)
-            if cleaned:
-                click.echo(cleaned)
 
             if result.returncode != 0:
                 if "docker directory not found" in cleaned:
                     no_template += 1
                 else:
                     failed += 1
+                    click.secho(f"  {base_name}: {cleaned}", fg="red")
                 continue
             if "No .env template" in cleaned:
                 no_template += 1
             elif "Created" in cleaned:
                 created += 1
+                short = base_name.split("/")[-1] if "/" in base_name else base_name
+                click.echo(f"  {click.style('  +', fg='green')}  {short} .env created")
             else:
                 skipped += 1
 
-        click.echo("\n✅ Feature .env generation complete.")
-        click.echo(f"   📄 Created: {created}")
-        click.echo(f"   ⏩ Skipped: {skipped}")
-        click.echo(f"   📭 No template: {no_template}")
-        click.echo(f"   💥 Failed: {failed}")
+        if failed:
+            click.secho(f"  {created} created, {failed} failed", fg="red")
         return
 
-    # ======================================================
-    # 2️⃣ MERGE MODE
-    # ======================================================
+    # ── Merge mode ────────────────────────────────────────────────────────
     if merge:
-        click.echo(f"🌍 Merging environment: {env_name}")
-
         # Locate product base env file
         candidates = [
             os.path.join(docker_dir, f".env.{env_name}.example"),
@@ -177,22 +167,20 @@ def product_env(generate, merge, env_name, process_all):
         base_env = next((c for c in candidates if os.path.exists(c)), None)
 
         if not base_env:
-            click.echo(
-                f"❌ No .env.{env_name}.example, .env.example or .env found in {docker_dir}"
+            click.secho(
+                f"  No .env template found for {product} ({env_name})", fg="red"
             )
             raise SystemExit(1)
 
         target_env = os.path.join(docker_dir, ".env")
         if base_env != target_env:
             shutil.copyfile(base_env, target_env)
-            click.echo(f"📋 Product: using {os.path.basename(base_env)} → .env")
 
         with open(py_path, "rb") as f:
             data = tomllib.load(f)
         features = read_features_from_data(data, env_name)
         if not features:
-            click.echo("ℹ️ No features declared.")
-            raise SystemExit(0)
+            return
 
         merged = {}
         with open(target_env, "r", encoding="utf-8") as f:
@@ -209,21 +197,17 @@ def product_env(generate, merge, env_name, process_all):
             docker_dir_f = compose.feature_docker_dir(workspace, bare_name)
 
             candidates_f = [
-                os.path.join(docker_dir_f, ".env"),  # preferimos la .env ya generada
+                os.path.join(docker_dir_f, ".env"),
                 os.path.join(docker_dir_f, f".env.{env_name}.example"),
                 os.path.join(docker_dir_f, ".env.example"),
             ]
             base_f = next((c for c in candidates_f if os.path.exists(c)), None)
             if not base_f:
-                click.echo(
-                    f"⚠️ {feature}: no .env.{env_name}.example, .env.example or .env found."
-                )
                 continue
 
             target_f = os.path.join(docker_dir_f, ".env")
             if base_f != target_f:
                 shutil.copyfile(base_f, target_f)
-                click.echo(f"📋 {feature}: using {os.path.basename(base_f)} → .env")
 
             feature_env_paths.append(target_f)
 
@@ -240,7 +224,6 @@ def product_env(generate, merge, env_name, process_all):
                 for line in f:
                     if "=" in line and not line.strip().startswith("#"):
                         k, v = line.strip().split("=", 1)
-                        # Apply product offset to feature port variables
                         if k not in merged and _is_port_var(k, v):
                             try:
                                 original = int(v)
@@ -257,10 +240,12 @@ def product_env(generate, merge, env_name, process_all):
                 f.write(f"{k}={v}\n")
 
         if port_adjusted:
-            click.echo("🔧 Adjusted feature ports for product isolation:")
-            for name, orig, adj in port_adjusted:
-                click.echo(f"   {name}: {orig} → {adj} (+{port_offset})")
+            click.echo(
+                click.style("  ports    ", dim=True)
+                + f"adjusted {len(port_adjusted)} feature port(s) (+{port_offset})"
+            )
 
         click.echo(
-            f"🔗 Merged {len(feature_env_paths)} feature .env files into {target_env}"
+            click.style("  merged   ", dim=True)
+            + f"{len(feature_env_paths)} feature .env file(s) into product .env"
         )

@@ -14,7 +14,7 @@
 
 set -e
 
-echo "🚀 [Start app in prod mode] entrypoint starting..."
+echo ""
 
 WORKERS=${GUNICORN_WORKERS:-$(( 2 * $(nproc) + 1 ))}
 TIMEOUT=${GUNICORN_TIMEOUT:-120}

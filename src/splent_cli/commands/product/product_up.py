@@ -15,8 +15,8 @@ def _check_docker_running():
     )
     if result.returncode != 0:
         click.secho(
-            "❌ Docker daemon is not running or not reachable.\n"
-            "   Start Docker and try again.",
+            "  Docker daemon is not running or not reachable.\n"
+            "  Start Docker and try again.",
             fg="red",
         )
         raise SystemExit(1)
@@ -31,11 +31,14 @@ def _check_docker_running():
 def product_up(dev, prod):
     """Starts the product and its features using Docker Compose."""
     if dev and prod:
-        click.echo("❌ You cannot specify both --dev and --prod.")
+        click.secho("  You cannot specify both --dev and --prod.", fg="red")
         raise SystemExit(1)
 
     if not dev and not prod and not os.getenv("SPLENT_ENV"):
-        click.echo("❌ No environment specified. Use --dev, --prod or set SPLENT_ENV.")
+        click.secho(
+            "  No environment specified. Use --dev, --prod or set SPLENT_ENV.",
+            fg="red",
+        )
         raise SystemExit(1)
 
     _check_docker_running()
@@ -45,29 +48,33 @@ def product_up(dev, prod):
     product_path = compose.product_path(product, str(context.workspace()))
 
     failed: list[str] = []
+    started: list[str] = []
 
     def launch(name, base_path):
         compose_file = compose.resolve_file(base_path, env)
         if compose_file is None:
-            click.echo(f"⚠️ No docker-compose file for {name}")
             return
         project_name = compose.project_name(name, env)
         result = subprocess.run(
             ["docker", "compose", "-p", project_name, "-f", compose_file, "up", "-d"],
+            capture_output=True,
+            text=True,
             check=False,
         )
+        short = name.split("/")[-1] if "/" in name else name
         if result.returncode != 0:
-            click.secho(
-                f"❌  {name}: failed to start (exit {result.returncode})", fg="red"
-            )
+            click.secho(f"    ✗  {short}: failed (exit {result.returncode})", fg="red")
+            if result.stderr.strip():
+                for line in result.stderr.strip().splitlines():
+                    click.echo(f"       {line}")
             failed.append(name)
         else:
-            click.echo(f"✅  {name}: started successfully")
+            started.append(short)
 
     # Load features
     py = os.path.join(product_path, "pyproject.toml")
     if not os.path.exists(py):
-        click.echo("❌ pyproject.toml not found in product path.")
+        click.secho("  pyproject.toml not found in product path.", fg="red")
         raise SystemExit(1)
 
     with open(py, "rb") as f:
@@ -82,8 +89,8 @@ def product_up(dev, prod):
 
     if failed:
         click.secho(
-            f"\n❌ {len(failed)} service(s) failed to start: {', '.join(failed)}\n"
-            "   The product was not launched. Fix the failing services and retry.",
+            f"\n  {len(failed)} service(s) failed to start: {', '.join(failed)}\n"
+            "  The product was not launched. Fix the failing services and retry.",
             fg="red",
         )
         raise SystemExit(1)
@@ -93,3 +100,6 @@ def product_up(dev, prod):
 
     if failed:
         raise SystemExit(1)
+
+    if started:
+        click.echo(click.style("    started: ", dim=True) + ", ".join(started))
