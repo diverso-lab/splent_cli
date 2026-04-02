@@ -88,9 +88,13 @@ def make_feature(full_name):
     if short_name.startswith("splent_feature_"):
         short_name = short_name[len("splent_feature_") :]
 
+    # PascalCase for class names: notes_tags → NotesTags
+    pascal_name = "".join(w.capitalize() for w in short_name.split("_"))
+
     template_ctx = {
         "feature_name": feature_name,
         "short_name": short_name,
+        "pascal_name": pascal_name,
         "org_safe": org_safe,
         "feature_import": f"{org_safe}.{feature_name}",
         "cli_version": _CLI_VERSION,

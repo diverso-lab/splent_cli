@@ -403,6 +403,45 @@ def _update_env_py(
         f.write(content)
 
 
+def _scaffold_hooks(feature_path: str, ns: str, feature_name: str, fill_hooks: list[str]):
+    """Create a hooks.py with register_template_hook calls for selected slots."""
+    ns_safe = normalize_namespace(ns)
+    hooks_path = os.path.join(feature_path, "src", ns_safe, feature_name, "hooks.py")
+
+    # Build function stubs for each hook
+    func_lines = []
+    register_lines = []
+    for hook in fill_hooks:
+        # notes.index.before_list → notes_index_before_list
+        func_name = hook.replace(".", "_")
+        func_lines.append(f"def {func_name}():")
+        func_lines.append(f'    """Fill the {hook} slot."""')
+        func_lines.append(f'    return render_template("hooks/{func_name}.html")')
+        func_lines.append("")
+        func_lines.append("")
+        register_lines.append(f'register_template_hook("{hook}", {func_name})')
+
+    code = (
+        "from splent_framework.hooks.template_hooks import register_template_hook\n"
+        "from flask import render_template\n"
+        "\n\n"
+        + "\n".join(func_lines)
+        + "\n".join(register_lines)
+        + "\n"
+    )
+
+    # Don't overwrite if hooks.py already has content
+    if os.path.isfile(hooks_path):
+        with open(hooks_path, "r") as f:
+            existing = f.read()
+        if "register_template_hook" in existing:
+            return
+
+    os.makedirs(os.path.dirname(hooks_path), exist_ok=True)
+    with open(hooks_path, "w") as f:
+        f.write(code)
+
+
 def _clean_scaffold_for_refinement(feature_path: str, ns: str, feature_name: str):
     """Clean up scaffold files that cause false positives in refinement features.
 
@@ -610,14 +649,32 @@ def feature_refinement(refiner_name):
             )
 
     # ── Hooks ─────────────────────────────────────────────────────────
+    # Separate hooks into two categories:
+    #   - Hooks the base feature registers (from provides.hooks) → can be overridden
+    #   - Hook slots the base feature offers in templates → can be filled (additive)
+    fill_hooks: list[str] = []
     if ext["hooks"]:
-        click.echo(click.style("  Hooks", bold=True) + click.style(" (override registration)", dim=True))
-        selected_hooks = _multi_select(ext["hooks"], "hooks to override")
-        for hook in selected_hooks:
-            override_hooks.append((hook, ""))
-            click.echo(
-                click.style("    override: ", dim=True) + hook
-            )
+        provided_hooks = set(provides.get("hooks", []))
+        overridable_hooks = [h for h in ext["hooks"] if h in provided_hooks]
+        fillable_hooks = [h for h in ext["hooks"] if h not in provided_hooks]
+
+        if fillable_hooks:
+            click.echo(click.style("  Hook slots", bold=True) + click.style(" (fill with register_template_hook)", dim=True))
+            selected_fill = _multi_select(fillable_hooks, "hook slots to fill")
+            for hook in selected_fill:
+                fill_hooks.append(hook)
+                click.echo(
+                    click.style("    fill: ", dim=True) + hook
+                )
+
+        if overridable_hooks:
+            click.echo(click.style("  Hooks", bold=True) + click.style(" (override with replace_template_hook)", dim=True))
+            selected_hooks = _multi_select(overridable_hooks, "hooks to override")
+            for hook in selected_hooks:
+                override_hooks.append((hook, ""))
+                click.echo(
+                    click.style("    override: ", dim=True) + hook
+                )
 
     # ── Routes ────────────────────────────────────────────────────────
     if ext["routes"] and provides.get("blueprints"):
@@ -634,7 +691,7 @@ def feature_refinement(refiner_name):
                 )
 
     # ── Check if anything was selected ───────────────────────────────
-    total = len(override_services) + len(override_templates) + len(override_hooks) + len(extend_models) + len(add_routes)
+    total = len(override_services) + len(override_templates) + len(override_hooks) + len(extend_models) + len(add_routes) + len(fill_hooks)
     if total == 0:
         click.echo()
         click.secho("  Nothing selected. Aborting.", fg="yellow")
@@ -724,6 +781,13 @@ def feature_refinement(refiner_name):
         click.style("  scaffolded: ", dim=True)
         + "__init__.py"
     )
+
+    if fill_hooks:
+        _scaffold_hooks(refiner_path, ns, refiner_name, fill_hooks)
+        click.echo(
+            click.style("  scaffolded: ", dim=True)
+            + f"hooks.py <- {len(fill_hooks)} hook slot(s)"
+        )
 
     # Clean up scaffold files that are not needed for refinement features
     _clean_scaffold_for_refinement(refiner_path, ns, refiner_name)

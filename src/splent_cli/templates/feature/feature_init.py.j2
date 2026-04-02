@@ -1,10 +1,13 @@
 from splent_framework.blueprints.base_blueprint import create_blueprint
+from splent_framework.services.service_locator import register_service
+
+from {{ feature_import }}.services import {{ short_name | pascalcase }}Service
 
 {{ short_name }}_bp = create_blueprint(__name__)
 
 
 def init_feature(app):
-    pass
+    register_service(app, "{{ short_name | pascalcase }}Service", {{ short_name | pascalcase }}Service)
 
 
 def inject_context_vars(app):

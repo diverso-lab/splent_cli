@@ -175,6 +175,10 @@ def _print_diff(current: dict, inferred: dict) -> bool:
         ("signals", "provides.signals"),
         ("translations", "provides.translations"),
         ("requires_signals", "requires.signals"),
+        ("extensible_services", "extensible.services"),
+        ("extensible_templates", "extensible.templates"),
+        ("extensible_models", "extensible.models"),
+        ("extensible_hooks", "extensible.hooks"),
     ]
 
     diff_lines = []

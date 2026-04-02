@@ -46,6 +46,57 @@ def _bare_name(feature_ref: str) -> str:
     return name
 
 
+# ── Helpers for collecting active items ──────────────────────────────
+
+
+def _active_items_for_feature(name, ext, overrides, hook_usage, full):
+    """Return list of (category_singular, item, annotation) for items to display."""
+    lines = []
+    for cat in ["services", "templates", "models", "hooks"]:
+        items = ext.get(cat, [])
+        if not items:
+            continue
+        cat_s = cat[:-1]
+        for item in items:
+            override = next(
+                (
+                    o
+                    for o in overrides
+                    if o["target"] == item and o["category"] == cat_s
+                ),
+                None,
+            )
+            if override:
+                action = (
+                    "overridden"
+                    if override["action"] == "override"
+                    else "extended"
+                )
+                lines.append((cat_s, item, ("override", f"{action} by {override['refiner']}")))
+            elif cat == "hooks" and item in hook_usage:
+                providers = [f for f in hook_usage[item] if f != name]
+                if providers:
+                    lines.append((cat_s, item, ("hook", ", ".join(providers))))
+                elif full:
+                    lines.append((cat_s, item, ("extensible", None)))
+            elif full:
+                lines.append((cat_s, item, ("extensible", None)))
+
+    # Routes
+    if ext.get("routes"):
+        route_adds = [o for o in overrides if o["category"] == "route"]
+        if route_adds:
+            for r in route_adds:
+                lines.append(("route", r["replacement"], ("override", f"added by {r['refiner']}")))
+        elif full:
+            lines.append(("routes", "", ("extensible_routes", None)))
+
+    return lines
+
+
+# ── Command ──────────────────────────────────────────────────────────
+
+
 @click.command("feature:xray", short_help="Show refinement map for the active product.")
 @click.argument("feature_ref", required=False)
 @click.option(
@@ -64,7 +115,10 @@ def _bare_name(feature_ref: str) -> str:
 @click.option(
     "--validate", is_flag=True, help="Validate extensibility (detect conflicts)."
 )
-def feature_xray(feature_ref, filter_cat, validate):
+@click.option(
+    "--full", is_flag=True, help="Show all extensible points (not just active ones)."
+)
+def feature_xray(feature_ref, filter_cat, validate, full):
     """Show the refinement and extension map for all features (or a single one)."""
     workspace = str(context.workspace())
     product = context.require_app()
@@ -178,31 +232,80 @@ def feature_xray(feature_ref, filter_cat, validate):
         click.echo(click.style(f"  {product} (product layout)", bold=True))
         if layout_template:
             click.echo(f"    {'template':>10}: {layout_template}")
+
+        used_layout = []
+        unused_layout = []
         for hook_name in layout_hooks:
             users = hook_usage.get(hook_name, [])
             if users:
-                user_str = ", ".join(users)
-                click.echo(
-                    f"    {'hook':>10}: {hook_name}"
-                    + click.style(f"  ← {user_str}", fg="green")
-                )
+                used_layout.append((hook_name, users))
+            else:
+                unused_layout.append(hook_name)
+
+        for hook_name, users in used_layout:
+            user_str = ", ".join(users)
+            click.echo(
+                f"    {'hook':>10}: {hook_name}"
+                + click.style(f"  ← {user_str}", fg="green")
+            )
+
+        if unused_layout:
+            if full:
+                for hook_name in unused_layout:
+                    click.echo(
+                        f"    {'hook':>10}: {hook_name}"
+                        + click.style("  (unused)", fg="bright_black")
+                    )
             else:
                 click.echo(
-                    f"    {'hook':>10}: {hook_name}"
-                    + click.style("  (unused)", fg="bright_black")
+                    click.style(
+                        f"    {'':>10}  {len(unused_layout)} unused: {', '.join(unused_layout)}",
+                        fg="bright_black",
+                    )
                 )
         click.echo()
 
+    # Feature sections
+    quiet_features = []
+
     for name in display_features:
-        data = feature_data[name]
-        ext = data["extensible"]
-        ref = data["refinement"]
-        contract = data["contract"]
+        fdata = feature_data[name]
+        ext = fdata["extensible"]
+        ref = fdata["refinement"]
+        contract = fdata["contract"]
         overrides = refinement_map.get(name, [])
         is_refiner = bool(ref.get("refines"))
 
         # Skip features with no relevance if we have a filter
         if filter_cat and not overrides and not ext and not is_refiner:
+            continue
+
+        # Collect active items
+        active_lines = _active_items_for_feature(name, ext, overrides, hook_usage, full)
+
+        # Apply category filter
+        if filter_cat:
+            active_lines = [
+                (c, i, a) for c, i, a in active_lines if c == filter_cat
+            ]
+
+        # Refiner contributions
+        refiner_lines = []
+        if is_refiner:
+            base = ref["refines"]
+            my_overrides = [
+                o for o in refinement_map.get(base, []) if o["refiner"] == name
+            ]
+            for o in my_overrides:
+                if filter_cat and o["category"] != filter_cat:
+                    continue
+                refiner_lines.append(o)
+
+        # Decide if this feature has anything to show
+        has_content = bool(active_lines or refiner_lines or is_refiner or overrides)
+
+        if not has_content and not full:
+            quiet_features.append(name)
             continue
 
         # Header
@@ -215,58 +318,31 @@ def feature_xray(feature_ref, filter_cat, validate):
 
         click.echo(click.style(f"  {label}", bold=True))
 
-        # Extensible points
+        # Active extensible items
         if ext and not is_refiner:
-            for cat in ["services", "templates", "models", "hooks"]:
-                items = ext.get(cat, [])
-                if not items:
-                    continue
-                if filter_cat and cat.rstrip("s") != filter_cat:
-                    continue
-                for item in items:
-                    # Check if overridden
-                    override = next(
-                        (
-                            o
-                            for o in overrides
-                            if o["target"] == item and o["category"] == cat.rstrip("s")
-                        ),
-                        None,
+            for cat_s, item, (kind, detail) in active_lines:
+                if kind == "override":
+                    click.echo(
+                        f"    {cat_s:>10}: {item}"
+                        + click.style(f"  ← {detail}", fg="yellow")
                     )
-                    if override:
-                        action_icon = (
-                            "overridden"
-                            if override["action"] == "override"
-                            else "extended"
-                        )
-                        click.echo(
-                            f"    {cat[:-1]:>10}: {item}"
-                            + click.style(
-                                f"  ← {action_icon} by {override['refiner']}",
-                                fg="yellow",
-                            )
-                        )
-                    else:
-                        click.echo(
-                            f"    {cat[:-1]:>10}: {item}"
-                            + click.style("  (extensible)", fg="bright_black")
-                        )
-
-            if ext.get("routes"):
-                route_adds = [o for o in overrides if o["category"] == "route"]
-                if route_adds:
-                    for r in route_adds:
-                        click.echo(
-                            f"    {'route':>10}: {r['replacement']}"
-                            + click.style(f"  ← added by {r['refiner']}", fg="yellow")
-                        )
-                elif not filter_cat or filter_cat == "route":
+                elif kind == "hook":
+                    click.echo(
+                        f"    {cat_s:>10}: {item}"
+                        + click.style(f"  ← {detail}", fg="green")
+                    )
+                elif kind == "extensible":
+                    click.echo(
+                        f"    {cat_s:>10}: {item}"
+                        + click.style("  (extensible)", fg="bright_black")
+                    )
+                elif kind == "extensible_routes":
                     click.echo(
                         f"    {'routes':>10}: "
                         + click.style("extensible (no additions)", fg="bright_black")
                     )
 
-        # Show what this feature provides (from contract)
+        # Non-extensible feature provides (from contract)
         provides = contract.get("provides", {})
         if not ext and not is_refiner:
             for cat in ["services", "models", "routes", "hooks", "commands", "signals"]:
@@ -277,31 +353,28 @@ def feature_xray(feature_ref, filter_cat, validate):
                     for item in items:
                         click.echo(f"    {cat[:-1]:>10}: {item}")
 
-        # Show refinement contributions
-        if is_refiner:
-            base = ref["refines"]
-            my_overrides = [
-                o for o in refinement_map.get(base, []) if o["refiner"] == name
-            ]
-            for o in my_overrides:
-                if filter_cat and o["category"] != filter_cat:
-                    continue
-                if o["action"] == "override":
-                    click.echo(
-                        f"    {o['category']:>10}: {o['target']}"
-                        + click.style(f" → {o['replacement']}", fg="green")
-                    )
-                elif o["action"] == "extend":
-                    click.echo(
-                        f"    {o['category']:>10}: {o['target']}"
-                        + click.style(f" + {o['replacement']}", fg="green")
-                    )
-                elif o["action"] == "add":
-                    click.echo(
-                        f"    {o['category']:>10}: {o['target']}"
-                        + click.style(f" + {o['replacement']}", fg="green")
-                    )
+        # Refinement contributions
+        for o in refiner_lines:
+            if o["action"] == "override":
+                click.echo(
+                    f"    {o['category']:>10}: {o['target']}"
+                    + click.style(f" → {o['replacement']}", fg="green")
+                )
+            elif o["action"] in ("extend", "add"):
+                click.echo(
+                    f"    {o['category']:>10}: {o['target']}"
+                    + click.style(f" + {o['replacement']}", fg="green")
+                )
 
+        click.echo()
+
+    # Quiet features
+    if quiet_features and not feature_ref:
+        names = ", ".join(quiet_features)
+        click.secho(
+            f"  {names} — no active refinements",
+            fg="bright_black",
+        )
         click.echo()
 
     # Summary
@@ -323,8 +396,8 @@ def feature_xray(feature_ref, filter_cat, validate):
     click.echo()
 
     ok = 0
-    warn = 0
     fail = 0
+    info_lines = []
 
     # 1. Services: check for name collisions
     all_services: dict[str, list[str]] = {}
@@ -333,30 +406,21 @@ def feature_xray(feature_ref, filter_cat, validate):
             all_services.setdefault(svc, []).append(name)
 
     svc_collisions = {s: fs for s, fs in all_services.items() if len(fs) > 1}
-    if svc_collisions:
-        # Check if collision is a legitimate refinement override
-        for svc, features_list in svc_collisions.items():
-            is_refinement = any(
-                o["target"] == svc and o["category"] == "service"
-                for overrides_list in refinement_map.values()
-                for o in overrides_list
-            )
-            if is_refinement:
-                click.secho(
-                    f"  ✅ Service '{svc}' — overridden by refinement ({', '.join(features_list)})",
-                    fg="green",
-                )
-                ok += 1
-            else:
-                click.secho(
-                    f"  ❌ Service '{svc}' — collision: {', '.join(features_list)}",
-                    fg="red",
-                )
-                fail += 1
-    else:
-        click.secho(
-            f"  ✅ Services: no collisions ({len(all_services)} unique)", fg="green"
+    for svc, features_list in svc_collisions.items():
+        is_refinement = any(
+            o["target"] == svc and o["category"] == "service"
+            for overrides_list in refinement_map.values()
+            for o in overrides_list
         )
+        if is_refinement:
+            ok += 1
+        else:
+            click.secho(
+                f"  ❌ Service '{svc}' — collision: {', '.join(features_list)}",
+                fg="red",
+            )
+            fail += 1
+    if not svc_collisions:
         ok += 1
 
     # 2. Models: check for name collisions
@@ -366,17 +430,13 @@ def feature_xray(feature_ref, filter_cat, validate):
             all_models.setdefault(model, []).append(name)
 
     model_collisions = {m: fs for m, fs in all_models.items() if len(fs) > 1}
-    if model_collisions:
-        for model, features_list in model_collisions.items():
-            click.secho(
-                f"  ❌ Model '{model}' — collision: {', '.join(features_list)}",
-                fg="red",
-            )
-            fail += 1
-    else:
+    for model, features_list in model_collisions.items():
         click.secho(
-            f"  ✅ Models: no collisions ({len(all_models)} unique)", fg="green"
+            f"  ❌ Model '{model}' — collision: {', '.join(features_list)}",
+            fg="red",
         )
+        fail += 1
+    if not model_collisions:
         ok += 1
 
     # 3. Routes: check for collisions
@@ -386,17 +446,13 @@ def feature_xray(feature_ref, filter_cat, validate):
             all_routes.setdefault(route, []).append(name)
 
     route_collisions = {r: fs for r, fs in all_routes.items() if len(fs) > 1}
-    if route_collisions:
-        for route, features_list in route_collisions.items():
-            click.secho(
-                f"  ❌ Route '{route}' — collision: {', '.join(features_list)}",
-                fg="red",
-            )
-            fail += 1
-    else:
+    for route, features_list in route_collisions.items():
         click.secho(
-            f"  ✅ Routes: no collisions ({len(all_routes)} unique)", fg="green"
+            f"  ❌ Route '{route}' — collision: {', '.join(features_list)}",
+            fg="red",
         )
+        fail += 1
+    if not route_collisions:
         ok += 1
 
     # 4. Blueprints: check for name collisions
@@ -406,17 +462,13 @@ def feature_xray(feature_ref, filter_cat, validate):
             all_bps.setdefault(bp, []).append(name)
 
     bp_collisions = {b: fs for b, fs in all_bps.items() if len(fs) > 1}
-    if bp_collisions:
-        for bp, features_list in bp_collisions.items():
-            click.secho(
-                f"  ❌ Blueprint '{bp}' — collision: {', '.join(features_list)}",
-                fg="red",
-            )
-            fail += 1
-    else:
+    for bp, features_list in bp_collisions.items():
         click.secho(
-            f"  ✅ Blueprints: no collisions ({len(all_bps)} unique)", fg="green"
+            f"  ❌ Blueprint '{bp}' — collision: {', '.join(features_list)}",
+            fg="red",
         )
+        fail += 1
+    if not bp_collisions:
         ok += 1
 
     # 5. Commands: check for name collisions
@@ -426,17 +478,13 @@ def feature_xray(feature_ref, filter_cat, validate):
             all_commands.setdefault(cmd, []).append(name)
 
     cmd_collisions = {c: fs for c, fs in all_commands.items() if len(fs) > 1}
-    if cmd_collisions:
-        for cmd, features_list in cmd_collisions.items():
-            click.secho(
-                f"  ❌ Command '{cmd}' — collision: {', '.join(features_list)}",
-                fg="red",
-            )
-            fail += 1
-    else:
+    for cmd, features_list in cmd_collisions.items():
         click.secho(
-            f"  ✅ Commands: no collisions ({len(all_commands)} unique)", fg="green"
+            f"  ❌ Command '{cmd}' — collision: {', '.join(features_list)}",
+            fg="red",
         )
+        fail += 1
+    if not cmd_collisions:
         ok += 1
 
     # 6. Signals: check for name collisions (emitters)
@@ -446,19 +494,15 @@ def feature_xray(feature_ref, filter_cat, validate):
             all_signals.setdefault(sig, []).append(name)
 
     sig_collisions = {s: fs for s, fs in all_signals.items() if len(fs) > 1}
-    if sig_collisions:
-        for sig, features_list in sig_collisions.items():
-            click.secho(
-                f"  ❌ Signal '{sig}' — collision: {', '.join(features_list)}", fg="red"
-            )
-            fail += 1
-    else:
+    for sig, features_list in sig_collisions.items():
         click.secho(
-            f"  ✅ Signals: no collisions ({len(all_signals)} unique)", fg="green"
+            f"  ❌ Signal '{sig}' — collision: {', '.join(features_list)}", fg="red"
         )
+        fail += 1
+    if not sig_collisions:
         ok += 1
 
-    # 7. Hooks: shared slots (warn, not error — additive by design)
+    # 7. Hooks: shared slots
     shared_hooks: dict[str, list[str]] = {}
     for name, fdata in feature_data.items():
         for hook in fdata["contract"].get("provides", {}).get("hooks", []):
@@ -466,32 +510,14 @@ def feature_xray(feature_ref, filter_cat, validate):
 
     multi_hooks = {h: fs for h, fs in shared_hooks.items() if len(fs) > 1}
     if multi_hooks:
-        for hook, features_list in multi_hooks.items():
-            click.secho(
-                f"  ℹ️  Hook '{hook}' — {len(features_list)} contributors: {', '.join(features_list)}",
-                fg="bright_black",
-            )
-        click.secho(
-            f"  ✅ Hooks: {len(multi_hooks)} shared slot(s) — additive, OK", fg="green"
-        )
-        ok += 1
-    else:
-        click.secho(
-            f"  ✅ Hooks: no shared slots ({len(shared_hooks)} unique)", fg="green"
-        )
-        ok += 1
+        info_lines.append(f"{len(multi_hooks)} shared hook(s)")
+    ok += 1
 
     # 8. Layout hooks: check for unused slots
     unused_hooks = [h for h in layout_hooks if h not in hook_usage]
     used_hooks = [h for h in layout_hooks if h in hook_usage]
     if unused_hooks:
-        click.secho(
-            f"  ℹ️  Layout: {len(unused_hooks)} unused hook(s): {', '.join(unused_hooks)}",
-            fg="bright_black",
-        )
-    click.secho(
-        f"  ✅ Layout: {len(used_hooks)}/{len(layout_hooks)} hooks active", fg="green"
-    )
+        info_lines.append(f"{len(unused_hooks)} unused layout hook(s)")
     ok += 1
 
     # 9. Refinements: validate targets
@@ -514,10 +540,6 @@ def feature_xray(feature_ref, filter_cat, validate):
                 else:
                     ok += 1
             elif o["target"] in extensible_list:
-                click.secho(
-                    f"  ✅ {o['refiner']} overrides {base_name}/{o['target']} — allowed",
-                    fg="green",
-                )
                 ok += 1
             else:
                 click.secho(
@@ -527,14 +549,16 @@ def feature_xray(feature_ref, filter_cat, validate):
                 fail += 1
 
     # Final summary
-    click.echo()
     if fail:
         click.secho(
-            f"  {fail} issue(s) found, {warn} warning(s), {ok} passed.", fg="red"
+            f"  {fail} issue(s) found, {ok} passed.", fg="red"
         )
         raise SystemExit(1)
     else:
-        click.secho(f"  ✅ All {ok} checks passed.", fg="green")
+        summary = f"  ✅ All {ok} checks passed."
+        if info_lines:
+            summary += click.style(f"  ({', '.join(info_lines)})", fg="bright_black")
+        click.secho(summary, fg="green")
     click.echo()
 
 

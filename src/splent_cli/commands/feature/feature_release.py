@@ -118,6 +118,20 @@ def _extract_templates(src_dir: Path) -> list[str]:
     )
 
 
+def _extract_template_hook_slots(src_dir: Path) -> list[str]:
+    """Extract hook slot names declared in templates via get_template_hooks(...)."""
+    templates_dir = src_dir / "templates"
+    if not templates_dir.exists():
+        return []
+    slots: set[str] = set()
+    for html_file in templates_dir.rglob("*.html"):
+        text = html_file.read_text()
+        slots.update(
+            re.findall(r"""get_template_hooks\s*\(\s*['"]([^'"]+)['"]""", text)
+        )
+    return sorted(slots)
+
+
 def _extract_docker(feature_root: Path) -> list[str]:
     found = []
     for pattern in ("docker-compose*.yml", "docker-compose*.yaml"):
@@ -195,6 +209,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
     hooks = _extract_hooks(src_dir / "hooks.py")
     services = _extract_services(src_dir / "services.py")
     templates = _extract_templates(src_dir)
+    template_hook_slots = _extract_template_hook_slots(src_dir)
     commands = _extract_commands(src_dir / "commands.py")
     docker = _extract_docker(feature_root)
     req_features, env_vars = _scan_dependencies(src_dir, feature_name)
@@ -217,7 +232,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
         "extensible_services": services,
         "extensible_templates": templates,
         "extensible_models": models,
-        "extensible_hooks": hooks,
+        "extensible_hooks": sorted(set(hooks + template_hook_slots)),
         "extensible_routes": bool(blueprints),
     }
 
@@ -261,26 +276,12 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
             return "[]"
         return "[" + ", ".join(f'"{i}"' for i in items) + "]"
 
-    # Use existing extensible only if it has real content (not all empty)
-    has_real_extensible = existing_extensible and any([
-        existing_extensible.get("services"),
-        existing_extensible.get("templates"),
-        existing_extensible.get("models"),
-        existing_extensible.get("hooks"),
-        existing_extensible.get("routes"),
-    ])
-    if has_real_extensible:
-        ext_services = existing_extensible.get("services", [])
-        ext_templates = existing_extensible.get("templates", [])
-        ext_models = existing_extensible.get("models", [])
-        ext_hooks = existing_extensible.get("hooks", [])
-        ext_routes = existing_extensible.get("routes", False)
-    else:
-        ext_services = contract.get("extensible_services", [])
-        ext_templates = contract.get("extensible_templates", [])
-        ext_models = contract.get("extensible_models", [])
-        ext_hooks = contract.get("extensible_hooks", [])
-        ext_routes = contract.get("extensible_routes", False)
+    # Always use inferred extensible values — they reflect current source code
+    ext_services = contract.get("extensible_services", [])
+    ext_templates = contract.get("extensible_templates", [])
+    ext_models = contract.get("extensible_models", [])
+    ext_hooks = contract.get("extensible_hooks", [])
+    ext_routes = contract.get("extensible_routes", False)
 
     contract_block = (
         "\n\n"
