@@ -291,7 +291,7 @@ def _check_blueprints(counters):
 
 @click.command(
     "check:product",
-    short_help="Validate product health: env vars, symlinks, config.",
+    short_help="Quick health check: env vars, symlinks, and config files.",
 )
 @context.requires_product
 def check_product():

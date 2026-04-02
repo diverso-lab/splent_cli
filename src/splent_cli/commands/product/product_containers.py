@@ -81,8 +81,8 @@ def _format_ports(ports) -> str:
 
 
 @click.command(
-    "product:docker",
-    short_help="Show Docker container status for the active product and its features.",
+    "product:containers",
+    short_help="List Docker container status for the active product and its features.",
 )
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")

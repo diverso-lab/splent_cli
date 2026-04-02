@@ -5,7 +5,8 @@ from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
 @click.command(
-    "feature:list", short_help="List all features declared in the active product."
+    "feature:list",
+    short_help="List feature names declared in pyproject.toml (simple, scriptable output).",
 )
 def feature_list():
     """List features declared in [tool.splent] of the active product's pyproject.toml,

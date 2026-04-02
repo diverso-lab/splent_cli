@@ -9,7 +9,7 @@ from splent_cli.utils.manifest import feature_key, set_feature_state
 
 @click.command(
     "feature:attach",
-    short_help="Attach a cached feature version to the current product.",
+    short_help="Register a cached versioned feature in the active product.",
 )
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)

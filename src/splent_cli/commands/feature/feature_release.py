@@ -133,10 +133,96 @@ def _extract_template_hook_slots(src_dir: Path) -> list[str]:
 
 
 def _extract_docker(feature_root: Path) -> list[str]:
+    """List docker-compose filenames (legacy field for provides.docker)."""
     found = []
+    docker_dir = feature_root / "docker"
+    if not docker_dir.is_dir():
+        return found
     for pattern in ("docker-compose*.yml", "docker-compose*.yaml"):
-        found.extend(p.name for p in feature_root.glob(pattern))
+        found.extend(p.name for p in docker_dir.glob(pattern))
     return sorted(found)
+
+
+def _extract_docker_contract(feature_root: Path) -> dict:
+    """Parse docker-compose files and extract structured Docker metadata.
+
+    Returns dict with: services, ports, volumes, networks, build, healthcheck,
+    depends_on_services.
+    """
+    docker_dir = feature_root / "docker"
+    result = {
+        "services": [],
+        "ports": [],
+        "volumes": [],
+        "networks": [],
+        "build": False,
+        "healthcheck": False,
+        "depends_on_services": [],
+    }
+
+    if not docker_dir.is_dir():
+        return result
+
+    # Parse all compose files (prefer default, merge info from all variants)
+    compose_files = sorted(docker_dir.glob("docker-compose*.yml")) + sorted(
+        docker_dir.glob("docker-compose*.yaml")
+    )
+    if not compose_files:
+        return result
+
+    try:
+        import yaml
+    except ImportError:
+        return result
+
+    services_seen: set[str] = set()
+    ports_seen: set[str] = set()
+    volumes_seen: set[str] = set()
+    networks_seen: set[str] = set()
+    depends_seen: set[str] = set()
+
+    for cf in compose_files:
+        try:
+            with open(cf) as f:
+                data = yaml.safe_load(f) or {}
+        except Exception:
+            continue
+
+        for svc_name, svc_def in data.get("services", {}).items():
+            if not isinstance(svc_def, dict):
+                continue
+            services_seen.add(svc_name)
+
+            if "build" in svc_def:
+                result["build"] = True
+
+            if "healthcheck" in svc_def:
+                result["healthcheck"] = True
+
+            for p in svc_def.get("ports", []):
+                ports_seen.add(str(p))
+
+            for dep_svc in svc_def.get("depends_on") or {}:
+                if isinstance(dep_svc, str):
+                    depends_seen.add(dep_svc)
+
+            for net in svc_def.get("networks", []):
+                if isinstance(net, str):
+                    networks_seen.add(net)
+
+        for vol_name in data.get("volumes", {}):
+            volumes_seen.add(vol_name)
+
+        for net_name in data.get("networks", {}):
+            networks_seen.add(net_name)
+
+    result["services"] = sorted(services_seen)
+    result["ports"] = sorted(ports_seen)
+    result["volumes"] = sorted(v for v in volumes_seen if v != "default")
+    result["networks"] = sorted(networks_seen)
+    result["depends_on_services"] = sorted(depends_seen - services_seen)
+
+    return result
 
 
 def _extract_translations(translations_dir: Path) -> list[str]:
@@ -212,6 +298,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
     template_hook_slots = _extract_template_hook_slots(src_dir)
     commands = _extract_commands(src_dir / "commands.py")
     docker = _extract_docker(feature_root)
+    docker_contract = _extract_docker_contract(feature_root)
     req_features, env_vars = _scan_dependencies(src_dir, feature_name)
     signals_provided, signals_required = _extract_signals(src_dir / "signals.py")
     translations = _extract_translations(src_dir / "translations")
@@ -234,6 +321,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
         "extensible_models": models,
         "extensible_hooks": sorted(set(hooks + template_hook_slots)),
         "extensible_routes": bool(blueprints),
+        "docker_contract": docker_contract,
     }
 
 
@@ -309,6 +397,23 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         f"hooks     = {_toml_list(ext_hooks)}\n"
         f"routes    = {'true' if ext_routes else 'false'}\n"
     )
+
+    # Docker contract (only if feature has docker infrastructure)
+    dc = contract.get("docker_contract", {})
+    if dc.get("services"):
+        contract_block += (
+            "\n"
+            "[tool.splent.contract.docker]\n"
+            f"services   = {_toml_list(dc.get('services', []))}\n"
+            f"ports      = {_toml_list(dc.get('ports', []))}\n"
+            f"volumes    = {_toml_list(dc.get('volumes', []))}\n"
+            f"networks   = {_toml_list(dc.get('networks', []))}\n"
+            f"build      = {'true' if dc.get('build') else 'false'}\n"
+            f"healthcheck = {'true' if dc.get('healthcheck') else 'false'}\n"
+            "\n"
+            "[tool.splent.contract.docker.depends_on]\n"
+            f"services = {_toml_list(dc.get('depends_on_services', []))}\n"
+        )
 
     path.write_text(text + contract_block + refinement_block)
 

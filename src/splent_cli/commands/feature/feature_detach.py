@@ -13,7 +13,7 @@ from splent_cli.utils.manifest import (
 
 @click.command(
     "feature:detach",
-    short_help="Detach a versioned feature from the current product",
+    short_help="Unregister a versioned feature from the active product (cache is kept).",
 )
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)

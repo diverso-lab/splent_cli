@@ -1,7 +1,7 @@
 """Tests for pure parser functions in export_puml.py."""
 import pytest
 
-from splent_cli.commands.export_puml import (
+from splent_cli.commands.export.export_puml import (
     _parse_models,
     _parse_uvl,
     _read_contract,

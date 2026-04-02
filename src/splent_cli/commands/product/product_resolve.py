@@ -37,8 +37,8 @@ def _feature_env_tag(entry: str, dev_set: set[str], prod_set: set[str]) -> str:
 
 
 @click.command(
-    "product:sync",
-    short_help="Sync all versioned features declared in the active product.",
+    "product:resolve",
+    short_help="Sync all versioned features from GitHub into the local cache.",
 )
 @click.pass_context
 @click.option(
@@ -84,7 +84,7 @@ def product_sync(ctx, force):
 
     # ── Header ──────────────────────────────────────────────
     click.echo()
-    click.secho("  product:sync", fg="cyan", bold=True, nl=False)
+    click.secho("  product:resolve", fg="cyan", bold=True, nl=False)
     click.echo(f"  {product}")
     click.echo()
 

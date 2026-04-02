@@ -108,6 +108,10 @@ def _read_current_contract(pyproject_path: Path) -> dict:
         "extensible_models": ext.get("models", []),
         "extensible_hooks": ext.get("hooks", []),
         "extensible_routes": ext.get("routes", False),
+        "docker_services": raw.get("docker", {}).get("services", []),
+        "docker_ports": raw.get("docker", {}).get("ports", []),
+        "docker_volumes": raw.get("docker", {}).get("volumes", []),
+        "docker_networks": raw.get("docker", {}).get("networks", []),
     }
 
 
@@ -154,6 +158,22 @@ def _print_contract(contract: dict, feature_name: str) -> None:
     click.echo(f"  models     = {_fmt(contract.get('extensible_models', []))}")
     click.echo(f"  hooks      = {_fmt(contract.get('extensible_hooks', []))}")
     click.echo(f"  routes     = {contract.get('extensible_routes', False)}")
+
+    dc = contract.get("docker_contract", {})
+    if dc.get("services"):
+        click.echo()
+        click.echo(click.style("  [tool.splent.contract.docker]", fg="bright_black"))
+        click.echo(f"  services    = {_fmt(dc.get('services', []))}")
+        click.echo(f"  ports       = {_fmt(dc.get('ports', []))}")
+        click.echo(f"  volumes     = {_fmt(dc.get('volumes', []))}")
+        click.echo(f"  networks    = {_fmt(dc.get('networks', []))}")
+        click.echo(f"  build       = {dc.get('build', False)}")
+        click.echo(f"  healthcheck = {dc.get('healthcheck', False)}")
+        click.echo()
+        click.echo(
+            click.style("  [tool.splent.contract.docker.depends_on]", fg="bright_black")
+        )
+        click.echo(f"  services    = {_fmt(dc.get('depends_on_services', []))}")
     click.echo()
 
 
@@ -179,6 +199,10 @@ def _print_diff(current: dict, inferred: dict) -> bool:
         ("extensible_templates", "extensible.templates"),
         ("extensible_models", "extensible.models"),
         ("extensible_hooks", "extensible.hooks"),
+        ("docker_services", "docker.services"),
+        ("docker_ports", "docker.ports"),
+        ("docker_volumes", "docker.volumes"),
+        ("docker_networks", "docker.networks"),
     ]
 
     diff_lines = []
@@ -248,6 +272,13 @@ def feature_contract(feature_ref, write):
     # Show inferred contract
     click.echo(click.style("  Inferred contract:", bold=True))
     _print_contract(inferred, name)
+
+    # Flatten docker_contract into top-level keys for diff comparison
+    dc = inferred.get("docker_contract", {})
+    inferred["docker_services"] = dc.get("services", [])
+    inferred["docker_ports"] = dc.get("ports", [])
+    inferred["docker_volumes"] = dc.get("volumes", [])
+    inferred["docker_networks"] = dc.get("networks", [])
 
     # Compare with current
     current = _read_current_contract(pyproject_path)

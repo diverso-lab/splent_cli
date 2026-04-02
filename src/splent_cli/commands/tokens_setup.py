@@ -2,8 +2,8 @@ import click
 
 
 @click.command(
-    "tokens",
-    short_help="Show how to obtain and configure GitHub and PyPI tokens.",
+    "tokens:setup",
+    short_help="Print setup instructions for GitHub and PyPI tokens.",
 )
 def tokens():
     """

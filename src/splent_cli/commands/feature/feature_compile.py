@@ -21,7 +21,8 @@ def _is_product_container() -> bool:
 
 
 @click.command(
-    "feature:compile", help="Compile frontend assets for one or all features."
+    "feature:compile",
+    short_help="Compile frontend assets (webpack) for one or all features.",
 )
 @click.argument("feature_name", required=False)
 @click.option("--watch", is_flag=True, help="Enable watch mode for development.")

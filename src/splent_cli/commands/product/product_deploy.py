@@ -184,8 +184,10 @@ def product_deploy(down, ci):
                 env_path,
                 "up",
                 "-d",
+                "--build",
             ],
             check=True,
+            cwd=docker_dir,
         )
 
         # Show access URL

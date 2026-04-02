@@ -37,7 +37,7 @@ class TestProductEnvMergeOrgNormalization:
 
 
 class TestProductSyncRelativeSymlinks:
-    """Verify product:sync creates relative symlinks."""
+    """Verify product:resolve creates relative symlinks."""
 
     def test_symlink_is_relative(self, product_workspace):
         ws = product_workspace

@@ -68,7 +68,7 @@ def _source_color(label: str) -> str:
 
 @click.command(
     "product:config",
-    short_help="Show the resolved configuration with origin tracing.",
+    short_help="Display the resolved Flask configuration with origin tracing.",
 )
 @click.option(
     "--all", "show_all", is_flag=True, help="Include Flask internal defaults."

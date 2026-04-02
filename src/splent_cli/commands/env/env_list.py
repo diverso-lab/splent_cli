@@ -51,7 +51,10 @@ def _read_env_file(path: Path) -> dict[str, str]:
     return result
 
 
-@click.command("env:list", short_help="List variables in the active .env file.")
+@click.command(
+    "env:list",
+    short_help="List all variables in the workspace .env file (grouped, with masking).",
+)
 @click.argument("filter", required=False, metavar="FILTER")
 @click.option(
     "--keys-only", is_flag=True, help="Print only variable names, one per line."

@@ -199,8 +199,8 @@ def _rewrite_pyproject_features_block(py_text: str, to_add: List[str]) -> str:
 
 
 @click.command(
-    "product:complete",
-    short_help="Add missing required features to pyproject using UVL metadata.",
+    "product:auto-require",
+    short_help="Auto-add missing required features to pyproject.toml from UVL constraints.",
 )
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option(

@@ -8,7 +8,7 @@ from splent_cli.services import context
 
 @click.command(
     "clear:uploads",
-    short_help="Clears the contents of the 'uploads' directory without removing the folder.",
+    short_help="Clear the contents of the uploads directory.",
 )
 @context.requires_product
 def clear_uploads():

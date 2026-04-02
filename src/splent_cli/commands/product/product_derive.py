@@ -8,7 +8,7 @@ import click
 from splent_cli.services import context, compose
 from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
-from splent_cli.commands.product.product_sync import product_sync
+from splent_cli.commands.product.product_resolve import product_sync
 from splent_cli.commands.product.product_env import product_env
 from splent_cli.commands.product.product_up import product_up
 from splent_cli.commands.product.product_run import product_runc
@@ -109,7 +109,7 @@ def _run_port_check(
 
 @click.command(
     "product:derive",
-    short_help="Derive and launch the active product (SPL derivation pipeline).",
+    short_help="Run the full setup pipeline: sync features, generate env, build, and start.",
 )
 @click.option("--dev", "mode", flag_value="dev", help="Derive in development mode.")
 @click.option("--prod", "mode", flag_value="prod", help="Derive in production mode.")
@@ -120,12 +120,12 @@ def product_derive(mode):
     \b
     Runs pre-flight checks before the pipeline:
       1. product:validate — feature selection must be satisfiable under the UVL model.
-      2. feature:diff    — no ERROR-level conflicts between feature contracts.
+      2. product:validate — configuration, compatibility, and dependency checks.
       3. port conflicts  — no running containers occupying required host ports (dev only).
 
     \b
     --dev runs (after pre-flight):
-      1. product:sync
+      1. product:resolve
       2. product:env --generate --all --dev
       3. product:env --merge --dev
       4. product:up --dev

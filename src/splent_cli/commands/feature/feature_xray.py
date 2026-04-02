@@ -103,7 +103,10 @@ def _active_items_for_feature(name, ext, overrides, hook_usage, full):
 # ── Command ──────────────────────────────────────────────────────────
 
 
-@click.command("feature:xray", short_help="Show refinement map for the active product.")
+@click.command(
+    "feature:xray",
+    short_help="Visualize feature extensions, refinements, and hook connections.",
+)
 @click.argument("feature_ref", required=False)
 @click.option(
     "--services", "filter_cat", flag_value="service", help="Show only services."

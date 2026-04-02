@@ -5,7 +5,7 @@ import click
 from splent_cli.utils.path_utils import PathUtils
 
 
-@click.command("command:create", help="Creates a new CLI command skeleton.")
+@click.command("command:create", short_help="Create a new CLI command skeleton.")
 @click.argument("name")
 def command_create(name):
     commands_dir = PathUtils.get_commands_path()

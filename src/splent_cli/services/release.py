@@ -52,7 +52,7 @@ def validate_release_env(*, require_pypi: bool = True, require_docker: bool = Fa
             click.echo(f"    - {m}")
         click.echo()
         click.secho(
-            "  Run 'splent tokens' for instructions on how to obtain them.",
+            "  Run 'splent tokens:setup' for instructions on how to obtain them.",
             fg="bright_black",
         )
         raise SystemExit(1)
@@ -440,7 +440,7 @@ def run_release_pipeline(
     repo = get_repo_from_path(path)
     create_github_release(repo, tag, os.getenv("GITHUB_TOKEN"))
 
-    from splent_cli.commands.clear_cache import clean_build_artifacts
+    from splent_cli.commands.clear.clear_build import clean_build_artifacts
 
     clean_build_artifacts(path, quiet=True)
 

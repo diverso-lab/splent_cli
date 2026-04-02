@@ -13,7 +13,7 @@ from splent_cli.utils.feature_utils import (
 
 @click.command(
     "feature:rename",
-    short_help="Renames a local feature (only if non-versioned and non-remote). Updates pyproject and symlink if active.",
+    short_help="Rename a local feature (non-versioned, non-remote only).",
 )
 @click.argument("old_name")
 @click.argument("new_name")

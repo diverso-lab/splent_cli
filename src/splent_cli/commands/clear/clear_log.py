@@ -5,7 +5,7 @@ from splent_cli.utils.path_utils import PathUtils
 from splent_cli.services import context
 
 
-@click.command("clear:log", short_help="Clears the 'app.log' file.")
+@click.command("clear:log", short_help="Clear the app.log file.")
 @context.requires_product
 def clear_log():
     log_file_path = PathUtils.get_app_log_dir()

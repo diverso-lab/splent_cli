@@ -1,7 +1,7 @@
 """Tests for PlantUML generator functions in export_puml.py."""
 import pytest
 
-from splent_cli.commands.export_puml import (
+from splent_cli.commands.export.export_puml import (
     _generate_class_puml,
     _generate_deps_puml,
     _generate_feature_puml,

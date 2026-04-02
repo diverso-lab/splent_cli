@@ -9,7 +9,7 @@ from splent_cli.services import context
 
 @click.command(
     "spl:features",
-    short_help="Print the list of features present in the SPL's UVL model",
+    short_help="List all features defined in the SPL's UVL variability model.",
 )
 @click.argument("spl_name")
 @click.option("--no-root", is_flag=True, help="Do not print the root feature")

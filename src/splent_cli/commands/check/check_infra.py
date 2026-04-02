@@ -220,6 +220,116 @@ def check_infra():
     else:
         _ok("No external networks required")
 
+    # --- Check 4: Dockerfile build contexts ---
+    click.echo()
+    click.echo(click.style("  Build contexts", bold=True))
+    build_count = 0
+    for label, cf in compose_files:
+        docker_dir = os.path.dirname(cf)
+        result = subprocess.run(
+            ["docker", "compose", "-f", cf, "config", "--format", "json"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            continue
+        try:
+            config = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            continue
+        for svc_name, svc_def in config.get("services", {}).items():
+            build_cfg = svc_def.get("build")
+            if not build_cfg:
+                continue
+            build_count += 1
+            if isinstance(build_cfg, dict):
+                ctx = build_cfg.get("context", ".")
+                dockerfile = build_cfg.get("dockerfile", "Dockerfile")
+                df_path = (
+                    os.path.join(ctx, dockerfile)
+                    if os.path.isabs(ctx)
+                    else os.path.join(docker_dir, ctx, dockerfile)
+                )
+            else:
+                df_path = os.path.join(docker_dir, build_cfg, "Dockerfile")
+
+            if os.path.isfile(df_path):
+                _ok(f"{label}/{svc_name}: Dockerfile found")
+            else:
+                _fail(f"{label}/{svc_name}: Dockerfile not found at {df_path}")
+
+    if build_count == 0:
+        _ok("No custom builds (all services use pre-built images)")
+
+    # --- Check 5: Healthcheck coverage ---
+    click.echo()
+    click.echo(click.style("  Health checks", bold=True))
+    services_with_hc: set[str] = set()
+    services_depended_on: dict[str, str] = {}  # depended_svc -> by_svc
+
+    for label, cf in compose_files:
+        result = subprocess.run(
+            ["docker", "compose", "-f", cf, "config", "--format", "json"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            continue
+        try:
+            config = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            continue
+        for svc_name, svc_def in config.get("services", {}).items():
+            if "healthcheck" in svc_def:
+                services_with_hc.add(svc_name)
+            for dep_svc, dep_cfg in (svc_def.get("depends_on") or {}).items():
+                if (
+                    isinstance(dep_cfg, dict)
+                    and dep_cfg.get("condition") == "service_healthy"
+                ):
+                    services_depended_on[dep_svc] = svc_name
+
+    missing_hc = {
+        svc: by
+        for svc, by in services_depended_on.items()
+        if svc not in services_with_hc
+    }
+    if missing_hc:
+        for svc, by in sorted(missing_hc.items()):
+            _fail(
+                f"'{by}' depends on '{svc}' being healthy, but '{svc}' has no healthcheck"
+            )
+    elif services_with_hc:
+        _ok(f"{len(services_with_hc)} service(s) with health checks")
+    else:
+        _ok("No health checks declared (none required)")
+
+    # --- Check 6: Volume name conflicts ---
+    click.echo()
+    click.echo(click.style("  Volumes", bold=True))
+    all_volumes: dict[str, list[str]] = {}  # vol_name -> [labels]
+    for label, cf in compose_files:
+        result = subprocess.run(
+            ["docker", "compose", "-f", cf, "config", "--format", "json"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            continue
+        try:
+            config = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            continue
+        for vol_name in config.get("volumes", {}):
+            all_volumes.setdefault(vol_name, []).append(label)
+
+    vol_conflicts = {v: srcs for v, srcs in all_volumes.items() if len(srcs) > 1}
+    if vol_conflicts:
+        for vol, sources in sorted(vol_conflicts.items()):
+            _warn(f"Volume '{vol}' declared by multiple features: {', '.join(sources)}")
+    else:
+        _ok(f"No volume name conflicts ({len(all_volumes)} volumes)")
+
     # --- Summary ---
     click.echo()
     if fail:

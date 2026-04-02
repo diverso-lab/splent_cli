@@ -1,38 +1,153 @@
 """
 product:restart — Restart the active product's Flask app inside the container.
+
+Detects feature changes in pyproject.toml (added, removed, or mode changes)
+and reinstalls affected features before restarting Flask.
 """
 
 import os
 import subprocess
+import tomllib
 
 import click
 
 from splent_cli.services import context, compose
+from splent_cli.utils.feature_utils import parse_feature_entry, read_features_from_data
 
 
-def _load_env_into_container(container_id: str, env_file: str):
-    """Export all vars from the .env file into the running container's shell env.
+# ── Feature change detection ─────────────────────────────────────────
 
-    Docker env_file is only applied at container creation. This injects
-    updated vars so that processes started inside the container (like Flask)
-    see them via os.getenv().
+
+def _installed_features(container_id: str) -> dict[str, str]:
+    """Read pip-installed splent_feature_* packages from the container.
+
+    Returns {package_name: version_or_path} dict.
     """
-    if not os.path.isfile(env_file):
-        return
+    result = subprocess.run(
+        ["docker", "exec", container_id, "pip", "list", "--format=json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return {}
 
-    exports = []
-    with open(env_file, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and "=" in line and not line.startswith("#"):
-                exports.append(f"export {line}")
+    import json
 
-    if exports:
-        cmd = " && ".join(exports) + " && env > /tmp/.splent_env_reload"
-        subprocess.run(
-            ["docker", "exec", container_id, "bash", "-c", cmd],
-            capture_output=True,
+    installed = {}
+    try:
+        for pkg in json.loads(result.stdout):
+            name = pkg.get("name", "")
+            if name.startswith("splent-feature-") or name.startswith("splent_feature_"):
+                # Normalize: pip uses hyphens, we use underscores
+                normalized = name.replace("-", "_")
+                installed[normalized] = pkg.get("version", "")
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return installed
+
+
+def _declared_features(workspace: str, product: str) -> list[dict]:
+    """Read features from pyproject.toml with their mode (editable vs pinned)."""
+    pyproject_path = os.path.join(workspace, product, "pyproject.toml")
+    if not os.path.isfile(pyproject_path):
+        return []
+
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+
+    env = os.getenv("SPLENT_ENV", "dev")
+    entries = read_features_from_data(data, env)
+
+    result = []
+    for entry in entries:
+        ns, name, version = parse_feature_entry(entry)
+        editable = version is None
+        result.append(
+            {
+                "entry": entry,
+                "name": name,
+                "version": version,
+                "editable": editable,
+            }
         )
+    return result
+
+
+def _detect_changes(container_id, workspace, product):
+    """Compare declared features with installed ones. Returns lists of features to install."""
+    installed = _installed_features(container_id)
+    declared = _declared_features(workspace, product)
+
+    to_install = []  # (name, path_or_entry, editable)
+
+    for feat in declared:
+        name = feat["name"]
+        editable = feat["editable"]
+
+        if editable:
+            # Editable: check if it's installed as editable (pip shows local path)
+            feature_path = os.path.join(workspace, name)
+            if name not in installed or not os.path.isdir(feature_path):
+                to_install.append((name, feature_path, True))
+        else:
+            # Pinned: check if version matches
+            if name not in installed:
+                to_install.append((name, feat["entry"], False))
+
+    return to_install
+
+
+def _install_features(container_id, to_install, workspace, product):
+    """Install changed features in the container."""
+    for name, path_or_entry, editable in to_install:
+        short = name.replace("splent_feature_", "")
+        if editable:
+            # pip install -e from workspace
+            feature_path = f"/workspace/{name}"
+            click.echo(
+                click.style("  install ", dim=True)
+                + f"{short}"
+                + click.style(" (editable)", fg="cyan")
+            )
+            subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    container_id,
+                    "pip",
+                    "install",
+                    "-e",
+                    feature_path,
+                    "-q",
+                ],
+                capture_output=True,
+            )
+        else:
+            # pip install from symlink (pinned)
+            ns, name, version = parse_feature_entry(path_or_entry)
+            link_dir = f"/workspace/{product}/features/{ns}"
+            link_path = f"{link_dir}/{name}@{version}"
+            click.echo(
+                click.style("  install ", dim=True)
+                + f"{short}"
+                + click.style(f" @{version}", dim=True)
+            )
+            subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    container_id,
+                    "pip",
+                    "install",
+                    "-e",
+                    link_path,
+                    "-q",
+                ],
+                capture_output=True,
+            )
+
+
+# ── Command ──────────────────────────────────────────────────────────
 
 
 @click.command(
@@ -49,9 +164,15 @@ def _load_env_into_container(container_id: str, env_file: str):
 def product_restart(env_dev, env_prod, full):
     """Restart Flask inside the container.
 
-    By default, kills Flask/watchmedo processes and restarts them with
-    the current .env vars loaded. Use --full to re-run the entire
-    entrypoint (reinstall deps, migrations, etc.).
+    \b
+    Detects feature changes before restarting:
+    - New features in pyproject.toml → pip install
+    - Features switched to editable → pip install -e
+    Then kills Flask/watchmedo and restarts.
+
+    \b
+    Use --full to re-run the entire entrypoint (reinstall all deps,
+    migrations, etc.).
     """
     product = context.require_app()
     workspace = str(context.workspace())
@@ -71,7 +192,24 @@ def product_restart(env_dev, env_prod, full):
         click.secho(f"  No running container found for {product} ({env})", fg="red")
         raise SystemExit(1)
 
-    # Kill existing Flask/watchmedo/gunicorn processes
+    # ── Resolve symlinks + detect and install changed features ──
+    if not full:
+        # Always resolve symlinks — catches pinned→editable switches
+        from splent_cli.commands.product.product_resolve import product_sync
+
+        ctx = click.get_current_context()
+        ctx.invoke(product_sync, force=False)
+
+        to_install = _detect_changes(container_id, workspace, product)
+        if to_install:
+            click.echo(
+                click.style("  detected ", dim=True)
+                + f"{len(to_install)} feature(s) to install"
+            )
+            _install_features(container_id, to_install, workspace, product)
+            click.echo()
+
+    # ── Kill existing processes ───────────────────────────────────
     subprocess.run(
         [
             "docker",
@@ -89,8 +227,6 @@ def product_restart(env_dev, env_prod, full):
             click.style("  restarting ", dim=True)
             + f"{product} ({env}) — full entrypoint"
         )
-
-        # Source .env and run the full entrypoint
         container_entrypoint = f"/workspace/{product}/entrypoints/entrypoint.{env}.sh"
         source_cmd = f"set -a && . /workspace/{product}/docker/.env && set +a && bash {container_entrypoint}"
         subprocess.run(
@@ -99,8 +235,6 @@ def product_restart(env_dev, env_prod, full):
         )
     else:
         click.echo(click.style("  restarting ", dim=True) + f"{product} ({env})")
-
-        # Source .env and restart Flask via the start script
         start_script = f"/workspace/{product}/scripts/05_0_start_app_{env}.sh"
         source_cmd = f"set -a && . /workspace/{product}/docker/.env && set +a && bash {start_script}"
         subprocess.run(

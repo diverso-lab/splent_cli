@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
-from splent_cli.commands.product.product_status import product_docker, _status_color
+from splent_cli.commands.product.product_containers import product_docker, _status_color
 
 
 @pytest.fixture

@@ -43,8 +43,14 @@ def load_compose_file(path):
         return yaml.safe_load(f) or {}
 
 
-def merge_compose(base, override, label=""):
-    """Merge two docker-compose YAML dicts. Reports conflicts via warnings."""
+def merge_compose(base, override, label="", build_services=None):
+    """Merge two docker-compose YAML dicts. Reports conflicts via warnings.
+
+    For services with custom builds, rewrites ``build:`` to point to the
+    copied Dockerfile in the product's docker/features/ directory.
+    """
+    if build_services is None:
+        build_services = set()
     result = dict(base)
 
     for key, value in override.items():
@@ -56,6 +62,21 @@ def merge_compose(base, override, label=""):
                         f"  ⚠️  Service '{svc}' overridden by: {label}",
                         fg="yellow",
                     )
+                if "build" in svc_def:
+                    svc_def = dict(svc_def)
+                    if svc in build_services:
+                        # Rewrite build context to product-local path
+                        svc_def["build"] = {
+                            "context": ".",
+                            "dockerfile": f"features/{svc}/Dockerfile",
+                        }
+                        if "image" not in svc_def:
+                            svc_def["image"] = f"splent/{svc}:latest"
+                    else:
+                        # No Dockerfile found — fall back to image only
+                        if "image" not in svc_def:
+                            svc_def["image"] = f"splent/{svc}:latest"
+                        del svc_def["build"]
                 result["services"][svc] = svc_def
         elif key in ("networks", "volumes"):
             result.setdefault(key, {})
@@ -64,6 +85,86 @@ def merge_compose(base, override, label=""):
             result[key] = value
 
     return result
+
+
+def _collect_feature_dockerfiles(workspace, declared_features, docker_path, env="prod"):
+    """Copy feature Dockerfiles into the product's docker/features/ directory.
+
+    Returns set of service names that have custom builds.
+    """
+    import shutil
+
+    features_build_dir = os.path.join(docker_path, "features")
+    build_services = set()
+
+    for feat in declared_features:
+        clean = compose.normalize_feature_ref(feat)
+        f_docker = compose.feature_docker_dir(workspace, clean)
+        if not os.path.isdir(f_docker):
+            continue
+
+        compose_file = (
+            os.path.join(f_docker, f"docker-compose.{env}.yml")
+            if os.path.isfile(os.path.join(f_docker, f"docker-compose.{env}.yml"))
+            else os.path.join(f_docker, "docker-compose.yml")
+        )
+
+        if not os.path.isfile(compose_file):
+            continue
+
+        with open(compose_file) as f:
+            data = yaml.safe_load(f) or {}
+
+        for svc_name, svc_def in data.get("services", {}).items():
+            build_cfg = svc_def.get("build")
+            if not build_cfg:
+                continue
+
+            # Resolve source Dockerfile path
+            if isinstance(build_cfg, str):
+                build_context = os.path.normpath(os.path.join(f_docker, build_cfg))
+                dockerfile = "Dockerfile"
+            else:
+                ctx = build_cfg.get("context", ".")
+                build_context = os.path.normpath(os.path.join(f_docker, ctx))
+                dockerfile = build_cfg.get("dockerfile", "Dockerfile")
+
+            src_df = os.path.join(build_context, dockerfile)
+            if not os.path.isfile(src_df):
+                click.secho(
+                    f"  ⚠️  Dockerfile not found for {svc_name}: {src_df}",
+                    fg="yellow",
+                )
+                continue
+
+            # Copy to product docker/features/<svc_name>/Dockerfile
+            dest_dir = os.path.join(features_build_dir, svc_name)
+            os.makedirs(dest_dir, exist_ok=True)
+            dest_df = os.path.join(dest_dir, "Dockerfile")
+            shutil.copy2(src_df, dest_df)
+
+            # Also copy any other files in the build context that the Dockerfile might need
+            # (e.g., config files, scripts) — copy the whole docker/ dir of the feature
+            for item in os.listdir(f_docker):
+                src_item = os.path.join(f_docker, item)
+                if item.startswith("docker-compose") or item.startswith(".env"):
+                    continue  # Skip compose files and env files
+                dest_item = os.path.join(dest_dir, item)
+                if os.path.isfile(src_item) and not os.path.exists(dest_item):
+                    shutil.copy2(src_item, dest_item)
+                elif os.path.isdir(src_item) and not os.path.exists(dest_item):
+                    shutil.copytree(src_item, dest_item)
+
+            build_services.add(svc_name)
+
+            short = svc_name.replace("splent_feature_", "")
+            click.echo(
+                click.style("  copy  ", dim=True)
+                + f"{short}/Dockerfile"
+                + click.style(f" → docker/features/{svc_name}/", dim=True)
+            )
+
+    return build_services
 
 
 @click.command(
@@ -171,7 +272,18 @@ def product_build(no_image, skip_preflight):
     click.echo(f"✅ Created: {env_deploy_path}")
 
     # ---------------------------------------------------------
-    # 2) docker-compose.deploy.yml (product + features merged)
+    # 2) Copy feature Dockerfiles into product docker/features/
+    # ---------------------------------------------------------
+    build_services = _collect_feature_dockerfiles(
+        workspace, declared_features, docker_path, "prod"
+    )
+    if build_services:
+        click.echo(
+            f"✅ Copied Dockerfiles for {len(build_services)} feature service(s)."
+        )
+
+    # ---------------------------------------------------------
+    # 3) docker-compose.deploy.yml (product + features merged)
     # ---------------------------------------------------------
     click.echo("\n🐳 Generating docker-compose.deploy.yml...")
 
@@ -202,7 +314,9 @@ def product_build(no_image, skip_preflight):
 
         feature_compose = load_compose_file(feature_compose_file)
         label = clean.split("/")[-1] if "/" in clean else clean
-        compose_result = merge_compose(compose_result, feature_compose, label=label)
+        compose_result = merge_compose(
+            compose_result, feature_compose, label=label, build_services=build_services
+        )
 
     # Check for port conflicts in merged result
     port_map: dict[str, list[str]] = {}  # "host_port" -> [service_names]

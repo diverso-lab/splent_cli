@@ -42,7 +42,7 @@ def _find_products_using_editable(workspace, feature_name, ns_safe):
 
 @click.command(
     "feature:discard",
-    short_help="Discard the editable version of a feature.",
+    short_help="Delete the editable copy of a feature from cache (versioned snapshots kept).",
 )
 @click.argument("feature_name", required=True)
 @click.option("--namespace", default=DEFAULT_NAMESPACE, help="Feature namespace.")

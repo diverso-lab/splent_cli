@@ -52,7 +52,7 @@ def _parse_semver(tag: str) -> tuple[int, ...] | None:
 
 @click.command(
     "feature:outdated",
-    short_help="Check for newer versions of pinned features.",
+    short_help="Check GitHub for newer versions of pinned features.",
 )
 @click.option(
     "--upgrade",
@@ -184,7 +184,7 @@ def feature_outdated(upgrade):
     click.echo()
     if upgraded:
         click.secho(f"  ✅ Upgraded {upgraded} feature(s).", fg="green")
-        click.secho("  Run 'splent product:sync' to update symlinks.", dim=True)
+        click.secho("  Run 'splent product:resolve' to update symlinks.", dim=True)
     click.echo()
 
 

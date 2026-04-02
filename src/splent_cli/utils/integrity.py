@@ -153,9 +153,9 @@ def fix_feature(
         check = issue["check"]
 
         if check == "Symlink":
-            click.echo("    Fixing symlink → running product:sync...")
+            click.echo("    Fixing symlink → running product:resolve...")
             result = subprocess.run(
-                [sys.executable, "-m", "splent_cli", "product:sync"],
+                [sys.executable, "-m", "splent_cli", "product:resolve"],
                 capture_output=True,
                 text=True,
                 env={**os.environ, "SPLENT_APP": os.path.basename(product_path)},

@@ -15,7 +15,7 @@ from splent_framework.managers.migration_manager import (
 )
 from splent_framework.utils.feature_utils import get_features_from_pyproject
 from splent_framework.utils.path_utils import PathUtils
-from splent_cli.commands.clear_uploads import clear_uploads
+from splent_cli.commands.clear.clear_uploads import clear_uploads
 
 
 @requires_db

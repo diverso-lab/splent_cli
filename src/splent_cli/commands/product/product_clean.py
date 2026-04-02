@@ -22,7 +22,7 @@ def _docker_down(name: str, base_path: str, env: str):
 
 @click.command(
     "product:clean",
-    short_help="Full reset: stop containers, wipe volumes, reset DB, clear files.",
+    short_help="DESTRUCTIVE: stop containers, wipe volumes, reset DB, clear files.",
 )
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")

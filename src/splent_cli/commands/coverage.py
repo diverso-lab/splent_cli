@@ -8,7 +8,7 @@ from splent_cli.services import context
 
 @click.command(
     "coverage",
-    short_help="Runs pytest coverage on the selected feature",
+    short_help="Run pytest with coverage reporting for a feature.",
 )
 @click.argument("module_name", required=False)
 @click.option("--html", is_flag=True, help="Generates an HTML coverage report.")

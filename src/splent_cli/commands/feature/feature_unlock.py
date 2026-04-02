@@ -248,7 +248,7 @@ def _edit_one(
 # MAIN COMMAND
 # =====================================================================
 @click.command(
-    "feature:edit",
+    "feature:unlock",
     short_help="Convert a released feature into a local editable version.",
 )
 @click.argument("feature_name", required=False, default=None)
@@ -329,4 +329,15 @@ def feature_edit(feature_name, edit_all, force):
         f"  {ok}/{len(versioned)} converted.",
         fg="green" if ok == len(versioned) else "yellow",
     )
+
+    if ok > 0:
+        # Resolve symlinks and restart Flask
+        click.echo()
+        from splent_cli.commands.product.product_resolve import product_sync
+        from splent_cli.commands.product.product_restart import product_restart
+
+        ctx = click.get_current_context()
+        ctx.invoke(product_sync, force=False)
+        ctx.invoke(product_restart, env_dev=False, env_prod=False, full=False)
+
     click.echo()

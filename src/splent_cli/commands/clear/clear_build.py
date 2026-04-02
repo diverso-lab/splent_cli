@@ -52,8 +52,8 @@ def clean_build_artifacts(target_path: str | Path, *, quiet: bool = False):
 
 
 @click.command(
-    "clear:pycache",
-    short_help="Clear __pycache__, .pytest_cache and build artifacts from the workspace.",
+    "clear:build",
+    short_help="Remove __pycache__, .pytest_cache, dist/, build/, and egg-info.",
 )
 def clear_cache():
     if not click.confirm("Are you sure you want to clear caches and build artifacts?"):

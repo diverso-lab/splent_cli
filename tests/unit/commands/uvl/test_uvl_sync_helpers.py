@@ -1,7 +1,7 @@
 """Tests for pure helper functions in uvl_sync.py."""
 import pytest
 
-from splent_cli.commands.product.product_complete import (
+from splent_cli.commands.product.product_auto_require import (
     _build_req_graph,
     _closure_requires,
     _dep_spec_from_meta,

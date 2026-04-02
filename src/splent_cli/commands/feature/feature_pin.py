@@ -136,7 +136,7 @@ def feature_pin(dry_run):
 
     click.echo()
     click.secho(f"  ✅ Pinned {pinned_count} feature(s) in pyproject.toml.", fg="green")
-    click.secho("  Run 'splent product:sync' to update symlinks.", dim=True)
+    click.secho("  Run 'splent product:resolve' to update symlinks.", dim=True)
     click.echo()
 
 

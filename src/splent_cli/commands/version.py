@@ -91,7 +91,10 @@ def _parse_feature_ref(ref: str) -> tuple:
     return base, None
 
 
-@click.command("version", short_help="Show full workspace version snapshot")
+@click.command(
+    "version",
+    short_help="Show workspace version snapshot (CLI, framework, product, features).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output in JSON format.")
 def version(as_json: bool) -> None:
     """

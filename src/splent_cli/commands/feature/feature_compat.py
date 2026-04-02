@@ -1,30 +1,18 @@
 """
-splent feature:diff
+splent feature:compat — Compare two features and report compatibility issues.
 
-Compare feature contracts and report potential conflicts.
-
-  Two-feature mode (default):
-    splent feature:diff splent_feature_auth splent_feature_profile
-
-  All-product mode:
-    splent feature:diff --all
-
-Conflict categories:
-  🚨 ERROR   — will break Flask at startup (route or blueprint name collision)
-  ⚠️  WARNING — may cause unexpected behaviour (model/service collision, missing dep)
-  ℹ️  INFO    — informational (shared hook slots, shared env vars)
+Usage:
+  splent feature:compat splent_feature_auth splent_feature_profile
 """
 
 import json
 import os
 import tomllib
 import click
-from collections import defaultdict
 from pathlib import Path
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import normalize_namespace
-from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -39,14 +27,14 @@ SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Resolution helpers
+# Resolution
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 def _resolve_feature(
     feature_ref: str, workspace: str
 ) -> tuple[Path, str, str, str | None]:
-    """Resolve a feature_ref to (cache_path, ns, name, version)."""
+    """Resolve a feature_ref to (path, ns, name, version)."""
     base, _, version = feature_ref.partition("@")
     version = version or None
 
@@ -57,66 +45,30 @@ def _resolve_feature(
         ns = DEFAULT_NAMESPACE
         name = base
 
+    # Workspace root first (editable)
+    root_path = Path(workspace) / name
+    if root_path.exists():
+        return root_path, ns, name, version
+
+    # Then cache
     cache_root = Path(workspace) / ".splent_cache" / "features" / ns
 
     if version:
         candidate = cache_root / f"{name}@{version}"
         if candidate.exists():
             return candidate, ns, name, version
-        raise SystemExit(f"❌ Not found in cache: {candidate}")
+        raise SystemExit(f"❌ Not found: {candidate}")
 
     candidate = cache_root / name
     if candidate.exists():
         return candidate, ns, name, None
 
-    raise SystemExit(f"❌ Not found in cache: {candidate}")
+    if cache_root.is_dir():
+        for entry in sorted(cache_root.iterdir()):
+            if entry.name.startswith(name + "@"):
+                return entry, ns, name, entry.name.split("@")[1]
 
-
-def _parse_pyproject_entry(entry: str) -> tuple[str, str, str | None]:
-    """Return (namespace, name, version | None) from a pyproject feature entry."""
-    base, _, version = entry.partition("@")
-    if "/" in base:
-        ns_raw, name = base.split("/", 1)
-        ns = normalize_namespace(ns_raw)
-    else:
-        ns = DEFAULT_NAMESPACE
-        name = base
-    return ns, name, version or None
-
-
-def _resolve_all_product_features(
-    product_dir: str, workspace: str
-) -> list[tuple[str, Path]]:
-    """
-    Read all features from the product's pyproject.toml and resolve each to
-    (label, cache_path). Skips any entry not found in cache with a warning.
-    """
-    try:
-        features_raw = PyprojectReader.for_product(product_dir).features
-    except FileNotFoundError:
-        raise SystemExit("❌ pyproject.toml not found in product.")
-
-    if not features_raw:
-        raise SystemExit("  No features declared in pyproject.toml.")
-
-    resolved = []
-    for entry in features_raw:
-        ns, name, version = _parse_pyproject_entry(entry)
-        label = f"{name}@{version}" if version else name
-        try:
-            cache_path, _, _, _ = _resolve_feature(
-                f"{ns}/{name}@{version}" if version else f"{ns}/{name}", workspace
-            )
-            resolved.append((label, cache_path))
-        except SystemExit:
-            click.secho(f"  ⚠️  {label} not found in cache — skipped.", fg="yellow")
-
-    return resolved
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Contract reader
-# ─────────────────────────────────────────────────────────────────────────────
+    raise SystemExit(f"❌ Not found: {name}")
 
 
 def _read_contract(cache_path: Path) -> dict:
@@ -148,7 +100,7 @@ def _read_contract(cache_path: Path) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Analysis: pair mode
+# Analysis
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -173,7 +125,7 @@ def _analyse_pair(
                 "field": "routes",
                 "values": [route],
                 "features": [label_a, label_b],
-                "message": f"Route '{route}' registered by both. Flask will raise an AssertionError at startup.",
+                "message": f"Route '{route}' registered by both.",
             }
         )
 
@@ -184,7 +136,7 @@ def _analyse_pair(
                 "field": "blueprints",
                 "values": [bp],
                 "features": [label_a, label_b],
-                "message": f"Blueprint '{bp}' declared by both. The second registration will conflict.",
+                "message": f"Blueprint '{bp}' declared by both.",
             }
         )
 
@@ -195,10 +147,7 @@ def _analyse_pair(
                 "field": "models",
                 "values": [model],
                 "features": [label_a, label_b],
-                "message": (
-                    f"Model class '{model}' defined by both. "
-                    f"Verify that __tablename__ values differ to avoid migration conflicts."
-                ),
+                "message": f"Model class '{model}' defined by both.",
             }
         )
 
@@ -209,7 +158,7 @@ def _analyse_pair(
                 "field": "services",
                 "values": [svc],
                 "features": [label_a, label_b],
-                "message": f"Service class '{svc}' defined by both. May cause import ambiguity.",
+                "message": f"Service class '{svc}' defined by both.",
             }
         )
 
@@ -220,10 +169,7 @@ def _analyse_pair(
                 "field": "hooks",
                 "values": [slot],
                 "features": [label_a, label_b],
-                "message": (
-                    f"Hook slot '{slot}' has callbacks in both features. "
-                    f"Both will run — verify the combined output in your layouts."
-                ),
+                "message": f"Hook slot '{slot}' has callbacks in both — both will run.",
             }
         )
 
@@ -234,7 +180,7 @@ def _analyse_pair(
                 "field": "env_vars",
                 "values": [var],
                 "features": [label_a, label_b],
-                "message": f"Env var '{var}' required by both. One .env entry serves both.",
+                "message": f"Env var '{var}' required by both.",
             }
         )
 
@@ -266,29 +212,62 @@ def _analyse_pair(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Analysis: all-product mode
+# All-product analysis (used by product:validate)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _parse_pyproject_entry(entry: str) -> tuple[str, str, str | None]:
+    base, _, version = entry.partition("@")
+    if "/" in base:
+        ns_raw, name = base.split("/", 1)
+        ns = normalize_namespace(ns_raw)
+    else:
+        ns = DEFAULT_NAMESPACE
+        name = base
+    return ns, name, version or None
+
+
+def _resolve_all_product_features(
+    product_dir: str, workspace: str
+) -> list[tuple[str, Path]]:
+    """Read all features from the product and resolve to (label, path)."""
+    from splent_framework.utils.pyproject_reader import PyprojectReader
+
+    try:
+        features_raw = PyprojectReader.for_product(product_dir).features
+    except FileNotFoundError:
+        raise SystemExit("❌ pyproject.toml not found in product.")
+
+    if not features_raw:
+        raise SystemExit("  No features declared in pyproject.toml.")
+
+    resolved = []
+    for entry in features_raw:
+        ns, name, version = _parse_pyproject_entry(entry)
+        label = f"{name}@{version}" if version else name
+        try:
+            path, _, _, _ = _resolve_feature(
+                f"{ns}/{name}@{version}" if version else f"{ns}/{name}", workspace
+            )
+            resolved.append((label, path))
+        except SystemExit:
+            click.secho(f"  ⚠️  {label} not found — skipped.", fg="yellow")
+
+    return resolved
+
+
 def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
-    """
-    Check all N features at once for conflicts.
+    """Check all N features for conflicts."""
+    from collections import defaultdict
 
-    Builds inverted indexes (value → [features that provide it]) and reports
-    any value shared by 2+ features. Cross-dependencies that are NOT satisfied
-    by the product are reported as warnings.
-    """
     findings = []
-
-    # Inverted indexes: value → list of feature labels
     routes_idx = defaultdict(list)
     blueprints_idx = defaultdict(list)
     models_idx = defaultdict(list)
     services_idx = defaultdict(list)
     hooks_idx = defaultdict(list)
     env_vars_idx = defaultdict(list)
-
-    feature_requires = {}  # label → list of required short names
+    feature_requires = {}
 
     for label, contract in labeled_contracts:
         prov = contract["provides"]
@@ -307,13 +286,11 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
             env_vars_idx[v].append(label)
         feature_requires[label] = req.get("features", [])
 
-    # Short-name → label map for dependency resolution
     short_to_label = {
         label.split("splent_feature_", 1)[-1].split("@")[0]: label
         for label, _ in labeled_contracts
     }
 
-    # 🚨 Route conflicts
     for route, labels in routes_idx.items():
         if len(labels) > 1:
             findings.append(
@@ -322,14 +299,10 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
                     "field": "routes",
                     "values": [route],
                     "features": sorted(labels),
-                    "message": (
-                        f"Route '{route}' is registered by {len(labels)} features. "
-                        f"Flask will raise an AssertionError at startup."
-                    ),
+                    "message": f"Route '{route}' registered by {len(labels)} features.",
                 }
             )
 
-    # 🚨 Blueprint name conflicts
     for bp, labels in blueprints_idx.items():
         if len(labels) > 1:
             findings.append(
@@ -338,14 +311,10 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
                     "field": "blueprints",
                     "values": [bp],
                     "features": sorted(labels),
-                    "message": (
-                        f"Blueprint name '{bp}' declared by {len(labels)} features. "
-                        f"The second registration will conflict."
-                    ),
+                    "message": f"Blueprint '{bp}' declared by {len(labels)} features.",
                 }
             )
 
-    # ⚠️ Model name conflicts
     for model, labels in models_idx.items():
         if len(labels) > 1:
             findings.append(
@@ -354,14 +323,10 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
                     "field": "models",
                     "values": [model],
                     "features": sorted(labels),
-                    "message": (
-                        f"Model class '{model}' defined by {len(labels)} features. "
-                        f"Verify that __tablename__ values differ."
-                    ),
+                    "message": f"Model '{model}' defined by {len(labels)} features.",
                 }
             )
 
-    # ⚠️ Service name conflicts
     for svc, labels in services_idx.items():
         if len(labels) > 1:
             findings.append(
@@ -370,14 +335,10 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
                     "field": "services",
                     "values": [svc],
                     "features": sorted(labels),
-                    "message": (
-                        f"Service class '{svc}' defined by {len(labels)} features. "
-                        f"May cause import ambiguity."
-                    ),
+                    "message": f"Service '{svc}' defined by {len(labels)} features.",
                 }
             )
 
-    # ⚠️ Missing dependencies (requires a feature not declared in product)
     for label, required_shorts in feature_requires.items():
         for short in required_shorts:
             if short not in short_to_label:
@@ -387,14 +348,10 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
                         "field": "requires",
                         "values": [f"splent_feature_{short}"],
                         "features": [label],
-                        "message": (
-                            f"{label} requires 'splent_feature_{short}' "
-                            f"but it is not declared in pyproject.toml."
-                        ),
+                        "message": f"{label} requires 'splent_feature_{short}' but it is not in the product.",
                     }
                 )
 
-    # ℹ️ Shared hook slots (additive, not a bug, but worth reviewing)
     for slot, labels in hooks_idx.items():
         if len(labels) > 1:
             findings.append(
@@ -403,14 +360,10 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
                     "field": "hooks",
                     "values": [slot],
                     "features": sorted(labels),
-                    "message": (
-                        f"Hook slot '{slot}' has {len(labels)} registered callbacks. "
-                        f"Both will run — verify the combined output in your layouts."
-                    ),
+                    "message": f"Hook '{slot}' has {len(labels)} contributors — both will run.",
                 }
             )
 
-    # ℹ️ Shared env vars
     for var, labels in env_vars_idx.items():
         if len(labels) > 1:
             findings.append(
@@ -419,26 +372,15 @@ def _analyse_all(labeled_contracts: list[tuple[str, dict]]) -> list[dict]:
                     "field": "env_vars",
                     "values": [var],
                     "features": sorted(labels),
-                    "message": (
-                        f"Env var '{var}' required by {len(labels)} features. "
-                        f"One .env entry serves all of them."
-                    ),
+                    "message": f"Env var '{var}' required by {len(labels)} features.",
                 }
             )
 
     return sorted(findings, key=lambda f: SEVERITY_ORDER[f["severity"]])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Programmatic API
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 def run_all_product_check(workspace: str, product_dir: str) -> list[dict]:
-    """
-    Run the all-product compatibility check programmatically.
-    Returns the findings list (may be empty). Does not print anything.
-    """
+    """Run the full product compatibility check. Returns findings list."""
     try:
         labeled_paths = _resolve_all_product_features(product_dir, workspace)
     except SystemExit:
@@ -450,7 +392,7 @@ def run_all_product_check(workspace: str, product_dir: str) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Output helpers
+# Output
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -460,7 +402,7 @@ def _print_findings(findings: list[dict], min_severity: str) -> None:
     findings.sort(key=lambda f: SEVERITY_ORDER[f["severity"]])
 
     if not findings:
-        click.secho("  ✅ No conflicts detected.", fg="green")
+        click.secho("  ✅ Compatible.", fg="green")
         click.echo()
         return
 
@@ -497,99 +439,38 @@ def _print_findings(findings: list[dict], min_severity: str) -> None:
 
 
 @click.command(
-    "feature:diff",
-    short_help="Compare feature contracts and report conflicts.",
+    "feature:compat",
+    short_help="Compare two features and report compatibility issues.",
 )
-@click.argument("feature_ref_a", required=False)
-@click.argument("feature_ref_b", required=False)
-@click.option(
-    "--all", "check_all", is_flag=True, help="Check all features in the active product."
-)
-@click.option("--json", "as_json", is_flag=True, help="Output findings as JSON.")
+@click.argument("feature_ref_a")
+@click.argument("feature_ref_b")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
 @click.option(
     "--min-severity",
     type=click.Choice(["error", "warning", "info"], case_sensitive=False),
     default="info",
     show_default=True,
-    help="Minimum severity level to display.",
 )
-def feature_diff(feature_ref_a, feature_ref_b, check_all, as_json, min_severity):
+@context.requires_product
+def feature_compat(feature_ref_a, feature_ref_b, as_json, min_severity):
     """
-    Compare feature contracts and report potential conflicts.
+    Compare two features and report potential conflicts.
 
     \b
-    Two-feature mode:
-      splent feature:diff splent_feature_auth splent_feature_profile
-
-    All-product mode (checks every feature pair at once):
-      splent feature:diff --all
-
-    \b
-    Severity levels:
-      🚨 ERROR   Route or Blueprint name collision — will break Flask at startup.
-      ⚠️  WARNING Model/Service name collision, or missing declared dependency.
-      ℹ️  INFO    Shared hook slots or env vars — additive, worth reviewing.
+    Examples:
+      splent feature:compat splent_feature_auth splent_feature_profile
+      splent feature:compat splent_feature_auth splent_feature_profile --min-severity error
     """
     workspace = str(context.workspace())
 
-    # ── All-product mode ──────────────────────────────────────────────────────
-    if check_all:
-        product = context.require_app()
-        product_dir = os.path.join(workspace, product)
-
-        # Check for stale contracts before reading them
-        from splent_cli.utils.contract_freshness import check_and_refresh_contracts
-        from splent_cli.utils.feature_utils import load_product_features
-
-        try:
-            features_raw = load_product_features(product_dir, os.getenv("SPLENT_ENV"))
-            check_and_refresh_contracts(workspace, features_raw)
-        except FileNotFoundError:
-            pass
-
-        labeled_paths = _resolve_all_product_features(product_dir, workspace)
-        if not labeled_paths:
-            click.echo("  No features resolved.")
-            return
-
-        labeled_contracts = [(lbl, _read_contract(path)) for lbl, path in labeled_paths]
-
-        n = len(labeled_contracts)
-        pairs = n * (n - 1) // 2
-
-        if as_json:
-            findings = _analyse_all(labeled_contracts)
-            click.echo(json.dumps(findings, indent=2))
-            return
-
-        click.echo()
-        click.echo(
-            click.style(
-                f"  Compatibility check — {product}  ({n} features, {pairs} pair{'s' if pairs != 1 else ''})",
-                bold=True,
-            )
-        )
-        click.echo(click.style(f"  {'─' * 70}", fg="bright_black"))
-        click.echo()
-
-        findings = _analyse_all(labeled_contracts)
-        _print_findings(findings, min_severity)
-        return
-
-    # ── Two-feature mode ──────────────────────────────────────────────────────
-    if not feature_ref_a or not feature_ref_b:
-        raise click.UsageError(
-            "Provide two feature refs for pair comparison, or use --all for the full product."
-        )
-
-    cache_a, _, name_a, ver_a = _resolve_feature(feature_ref_a, workspace)
-    cache_b, _, name_b, ver_b = _resolve_feature(feature_ref_b, workspace)
+    path_a, _, name_a, ver_a = _resolve_feature(feature_ref_a, workspace)
+    path_b, _, name_b, ver_b = _resolve_feature(feature_ref_b, workspace)
 
     label_a = f"{name_a}@{ver_a}" if ver_a else name_a
     label_b = f"{name_b}@{ver_b}" if ver_b else name_b
 
-    contract_a = _read_contract(cache_a)
-    contract_b = _read_contract(cache_b)
+    contract_a = _read_contract(path_a)
+    contract_b = _read_contract(path_b)
 
     findings = _analyse_pair(contract_a, contract_b, label_a, label_b)
 
@@ -604,7 +485,7 @@ def feature_diff(feature_ref_a, feature_ref_b, check_all, as_json, min_severity)
         return
 
     click.echo()
-    click.echo(click.style(f"  Contract diff — {label_a}  vs  {label_b}", bold=True))
+    click.echo(click.style(f"  Compatibility — {label_a}  vs  {label_b}", bold=True))
     click.echo(click.style(f"  {'─' * 70}", fg="bright_black"))
 
     if contract_a["description"]:
@@ -620,4 +501,4 @@ def feature_diff(feature_ref_a, feature_ref_b, check_all, as_json, min_severity)
     _print_findings(findings, min_severity)
 
 
-cli_command = feature_diff
+cli_command = feature_compat

@@ -123,7 +123,7 @@ def _read_existing_vars(config_path: Path) -> set[str]:
 
 @click.command(
     "feature:inject-config",
-    short_help="Generate or update config.py from env vars in source code.",
+    short_help="Auto-generate config.py by scanning source code for env var usage.",
 )
 @click.argument("feature_ref")
 @click.option(

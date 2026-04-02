@@ -9,13 +9,11 @@ import os
 import click
 
 from splent_cli.services import context
-from splent_cli.commands.uvl.uvl_utils import run_uvl_check
-from splent_cli.commands.feature.feature_diff import run_all_product_check
 
 
 def run_preflight(*, interactive: bool = True) -> bool:
     """
-    Run UVL and feature:diff pre-flight checks.
+    Run product:validate as pre-flight check.
 
     Parameters
     ----------
@@ -28,32 +26,52 @@ def run_preflight(*, interactive: bool = True) -> bool:
     product = context.require_app()
     product_dir = os.path.join(workspace, product)
 
+    # Run the full product:validate programmatically
+    from splent_cli.commands.uvl.uvl_utils import (
+        read_splent_app as _read_splent_app,
+        load_pyproject as _load_pyproject,
+    )
+    from splent_cli.commands.product.product_validate import (
+        _run_sat_check,
+        _run_compat_check,
+    )
+
+    app_name = _read_splent_app(workspace=workspace)
+    pyproject_path = os.path.join(product_dir, "pyproject.toml")
+    data = _load_pyproject(pyproject_path)
+
     failed = False
 
-    # validate — UVL satisfiability
-    uvl_ok, uvl_msg = run_uvl_check(workspace)
-    if uvl_ok:
+    # Phase 1: SAT
+    try:
+        sat_ok, selected, _, _ = _run_sat_check(workspace, app_name, data, None, False)
+    except Exception:
+        sat_ok = False
+
+    if sat_ok:
         if interactive:
             click.echo("  validate UVL configuration is satisfiable")
     else:
         if interactive:
-            click.secho(f"  validate {uvl_msg}", fg="red")
+            click.secho("  validate UVL configuration is NOT satisfiable", fg="red")
             click.secho(
                 "           run 'splent product:validate' to inspect", fg="bright_black"
             )
         failed = True
 
-    # contract — feature:diff --all
-    findings = run_all_product_check(workspace, product_dir)
-    errors = [f for f in findings if f["severity"] == "error"]
-    warnings = [f for f in findings if f["severity"] == "warning"]
+    # Phase 2: Contracts
+    try:
+        findings, errors, warnings = _run_compat_check(workspace, product_dir)
+    except Exception:
+        errors = []
+        warnings = []
 
     if not errors:
         if interactive:
             if warnings:
                 click.echo(
                     f"  contract no conflicts — {len(warnings)} warning(s), "
-                    "run 'splent feature:diff --all' to review"
+                    "run 'splent product:validate' to review"
                 )
             else:
                 click.echo("  contract no conflicts detected")
@@ -62,7 +80,7 @@ def run_preflight(*, interactive: bool = True) -> bool:
             for err in errors:
                 click.secho(f"  contract [{err['field']}] {err['message']}", fg="red")
             click.secho(
-                "           run 'splent feature:diff --all' to inspect",
+                "           run 'splent product:validate' to inspect",
                 fg="bright_black",
             )
         failed = True

@@ -65,7 +65,7 @@ def _has_uvl(spl_dir):
     return False
 
 
-@click.command("product:create", help="Creates a new product with a given name.")
+@click.command("product:create", short_help="Create a new product in the workspace.")
 @click.argument("name")
 @click.option(
     "--spl", "spl_name", default=None, help="SPL to derive from (from splent_catalog/)."

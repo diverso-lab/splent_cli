@@ -32,9 +32,7 @@ def _resolve_directories(targets: tuple[str, ...]) -> list[str]:
     return [d for d in dirs if os.path.isdir(d)]
 
 
-@click.command(
-    "linter", short_help="Lint and optionally auto-fix the project with Ruff."
-)
+@click.command("lint", short_help="Lint the project with Ruff (optionally auto-fix).")
 @click.option("--fix", is_flag=True, help="Auto-fix lint issues and reformat code.")
 @click.option(
     "--target",

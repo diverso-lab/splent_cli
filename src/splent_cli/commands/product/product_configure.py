@@ -830,7 +830,7 @@ def _configure_subtree(
 
 @click.command(
     "product:configure",
-    short_help="Interactive feature configurator for the active product.",
+    short_help="Interactive wizard to select features from the SPL variability model.",
 )
 def product_configure():
     """
@@ -1044,7 +1044,7 @@ def product_configure():
     click.secho("  Configuration applied.", fg="green", bold=True)
     click.echo()
     click.echo("  Next: download and link features with:")
-    click.echo("     splent product:sync")
+    click.echo("     splent product:resolve")
     click.echo()
 
 

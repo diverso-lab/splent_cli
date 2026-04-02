@@ -9,7 +9,7 @@ from splent_cli.services import context
 
 @click.command(
     "db:dump",
-    short_help="Creates a dump of the MariaDB database with credentials from .env.",
+    short_help="Create a SQL dump of the MariaDB database.",
 )
 @click.argument("filename", required=False)
 @context.requires_product

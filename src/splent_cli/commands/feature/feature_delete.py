@@ -6,7 +6,7 @@ from splent_cli.services import context, compose
 
 @click.command(
     "feature:delete",
-    short_help="Delete a versioned feature from the SPLENT cache",
+    short_help="Delete a versioned feature from the local cache (.splent_cache).",
 )
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)

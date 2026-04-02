@@ -19,7 +19,7 @@ from splent_cli.utils.manifest import (
 
 @click.command(
     "feature:remove",
-    short_help="Removes a local (non-versioned) feature from the active product.",
+    short_help="Unregister an editable feature from the active product (keeps files).",
 )
 @click.argument("feature_name", required=True)
 @click.option(

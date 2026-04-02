@@ -8,7 +8,7 @@ from splent_cli.utils.feature_utils import normalize_namespace, read_features_fr
 
 @click.command(
     "feature:env",
-    short_help="Manage .env files for a feature",
+    short_help="Generate or display .env files for a feature.",
 )
 @click.argument("feature_name", required=True)
 @click.option(

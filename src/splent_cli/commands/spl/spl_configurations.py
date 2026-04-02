@@ -8,8 +8,8 @@ from splent_cli.services import context
 
 
 @click.command(
-    "spl:configs",
-    short_help="Show all valid product configurations from the SPL's UVL model.",
+    "spl:configurations",
+    short_help="Enumerate all valid feature selections from the SPL variability model.",
 )
 @click.argument("spl_name")
 @click.option(

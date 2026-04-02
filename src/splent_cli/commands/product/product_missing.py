@@ -18,7 +18,7 @@ from splent_cli.commands.uvl.uvl_utils import (
 
 @click.command(
     "product:missing",
-    short_help="List missing required features according to UVL constraints (based on pyproject selection).",
+    short_help="List features required by UVL but missing from pyproject.toml.",
 )
 @click.option("--pyproject", default=None, help="Override pyproject.toml path")
 @click.option(

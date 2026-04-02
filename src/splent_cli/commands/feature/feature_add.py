@@ -9,7 +9,7 @@ from splent_cli.utils.manifest import feature_key, set_feature_state
 
 @click.command(
     "feature:add",
-    short_help="Adds a local (non-versioned) feature to the active product.",
+    short_help="Register a local editable feature in the active product.",
 )
 @click.argument("full_name", required=True)
 @click.option(

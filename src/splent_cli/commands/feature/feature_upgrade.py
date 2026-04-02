@@ -246,7 +246,7 @@ def feature_upgrade(feature_ref, yes):
 
     click.echo()
     click.secho(
-        "  Done. Run 'splent product:sync' to reinstall pip dependencies.", fg="cyan"
+        "  Done. Run 'splent product:resolve' to reinstall pip dependencies.", fg="cyan"
     )
     click.echo()
 

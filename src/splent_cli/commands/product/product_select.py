@@ -5,7 +5,7 @@ from splent_cli.services import context
 
 @click.command(
     "product:select",
-    short_help="Select the active app (updates .env and session env vars)",
+    short_help="Select the active product (sets SPLENT_APP in .env).",
 )
 @click.argument("app_name", required=True)
 @click.option(

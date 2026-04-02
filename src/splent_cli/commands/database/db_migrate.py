@@ -48,7 +48,7 @@ def _is_empty_migration(path: str) -> bool:
 @requires_db
 @click.command(
     "db:migrate",
-    short_help="Generate and apply migrations (all features or a single one).",
+    short_help="Generate a new migration from model changes and apply it.",
 )
 @click.argument("feature", required=False, default=None)
 @click.option(

@@ -68,7 +68,7 @@ def _get_product_features(workspace: Path) -> dict:
 
 @click.command(
     "cache:outdated",
-    short_help="Show products using older versions than what's in cache.",
+    short_help="Show products using older feature versions than what is in cache.",
 )
 def cache_outdated():
     """

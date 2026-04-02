@@ -57,7 +57,7 @@ def _print_diff_lines(diff: list[str]) -> None:
 
 @click.command(
     "feature:drift",
-    short_help="Show template drift for SPLENT-owned feature files.",
+    short_help="Show differences between feature scaffold files and the latest SPLENT template.",
 )
 @click.argument("feature_identifier")
 @click.option(

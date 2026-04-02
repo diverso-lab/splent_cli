@@ -1,5 +1,5 @@
 """
-spl:fix — Interactive wizard to add missing UVL constraints based on code analysis.
+spl:add-constraints — Interactive wizard to add missing UVL constraints based on code analysis.
 
 Scans all splent_feature_* directories at workspace root (detached mode).
 """
@@ -138,8 +138,8 @@ def _write_constraints(
 
 
 @click.command(
-    "spl:fix",
-    short_help="Interactive wizard to add missing UVL constraints from code analysis.",
+    "spl:add-constraints",
+    short_help="Analyze feature imports and interactively add missing UVL constraints.",
 )
 @click.argument("spl_name")
 @context.requires_detached

@@ -345,7 +345,7 @@ def feature_status(as_json, integrity, do_fix, timeline):
         if stale > 0:
             click.echo(
                 click.style(
-                    f"  ({stale} stale entries hidden — run 'splent product:sync' to clean up)",
+                    f"  ({stale} stale entries hidden — run 'splent product:resolve' to clean up)",
                     fg="bright_black",
                 )
             )

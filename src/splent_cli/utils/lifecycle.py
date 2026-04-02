@@ -73,7 +73,7 @@ BLOCKED_STATES: dict[str, set[str]] = {
     "feature:attach": set(),  # always ok
     "feature:remove": {"migrated", "active"},  # must rollback first
     "feature:detach": {"migrated", "active"},  # must rollback first
-    "feature:edit": {"migrated", "active"},  # must rollback first
+    "feature:unlock": {"migrated", "active"},  # must rollback first
     "feature:upgrade": set(),  # always ok — only updates cache + pyproject + symlink
     "feature:rename": {"migrated", "active"},  # must rollback first
     "db:migrate": set(),  # needs "installed" min (handled by require_state)
@@ -226,7 +226,7 @@ def require_editable(
     """Abort if the feature is pinned (read-only).
 
     Pinned features are versioned snapshots that must not be modified
-    in place.  Use ``feature:edit`` to create an editable copy first.
+    in place.  Use ``feature:unlock`` to create an editable copy first.
     """
     manifest = read_manifest(product_path)
     entry = manifest.get("features", {}).get(key, {})
@@ -235,7 +235,7 @@ def require_editable(
     if mode == "pinned":
         click.secho(
             f"❌ Feature '{key}' is pinned (read-only). "
-            f"Run 'splent feature:edit {entry.get('name', key)}' first to create an editable copy.",
+            f"Run 'splent feature:unlock {entry.get('name', key)}' first to create an editable copy.",
             fg="red",
         )
         raise SystemExit(1)
