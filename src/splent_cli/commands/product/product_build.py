@@ -118,9 +118,7 @@ def product_build(no_image, skip_preflight):
     # Check for editable (non-versioned) features — these can't be installed from PyPI
     editable = [f for f in declared_features if "@" not in f.split("/")[-1]]
     if editable:
-        names = ", ".join(
-            f.split("/")[-1] if "/" in f else f for f in editable
-        )
+        names = ", ".join(f.split("/")[-1] if "/" in f else f for f in editable)
         click.secho(
             f"  The following features are editable (not versioned):\n"
             f"    {names}\n\n"

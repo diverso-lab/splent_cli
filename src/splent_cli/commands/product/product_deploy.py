@@ -77,8 +77,7 @@ def product_deploy(down, ci):
     # ---------------------------------------------------------
     if not os.path.isfile(env_path):
         click.echo(
-            click.style("  env      ", dim=True)
-            + "creating .env.deploy from template"
+            click.style("  env      ", dim=True) + "creating .env.deploy from template"
         )
         with open(env_example_path, "r", encoding="utf-8") as src:
             content = src.read()
@@ -145,9 +144,7 @@ def product_deploy(down, ci):
             )
 
     if port_conflicts:
-        click.secho(
-            f"  {len(port_conflicts)} port conflict(s) found:", fg="yellow"
-        )
+        click.secho(f"  {len(port_conflicts)} port conflict(s) found:", fg="yellow")
         all_containers: dict[str, str] = {}
         for conflict in port_conflicts:
             for cid, cname in conflict["containers"]:
@@ -159,7 +156,9 @@ def product_deploy(down, ci):
                 fg="yellow",
             )
         click.echo()
-        if click.confirm("  Stop and remove the conflicting containers?", default=False):
+        if click.confirm(
+            "  Stop and remove the conflicting containers?", default=False
+        ):
             for cid, cname in all_containers.items():
                 click.echo(f"  stopping {cname}...")
                 subprocess.run(["docker", "stop", cid], capture_output=True)
@@ -207,16 +206,26 @@ def product_deploy(down, ci):
             url = f"http://localhost:{app_port}"
 
             # Health check — wait for the app to respond
-            click.echo(click.style("  health   ", dim=True) + "waiting for app to respond...")
+            click.echo(
+                click.style("  health   ", dim=True) + "waiting for app to respond..."
+            )
             import time
 
             healthy = False
             for attempt in range(15):
                 try:
                     result = subprocess.run(
-                        ["docker", "exec", f"{product}_web_deploy", "bash", "-c",
-                         f"curl -s -o /dev/null -w '%{{http_code}}' http://localhost:5000/"],
-                        capture_output=True, text=True, timeout=5,
+                        [
+                            "docker",
+                            "exec",
+                            f"{product}_web_deploy",
+                            "bash",
+                            "-c",
+                            "curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
                     )
                     code = result.stdout.strip()
                     if code in ("200", "302"):

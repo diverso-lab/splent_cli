@@ -29,7 +29,9 @@ def _read_extensible_contract(feature_path: str) -> dict:
         return {}
     with open(pyproject, "rb") as f:
         data = tomllib.load(f)
-    ext = data.get("tool", {}).get("splent", {}).get("contract", {}).get("extensible", {})
+    ext = (
+        data.get("tool", {}).get("splent", {}).get("contract", {}).get("extensible", {})
+    )
     return {
         "services": ext.get("services", []),
         "templates": ext.get("templates", []),
@@ -46,7 +48,9 @@ def _read_provides(feature_path: str) -> dict:
         return {}
     with open(pyproject, "rb") as f:
         data = tomllib.load(f)
-    provides = data.get("tool", {}).get("splent", {}).get("contract", {}).get("provides", {})
+    provides = (
+        data.get("tool", {}).get("splent", {}).get("contract", {}).get("provides", {})
+    )
     return {
         "services": provides.get("services", []),
         "templates": provides.get("templates", []),
@@ -56,7 +60,9 @@ def _read_provides(feature_path: str) -> dict:
     }
 
 
-def _resolve_feature_path(workspace: str, feature_name: str, product: str) -> str | None:
+def _resolve_feature_path(
+    workspace: str, feature_name: str, product: str
+) -> str | None:
     """Find a feature's path: workspace root first, then product symlinks, then cache."""
     # Workspace root (editable)
     root = os.path.join(workspace, feature_name)
@@ -111,15 +117,17 @@ def _get_product_features(workspace: str, product: str) -> list[dict]:
             or ext.get("routes")
         )
 
-        result.append({
-            "entry": entry,
-            "name": name,
-            "short": short,
-            "path": path,
-            "pinned": pinned,
-            "extensible": ext,
-            "has_extensible": bool(has_extensible),
-        })
+        result.append(
+            {
+                "entry": entry,
+                "name": name,
+                "short": short,
+                "path": path,
+                "pinned": pinned,
+                "extensible": ext,
+                "has_extensible": bool(has_extensible),
+            }
+        )
 
     return result
 
@@ -133,7 +141,7 @@ def _multi_select(items: list[str], label: str) -> list[str]:
     click.echo(click.style(f"  Available {label}:", bold=True))
     for i, item in enumerate(items, 1):
         click.echo(f"    {i}. {item}")
-    click.echo(f"    0. (none)")
+    click.echo("    0. (none)")
     click.echo()
 
     raw = click.prompt(
@@ -194,12 +202,14 @@ def _generate_refinement_toml(
         lines.append("[tool.splent.refinement.overrides]")
         if override_services:
             entries = ", ".join(
-                f'{{ target = "{t}", replacement = "{r}" }}' for t, r in override_services
+                f'{{ target = "{t}", replacement = "{r}" }}'
+                for t, r in override_services
             )
             lines.append(f"services = [{entries}]")
         if override_templates:
             entries = ", ".join(
-                f'{{ target = "{t}", replacement = "{r}" }}' for t, r in override_templates
+                f'{{ target = "{t}", replacement = "{r}" }}'
+                for t, r in override_templates
             )
             lines.append(f"templates = [{entries}]")
         if override_hooks:
@@ -212,7 +222,9 @@ def _generate_refinement_toml(
     return "\n".join(lines)
 
 
-def _scaffold_mixin(feature_path: str, ns: str, feature_name: str, model_name: str, mixin_name: str):
+def _scaffold_mixin(
+    feature_path: str, ns: str, feature_name: str, model_name: str, mixin_name: str
+):
     """Create a skeleton mixin class in the feature's models.py.
 
     Replaces the scaffold's default db.Model with only the mixin —
@@ -251,14 +263,22 @@ class {mixin_name}:
         f.write(mixin_code)
 
 
-def _scaffold_service(feature_path: str, ns: str, feature_name: str, target_service: str, replacement_name: str):
+def _scaffold_service(
+    feature_path: str,
+    ns: str,
+    feature_name: str,
+    target_service: str,
+    replacement_name: str,
+):
     """Create a skeleton replacement service in the feature's services.py.
 
     Replaces the scaffold's default service/repository with only the
     replacement class — refinement features override, not own.
     """
     ns_safe = normalize_namespace(ns)
-    services_path = os.path.join(feature_path, "src", ns_safe, feature_name, "services.py")
+    services_path = os.path.join(
+        feature_path, "src", ns_safe, feature_name, "services.py"
+    )
 
     service_code = f'''class {replacement_name}:
     """Replaces {target_service} at runtime.
@@ -285,11 +305,15 @@ def _scaffold_service(feature_path: str, ns: str, feature_name: str, target_serv
         f.write(service_code)
 
     # Also clean up repositories.py — refinement features don't need one
-    repos_path = os.path.join(feature_path, "src", ns_safe, feature_name, "repositories.py")
+    repos_path = os.path.join(
+        feature_path, "src", ns_safe, feature_name, "repositories.py"
+    )
     if os.path.isfile(repos_path):
         with open(repos_path, "w") as f:
-            f.write("# Refinement features do not need their own repository.\n"
-                    "# The base feature's repository is used via the service locator.\n")
+            f.write(
+                "# Refinement features do not need their own repository.\n"
+                "# The base feature's repository is used via the service locator.\n"
+            )
 
 
 def _scaffold_init(
@@ -318,7 +342,9 @@ def _scaffold_init(
     if override_services:
         refinement_imports.append("refine_service")
     if refinement_imports:
-        imports.append(f"from splent_framework.refinement import {', '.join(refinement_imports)}")
+        imports.append(
+            f"from splent_framework.refinement import {', '.join(refinement_imports)}"
+        )
 
     imports.append("")
 
@@ -403,7 +429,9 @@ def _update_env_py(
         f.write(content)
 
 
-def _scaffold_hooks(feature_path: str, ns: str, feature_name: str, fill_hooks: list[str]):
+def _scaffold_hooks(
+    feature_path: str, ns: str, feature_name: str, fill_hooks: list[str]
+):
     """Create a hooks.py with register_template_hook calls for selected slots."""
     ns_safe = normalize_namespace(ns)
     hooks_path = os.path.join(feature_path, "src", ns_safe, feature_name, "hooks.py")
@@ -424,10 +452,7 @@ def _scaffold_hooks(feature_path: str, ns: str, feature_name: str, fill_hooks: l
     code = (
         "from splent_framework.hooks.template_hooks import register_template_hook\n"
         "from flask import render_template\n"
-        "\n\n"
-        + "\n".join(func_lines)
-        + "\n".join(register_lines)
-        + "\n"
+        "\n\n" + "\n".join(func_lines) + "\n".join(register_lines) + "\n"
     )
 
     # Don't overwrite if hooks.py already has content
@@ -453,8 +478,14 @@ def _clean_scaffold_for_refinement(feature_path: str, ns: str, feature_name: str
     pkg_dir = os.path.join(feature_path, "src", ns_safe, feature_name)
 
     for filename, content in [
-        ("signals.py", "# Refinement features typically do not define their own signals.\n"),
-        ("config.py", "# Refinement features typically do not need their own config.\n"),
+        (
+            "signals.py",
+            "# Refinement features typically do not define their own signals.\n",
+        ),
+        (
+            "config.py",
+            "# Refinement features typically do not need their own config.\n",
+        ),
     ]:
         filepath = os.path.join(pkg_dir, filename)
         if os.path.isfile(filepath):
@@ -499,7 +530,9 @@ def feature_refinement(refiner_name):
     # Check if refinement already configured
     with open(refiner_pyproject, "rb") as f:
         refiner_data = tomllib.load(f)
-    existing_refinement = refiner_data.get("tool", {}).get("splent", {}).get("refinement")
+    existing_refinement = (
+        refiner_data.get("tool", {}).get("splent", {}).get("refinement")
+    )
     if existing_refinement:
         click.echo()
         click.echo(
@@ -513,6 +546,7 @@ def feature_refinement(refiner_name):
     click.echo()
     click.echo(click.style("  Updating editable feature contracts...", dim=True))
     from splent_cli.commands.feature.feature_contract import update_contract
+
     features_raw = _get_product_features(workspace, product)
     for feat in features_raw:
         if feat.get("pinned"):
@@ -541,7 +575,9 @@ def feature_refinement(refiner_name):
 
     if not extensible_features:
         click.echo()
-        click.secho("  No features with extensible points found in this product.", fg="yellow")
+        click.secho(
+            "  No features with extensible points found in this product.", fg="yellow"
+        )
         click.echo(
             click.style("  Make sure the base feature has ", dim=True)
             + "[tool.splent.contract.extensible]"
@@ -586,8 +622,7 @@ def feature_refinement(refiner_name):
 
     click.echo()
     click.echo(
-        click.style("  Refining: ", dim=True)
-        + click.style(base_short, bold=True)
+        click.style("  Refining: ", dim=True) + click.style(base_short, bold=True)
     )
 
     # ── Step 2: Select what to override/extend ───────────────────────
@@ -603,20 +638,24 @@ def feature_refinement(refiner_name):
 
     # Determine refiner's short name for generating class names
     refiner_short = refiner_name.replace("splent_feature_", "")
-    base_short_lower = base_short.lower().replace("_", "")
     # Strip the base feature name from the refiner if it starts with it
     # e.g. "notes_tags" refining "notes" → suffix is "tags"
     suffix = refiner_short
     if suffix.startswith(base_short + "_"):
-        suffix = suffix[len(base_short) + 1:]
+        suffix = suffix[len(base_short) + 1 :]
     elif suffix.startswith(base_short):
-        suffix = suffix[len(base_short):]
+        suffix = suffix[len(base_short) :]
     # e.g. "tags" → "Tags" for class name suffixes
-    refiner_pascal = "".join(w.capitalize() for w in suffix.split("_")) if suffix else "Ext"
+    refiner_pascal = (
+        "".join(w.capitalize() for w in suffix.split("_")) if suffix else "Ext"
+    )
 
     # ── Models ────────────────────────────────────────────────────────
     if ext["models"]:
-        click.echo(click.style("  Models", bold=True) + click.style(" (extend with mixins)", dim=True))
+        click.echo(
+            click.style("  Models", bold=True)
+            + click.style(" (extend with mixins)", dim=True)
+        )
         selected_models = _multi_select(ext["models"], "models to extend")
         for model in selected_models:
             mixin = f"{model}{refiner_pascal}Mixin"
@@ -628,7 +667,10 @@ def feature_refinement(refiner_name):
 
     # ── Services ──────────────────────────────────────────────────────
     if ext["services"]:
-        click.echo(click.style("  Services", bold=True) + click.style(" (override with replacement)", dim=True))
+        click.echo(
+            click.style("  Services", bold=True)
+            + click.style(" (override with replacement)", dim=True)
+        )
         selected_services = _multi_select(ext["services"], "services to override")
         for svc in selected_services:
             replacement = f"{svc}With{refiner_pascal}"
@@ -640,13 +682,14 @@ def feature_refinement(refiner_name):
 
     # ── Templates ─────────────────────────────────────────────────────
     if ext["templates"]:
-        click.echo(click.style("  Templates", bold=True) + click.style(" (override with replacement)", dim=True))
+        click.echo(
+            click.style("  Templates", bold=True)
+            + click.style(" (override with replacement)", dim=True)
+        )
         selected_templates = _multi_select(ext["templates"], "templates to override")
         for tpl in selected_templates:
             override_templates.append((tpl, ""))
-            click.echo(
-                click.style("    override: ", dim=True) + tpl
-            )
+            click.echo(click.style("    override: ", dim=True) + tpl)
 
     # ── Hooks ─────────────────────────────────────────────────────────
     # Separate hooks into two categories:
@@ -659,29 +702,41 @@ def feature_refinement(refiner_name):
         fillable_hooks = [h for h in ext["hooks"] if h not in provided_hooks]
 
         if fillable_hooks:
-            click.echo(click.style("  Hook slots", bold=True) + click.style(" (fill with register_template_hook)", dim=True))
+            click.echo(
+                click.style("  Hook slots", bold=True)
+                + click.style(" (fill with register_template_hook)", dim=True)
+            )
             selected_fill = _multi_select(fillable_hooks, "hook slots to fill")
             for hook in selected_fill:
                 fill_hooks.append(hook)
-                click.echo(
-                    click.style("    fill: ", dim=True) + hook
-                )
+                click.echo(click.style("    fill: ", dim=True) + hook)
 
         if overridable_hooks:
-            click.echo(click.style("  Hooks", bold=True) + click.style(" (override with replace_template_hook)", dim=True))
+            click.echo(
+                click.style("  Hooks", bold=True)
+                + click.style(" (override with replace_template_hook)", dim=True)
+            )
             selected_hooks = _multi_select(overridable_hooks, "hooks to override")
             for hook in selected_hooks:
                 override_hooks.append((hook, ""))
-                click.echo(
-                    click.style("    override: ", dim=True) + hook
-                )
+                click.echo(click.style("    override: ", dim=True) + hook)
 
     # ── Routes ────────────────────────────────────────────────────────
     if ext["routes"] and provides.get("blueprints"):
-        click.echo(click.style("  Routes", bold=True) + click.style(" (add to existing blueprint)", dim=True))
-        if click.confirm("  Add routes to the base feature's blueprint?", default=False):
-            bp = provides["blueprints"][0] if len(provides["blueprints"]) == 1 else \
-                _multi_select(provides["blueprints"], "blueprint")[0] if provides["blueprints"] else None
+        click.echo(
+            click.style("  Routes", bold=True)
+            + click.style(" (add to existing blueprint)", dim=True)
+        )
+        if click.confirm(
+            "  Add routes to the base feature's blueprint?", default=False
+        ):
+            bp = (
+                provides["blueprints"][0]
+                if len(provides["blueprints"]) == 1
+                else _multi_select(provides["blueprints"], "blueprint")[0]
+                if provides["blueprints"]
+                else None
+            )
             if bp:
                 module = f"routes_{refiner_short}"
                 add_routes.append((bp, module))
@@ -691,7 +746,14 @@ def feature_refinement(refiner_name):
                 )
 
     # ── Check if anything was selected ───────────────────────────────
-    total = len(override_services) + len(override_templates) + len(override_hooks) + len(extend_models) + len(add_routes) + len(fill_hooks)
+    total = (
+        len(override_services)
+        + len(override_templates)
+        + len(override_hooks)
+        + len(extend_models)
+        + len(add_routes)
+        + len(fill_hooks)
+    )
     if total == 0:
         click.echo()
         click.secho("  Nothing selected. Aborting.", fg="yellow")
@@ -703,8 +765,12 @@ def feature_refinement(refiner_name):
     click.echo(click.style(f"  {'─' * 56}", fg="bright_black"))
 
     refinement_toml = _generate_refinement_toml(
-        base_name, override_services, override_templates,
-        override_hooks, extend_models, add_routes,
+        base_name,
+        override_services,
+        override_templates,
+        override_hooks,
+        extend_models,
+        add_routes,
     )
 
     for line in refinement_toml.strip().splitlines():
@@ -742,7 +808,11 @@ def feature_refinement(refiner_name):
 
     # ── Step 5: Scaffold code ────────────────────────────────────────
     # Determine namespace from refiner's pyproject
-    ns_raw = refiner_data.get("tool", {}).get("splent", {}).get("namespace", DEFAULT_NAMESPACE)
+    ns_raw = (
+        refiner_data.get("tool", {})
+        .get("splent", {})
+        .get("namespace", DEFAULT_NAMESPACE)
+    )
     ns = normalize_namespace(ns_raw)
 
     # Also try to detect from src/ directory structure
@@ -761,26 +831,23 @@ def feature_refinement(refiner_name):
 
     for model, mixin in extend_models:
         _scaffold_mixin(refiner_path, ns, refiner_name, model, mixin)
-        click.echo(
-            click.style("  scaffolded: ", dim=True)
-            + f"models.py <- {mixin}"
-        )
+        click.echo(click.style("  scaffolded: ", dim=True) + f"models.py <- {mixin}")
 
     for target, replacement in override_services:
         _scaffold_service(refiner_path, ns, refiner_name, target, replacement)
         click.echo(
-            click.style("  scaffolded: ", dim=True)
-            + f"services.py <- {replacement}"
+            click.style("  scaffolded: ", dim=True) + f"services.py <- {replacement}"
         )
 
     _scaffold_init(
-        refiner_path, ns, refiner_name, base_short,
-        extend_models, override_services,
+        refiner_path,
+        ns,
+        refiner_name,
+        base_short,
+        extend_models,
+        override_services,
     )
-    click.echo(
-        click.style("  scaffolded: ", dim=True)
-        + "__init__.py"
-    )
+    click.echo(click.style("  scaffolded: ", dim=True) + "__init__.py")
 
     if fill_hooks:
         _scaffold_hooks(refiner_path, ns, refiner_name, fill_hooks)
@@ -795,10 +862,7 @@ def feature_refinement(refiner_name):
     # Update env.py to include refined tables in migration scope
     if extend_models:
         _update_env_py(refiner_path, ns, refiner_name, extend_models)
-        click.echo(
-            click.style("  updated:    ", dim=True)
-            + "migrations/env.py"
-        )
+        click.echo(click.style("  updated:    ", dim=True) + "migrations/env.py")
 
     # ── Update the refiner's own contract ───────────────────────────
     try:

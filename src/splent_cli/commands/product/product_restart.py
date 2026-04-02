@@ -71,19 +71,24 @@ def product_restart(env_dev, env_prod, full):
         click.secho(f"  No running container found for {product} ({env})", fg="red")
         raise SystemExit(1)
 
-    env_file = os.path.join(product_path, "docker", ".env")
-
     # Kill existing Flask/watchmedo/gunicorn processes
     subprocess.run(
         [
-            "docker", "exec", container_id, "bash", "-c",
+            "docker",
+            "exec",
+            container_id,
+            "bash",
+            "-c",
             "pkill -f 'flask run' ; pkill -f watchmedo ; pkill -f gunicorn ; sleep 1",
         ],
         capture_output=True,
     )
 
     if full:
-        click.echo(click.style("  restarting ", dim=True) + f"{product} ({env}) — full entrypoint")
+        click.echo(
+            click.style("  restarting ", dim=True)
+            + f"{product} ({env}) — full entrypoint"
+        )
 
         # Source .env and run the full entrypoint
         container_entrypoint = f"/workspace/{product}/entrypoints/entrypoint.{env}.sh"

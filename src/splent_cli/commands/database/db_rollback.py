@@ -214,7 +214,8 @@ def db_rollback(feature, steps, cascade):
         versions_dir = os.path.join(mdir, "versions")
         if os.path.isdir(versions_dir):
             migration_files = [
-                f for f in os.listdir(versions_dir)
+                f
+                for f in os.listdir(versions_dir)
                 if f.endswith(".py") and not f.startswith("__")
             ]
             if migration_files and click.confirm(

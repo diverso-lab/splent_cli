@@ -68,11 +68,11 @@ def _active_items_for_feature(name, ext, overrides, hook_usage, full):
             )
             if override:
                 action = (
-                    "overridden"
-                    if override["action"] == "override"
-                    else "extended"
+                    "overridden" if override["action"] == "override" else "extended"
                 )
-                lines.append((cat_s, item, ("override", f"{action} by {override['refiner']}")))
+                lines.append(
+                    (cat_s, item, ("override", f"{action} by {override['refiner']}"))
+                )
             elif cat == "hooks" and item in hook_usage:
                 providers = [f for f in hook_usage[item] if f != name]
                 if providers:
@@ -87,7 +87,13 @@ def _active_items_for_feature(name, ext, overrides, hook_usage, full):
         route_adds = [o for o in overrides if o["category"] == "route"]
         if route_adds:
             for r in route_adds:
-                lines.append(("route", r["replacement"], ("override", f"added by {r['refiner']}")))
+                lines.append(
+                    (
+                        "route",
+                        r["replacement"],
+                        ("override", f"added by {r['refiner']}"),
+                    )
+                )
         elif full:
             lines.append(("routes", "", ("extensible_routes", None)))
 
@@ -285,9 +291,7 @@ def feature_xray(feature_ref, filter_cat, validate, full):
 
         # Apply category filter
         if filter_cat:
-            active_lines = [
-                (c, i, a) for c, i, a in active_lines if c == filter_cat
-            ]
+            active_lines = [(c, i, a) for c, i, a in active_lines if c == filter_cat]
 
         # Refiner contributions
         refiner_lines = []
@@ -515,7 +519,6 @@ def feature_xray(feature_ref, filter_cat, validate, full):
 
     # 8. Layout hooks: check for unused slots
     unused_hooks = [h for h in layout_hooks if h not in hook_usage]
-    used_hooks = [h for h in layout_hooks if h in hook_usage]
     if unused_hooks:
         info_lines.append(f"{len(unused_hooks)} unused layout hook(s)")
     ok += 1
@@ -550,9 +553,7 @@ def feature_xray(feature_ref, filter_cat, validate, full):
 
     # Final summary
     if fail:
-        click.secho(
-            f"  {fail} issue(s) found, {ok} passed.", fg="red"
-        )
+        click.secho(f"  {fail} issue(s) found, {ok} passed.", fg="red")
         raise SystemExit(1)
     else:
         summary = f"  ✅ All {ok} checks passed."

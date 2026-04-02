@@ -242,16 +242,12 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
     text = path.read_text()
 
     existing_description = f"{feature_name} feature"
-    existing_extensible = None
     try:
         data = tomllib.loads(text)
         splent_contract = data.get("tool", {}).get("splent", {}).get("contract", {})
         desc = splent_contract.get("description")
         if desc:
             existing_description = desc
-        ext = splent_contract.get("extensible")
-        if ext:
-            existing_extensible = ext
     except Exception:
         pass
 

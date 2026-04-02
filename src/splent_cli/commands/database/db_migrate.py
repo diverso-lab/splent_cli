@@ -1,7 +1,6 @@
 import os
 
 import click
-from flask import current_app
 from flask_migrate import migrate as alembic_migrate
 
 from splent_cli.utils.decorators import requires_db
@@ -52,7 +51,9 @@ def _is_empty_migration(path: str) -> bool:
     short_help="Generate and apply migrations (all features or a single one).",
 )
 @click.argument("feature", required=False, default=None)
-@click.option("-m", "message", default=None, help="Migration message (defaults to feature name).")
+@click.option(
+    "-m", "message", default=None, help="Migration message (defaults to feature name)."
+)
 @context.requires_product
 def db_migrate(feature, message):
     """
@@ -61,8 +62,6 @@ def db_migrate(feature, message):
 
     Empty migrations (no schema changes detected) are automatically removed.
     """
-    app = current_app
-
     if feature:
         dirs = {}
         mdir = MigrationManager.get_feature_migration_dir(feature)
@@ -84,7 +83,6 @@ def db_migrate(feature, message):
 
     # Build entry→key lookup for manifest updates
     product_path = PathUtils.get_app_base_dir()
-    product_name = os.getenv("SPLENT_APP", "")
     entry_lookup = {}
     for entry in get_features_from_pyproject() or []:
         key, ns, name, version = resolve_feature_key_from_entry(entry)
