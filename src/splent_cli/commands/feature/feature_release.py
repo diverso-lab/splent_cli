@@ -273,14 +273,19 @@ def _scan_dependencies(
                 if f"splent_feature_{short_name}" != own_feature_name:
                     required_features.add(short_name)
 
-        for var in re.findall(
-            r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z][A-Z0-9_]+)['"]""", text
-        ):
-            env_vars.add(var)
-        for var in re.findall(
-            r"""os\.environ\s*\[\s*['"]([A-Z][A-Z0-9_]+)['"]""", text
-        ):
-            env_vars.add(var)
+        for line in text.splitlines():
+            stripped = line.lstrip()
+            # Skip comments and docstrings
+            if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
+                continue
+            for var in re.findall(
+                r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z][A-Z0-9_]+)['"]""", stripped
+            ):
+                env_vars.add(var)
+            for var in re.findall(
+                r"""os\.environ\s*\[\s*['"]([A-Z][A-Z0-9_]+)['"]""", stripped
+            ):
+                env_vars.add(var)
 
     return sorted(required_features), sorted(env_vars)
 

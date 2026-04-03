@@ -106,6 +106,48 @@ def run_preflight(*, interactive: bool = True, build_mode: bool = False) -> bool
 
     failed = False
 
+    # Phase 0: pyproject sanity (duplicates, namespaces, SPL)
+    splent_cfg = data.get("tool", {}).get("splent", {})
+    base_feats = splent_cfg.get("features", [])
+    dev_feats = splent_cfg.get("features_dev", [])
+    prod_feats = splent_cfg.get("features_prod", [])
+
+    all_entries = base_feats + dev_feats + prod_feats
+    seen = {}
+    for entry in all_entries:
+        bare = entry.split("/")[-1].split("@")[0] if "/" in entry else entry.split("@")[0]
+        seen.setdefault(bare, []).append(entry)
+
+    duplicates = {k: v for k, v in seen.items() if len(v) > 1}
+    if duplicates:
+        if interactive:
+            for bare, entries in duplicates.items():
+                short = bare.replace("splent_feature_", "")
+                click.secho(f"  pyproject duplicate '{short}': {', '.join(entries)}", fg="red")
+        failed = True
+    else:
+        namespaces = set()
+        for entry in all_entries:
+            if "/" in entry:
+                namespaces.add(entry.split("/")[0])
+        if len(namespaces) > 1:
+            if interactive:
+                click.secho(
+                    f"  pyproject inconsistent namespaces: {', '.join(sorted(namespaces))}",
+                    fg="yellow",
+                )
+
+    spl_name = splent_cfg.get("spl")
+    if spl_name:
+        uvl_check = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+        if not os.path.isfile(uvl_check):
+            if interactive:
+                click.secho(f"  pyproject SPL '{spl_name}' — UVL not found in catalog", fg="red")
+            failed = True
+
+    if failed:
+        return False
+
     # Phase 1: SAT
     try:
         sat_ok, selected, _, _ = _run_sat_check(workspace, app_name, data, None, False)

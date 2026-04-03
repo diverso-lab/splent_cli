@@ -88,29 +88,63 @@ def check_pyproject():
         _ok(f"All {len(deps)} dependencies satisfied")
 
     # Features
-    features = read_features_from_data(data)
-    _ok(f"{len(features)} features declared in [tool.splent.features]")
-
     splent = data.get("tool", {}).get("splent", {})
+    base_feats = splent.get("features", [])
     dev_feats = splent.get("features_dev", [])
     prod_feats = splent.get("features_prod", [])
+
+    _ok(f"{len(base_feats)} features in [tool.splent].features")
     if dev_feats:
         _ok(f"{len(dev_feats)} dev-only features")
     if prod_feats:
         _ok(f"{len(prod_feats)} prod-only features")
 
-    # UVL
-    uvl_cfg = splent.get("uvl", {})
-    uvl_file = uvl_cfg.get("file")
-    if uvl_file:
-        app_path = os.path.join(workspace, product)
-        uvl_path = os.path.join(app_path, "uvl", uvl_file)
-        if os.path.exists(uvl_path):
-            _ok(f"UVL file found: uvl/{uvl_file}")
+    # Check for duplicates across feature lists
+    def _bare_name(entry):
+        name = entry.split("/")[-1] if "/" in entry else entry
+        return name.split("@")[0]
+
+    all_entries = base_feats + dev_feats + prod_feats
+    seen_names = {}
+    for entry in all_entries:
+        bare = _bare_name(entry)
+        seen_names.setdefault(bare, []).append(entry)
+
+    for bare, entries in seen_names.items():
+        if len(entries) > 1:
+            short = bare.replace("splent_feature_", "")
+            _fail(f"Duplicate feature '{short}': {', '.join(entries)}")
+
+    # Check for inconsistent namespaces
+    namespaces = set()
+    for entry in all_entries:
+        if "/" in entry:
+            ns = entry.split("/")[0]
+            namespaces.add(ns)
+    if len(namespaces) > 1:
+        _warn(f"Inconsistent namespaces: {', '.join(sorted(namespaces))} — use one format consistently")
+
+    # SPL / UVL
+    spl_name = splent.get("spl")
+    if spl_name:
+        uvl_path = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+        if os.path.isfile(uvl_path):
+            _ok(f"SPL catalog: {spl_name} (UVL found)")
         else:
-            _fail(f"UVL file not found: uvl/{uvl_file}")
+            _fail(f"SPL catalog: {spl_name} — UVL not found at splent_catalog/{spl_name}/{spl_name}.uvl")
     else:
-        _warn("No UVL file configured")
+        # Legacy fallback
+        uvl_cfg = splent.get("uvl", {})
+        uvl_file = uvl_cfg.get("file")
+        if uvl_file:
+            app_path = os.path.join(workspace, product)
+            uvl_path = os.path.join(app_path, "uvl", uvl_file)
+            if os.path.exists(uvl_path):
+                _ok(f"UVL file found: uvl/{uvl_file} (legacy)")
+            else:
+                _fail(f"UVL file not found: uvl/{uvl_file}")
+        else:
+            _warn("No SPL configured — set [tool.splent].spl in pyproject.toml")
 
     click.echo()
     if fail:
