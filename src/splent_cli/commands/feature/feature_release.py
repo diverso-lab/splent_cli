@@ -340,12 +340,14 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
     text = path.read_text()
 
     existing_description = f"{feature_name} feature"
+    existing_env = None
     try:
         data = tomllib.loads(text)
         splent_contract = data.get("tool", {}).get("splent", {}).get("contract", {})
         desc = splent_contract.get("description")
         if desc:
             existing_description = desc
+        existing_env = splent_contract.get("env")
     except Exception:
         pass
 
@@ -383,7 +385,8 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         "# Do not edit manually — re-run `splent feature:contract --write` to refresh.\n"
         "[tool.splent.contract]\n"
         f'description = "{existing_description}"\n'
-        "\n"
+        + (f'env = "{existing_env}"\n' if existing_env else "")
+        + "\n"
         "[tool.splent.contract.provides]\n"
         f"routes     = {_toml_list(contract['routes'])}\n"
         f"blueprints = {_toml_list(contract['blueprints'])}\n"

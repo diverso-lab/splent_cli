@@ -78,14 +78,14 @@ class TestCheckPyproject:
     def test_features_declared_shows_count(self, runner, product_workspace):
         (product_workspace / "test_app" / "pyproject.toml").write_text(
             '[project]\nname = "test_app"\nversion = "1.0.0"\n'
-            '[project.optional-dependencies]\nfeatures = ["splent_io/auth"]\n'
+            '[tool.splent]\nfeatures = ["splent-io/splent_feature_auth"]\n'
         )
         result = runner.invoke(check_pyproject)
         assert "1 features" in result.output
 
-    def test_no_uvl_configured_shows_warning(self, runner, product_workspace):
+    def test_no_spl_configured_shows_warning(self, runner, product_workspace):
         result = runner.invoke(check_pyproject)
-        assert "UVL" in result.output
+        assert "No SPL configured" in result.output
 
     def test_uvl_file_found_shows_ok(self, runner, product_workspace):
         uvl_dir = product_workspace / "test_app" / "uvl"
