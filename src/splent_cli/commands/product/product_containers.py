@@ -235,10 +235,10 @@ def product_docker(env_dev, env_prod):
                 seen.add(key)
                 unique.append((label, port, kind))
 
-        http_services = [(l, p) for l, p, k in unique if k == "http"]
-        tcp_services = [(l, p) for l, p, k in unique if k == "tcp"]
+        http_services = [(lbl, p) for lbl, p, k in unique if k == "http"]
+        tcp_services = [(lbl, p) for lbl, p, k in unique if k == "tcp"]
         all_services = http_services + tcp_services
-        label_width = max((len(l) for l, _ in all_services), default=20) + 2
+        label_width = max((len(lbl) for lbl, _ in all_services), default=20) + 2
 
         if http_services:
             click.secho("  Accessible services:", bold=True)

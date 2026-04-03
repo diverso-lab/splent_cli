@@ -115,7 +115,9 @@ def run_preflight(*, interactive: bool = True, build_mode: bool = False) -> bool
     all_entries = base_feats + dev_feats + prod_feats
     seen = {}
     for entry in all_entries:
-        bare = entry.split("/")[-1].split("@")[0] if "/" in entry else entry.split("@")[0]
+        bare = (
+            entry.split("/")[-1].split("@")[0] if "/" in entry else entry.split("@")[0]
+        )
         seen.setdefault(bare, []).append(entry)
 
     duplicates = {k: v for k, v in seen.items() if len(v) > 1}
@@ -123,7 +125,9 @@ def run_preflight(*, interactive: bool = True, build_mode: bool = False) -> bool
         if interactive:
             for bare, entries in duplicates.items():
                 short = bare.replace("splent_feature_", "")
-                click.secho(f"  pyproject duplicate '{short}': {', '.join(entries)}", fg="red")
+                click.secho(
+                    f"  pyproject duplicate '{short}': {', '.join(entries)}", fg="red"
+                )
         failed = True
     else:
         namespaces = set()
@@ -139,10 +143,14 @@ def run_preflight(*, interactive: bool = True, build_mode: bool = False) -> bool
 
     spl_name = splent_cfg.get("spl")
     if spl_name:
-        uvl_check = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+        uvl_check = os.path.join(
+            workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
+        )
         if not os.path.isfile(uvl_check):
             if interactive:
-                click.secho(f"  pyproject SPL '{spl_name}' — UVL not found in catalog", fg="red")
+                click.secho(
+                    f"  pyproject SPL '{spl_name}' — UVL not found in catalog", fg="red"
+                )
             failed = True
 
     if failed:

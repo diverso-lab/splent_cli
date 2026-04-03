@@ -276,10 +276,15 @@ def _scan_dependencies(
         for line in text.splitlines():
             stripped = line.lstrip()
             # Skip comments and docstrings
-            if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
+            if (
+                stripped.startswith("#")
+                or stripped.startswith('"""')
+                or stripped.startswith("'''")
+            ):
                 continue
             for var in re.findall(
-                r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z][A-Z0-9_]+)['"]""", stripped
+                r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z][A-Z0-9_]+)['"]""",
+                stripped,
             ):
                 env_vars.add(var)
             for var in re.findall(

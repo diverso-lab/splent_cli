@@ -798,7 +798,9 @@ def export_puml(
             pydata = tomllib.load(f)
         spl_name = pydata.get("tool", {}).get("splent", {}).get("spl")
         if spl_name:
-            candidate = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+            candidate = os.path.join(
+                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
+            )
             if os.path.isfile(candidate):
                 uvl_path = candidate
 
@@ -880,6 +882,7 @@ def export_puml(
             if not os.path.isfile(pyproject_path):
                 continue
             import tomllib as _tomllib
+
             with open(pyproject_path, "rb") as f:
                 feat_data = _tomllib.load(f)
             extends = (
@@ -907,7 +910,9 @@ def export_puml(
                 if not target_name or not mixin_name:
                     continue
                 # Find the mixin class in parsed mixin_models
-                mixin_cls = next((m for m in mixin_models if m["name"] == mixin_name), None)
+                mixin_cls = next(
+                    (m for m in mixin_models if m["name"] == mixin_name), None
+                )
                 if not mixin_cls:
                     continue
                 # Find the target model across all parsed features

@@ -9,7 +9,6 @@ import click
 import tomllib
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import read_features_from_data
 
 
 def _find_missing_pkgs(deps: list) -> list:
@@ -122,16 +121,22 @@ def check_pyproject():
             ns = entry.split("/")[0]
             namespaces.add(ns)
     if len(namespaces) > 1:
-        _warn(f"Inconsistent namespaces: {', '.join(sorted(namespaces))} — use one format consistently")
+        _warn(
+            f"Inconsistent namespaces: {', '.join(sorted(namespaces))} — use one format consistently"
+        )
 
     # SPL / UVL
     spl_name = splent.get("spl")
     if spl_name:
-        uvl_path = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+        uvl_path = os.path.join(
+            workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
+        )
         if os.path.isfile(uvl_path):
             _ok(f"SPL catalog: {spl_name} (UVL found)")
         else:
-            _fail(f"SPL catalog: {spl_name} — UVL not found at splent_catalog/{spl_name}/{spl_name}.uvl")
+            _fail(
+                f"SPL catalog: {spl_name} — UVL not found at splent_catalog/{spl_name}/{spl_name}.uvl"
+            )
     else:
         # Legacy fallback
         uvl_cfg = splent.get("uvl", {})
