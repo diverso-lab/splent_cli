@@ -13,6 +13,7 @@ import click
 
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import parse_feature_entry, read_features_from_data
+from splent_cli.commands.product.product_up import _get_feature_order
 
 
 # ── Feature change detection ─────────────────────────────────────────
@@ -208,6 +209,41 @@ def product_restart(env_dev, env_prod, full):
             )
             _install_features(container_id, to_install, workspace, product)
             click.echo()
+
+    # ── Restart feature Docker containers (nginx, redis, etc.) ──
+    features = _get_feature_order(workspace, product_path, env)
+    restarted = 0
+    for feat in features:
+        clean = compose.normalize_feature_ref(feat)
+        feat_docker = compose.feature_docker_dir(workspace, clean)
+        feat_base = os.path.dirname(feat_docker)
+
+        if not os.path.isdir(feat_docker):
+            continue
+
+        feat_compose = compose.resolve_file(feat_base, env)
+        if not feat_compose:
+            continue
+
+        feat_project = compose.project_name(clean, env)
+        short = clean.split("/")[-1] if "/" in clean else clean
+        short = short.replace("splent_feature_", "")
+
+        click.echo(
+            click.style("    ⏳ ", dim=True) + click.style(short, dim=True),
+            nl=False,
+        )
+        result = subprocess.run(
+            ["docker", "compose", "-p", feat_project, "-f", feat_compose, "restart"],
+            cwd=feat_docker,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            click.echo(click.style(" ✓", fg="green"))
+            restarted += 1
+        else:
+            click.echo(click.style(" ✗", fg="red"))
 
     # ── Kill existing processes ───────────────────────────────────
     subprocess.run(

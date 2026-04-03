@@ -64,6 +64,27 @@ def feature_attach(feature_identifier, version, env_scope):
 
     short = feature_name.replace("splent_feature_", "")
 
+    # ── Auto-detect env scope from feature contract ───────────────────
+    if not env_scope:
+        feat_pyproject = os.path.join(versioned_dir, "pyproject.toml")
+        if os.path.isfile(feat_pyproject):
+            import tomllib as _tomllib
+
+            with open(feat_pyproject, "rb") as f:
+                feat_data = _tomllib.load(f)
+            contract_env = (
+                feat_data.get("tool", {})
+                .get("splent", {})
+                .get("contract", {})
+                .get("env")
+            )
+            if contract_env:
+                env_scope = contract_env
+                click.echo(
+                    click.style("  scope    ", dim=True)
+                    + f"contract declares env={contract_env} → features_{contract_env}"
+                )
+
     # ── Update pyproject.toml ─────────────────────────────────────────
     full_name = f"{namespace}/{feature_name}@{version}"
     bare_name = f"{namespace}/{feature_name}"

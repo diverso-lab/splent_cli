@@ -203,11 +203,18 @@ def product_up(dev, prod):
         if needs_build:
             cmd.append("--build")
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         short = name.split("/")[-1] if "/" in name else name
 
+        # Show progress: service name while launching
+        click.echo(
+            click.style("    ⏳ ", dim=True) + click.style(short, dim=True),
+            nl=False,
+        )
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+
         if result.returncode != 0:
-            click.secho(f"    ✗  {short}: failed (exit {result.returncode})", fg="red")
+            click.echo(click.style(" ✗", fg="red"))
             if result.stderr.strip():
                 for line in result.stderr.strip().splitlines():
                     click.echo(f"       {line}")
@@ -218,16 +225,14 @@ def product_up(dev, prod):
 
         # Wait for health if this feature has healthchecks
         if wait_health:
-            click.echo(
-                click.style(f"    ⏳ {short}", dim=True)
-                + click.style(" waiting for healthy...", dim=True),
-                nl=False,
-            )
+            click.echo(click.style(" waiting...", dim=True), nl=False)
             healthy = _wait_for_healthy(project, compose_file, docker_dir)
             if healthy:
                 click.echo(click.style(" ✓", fg="green"))
             else:
                 click.echo(click.style(" timeout", fg="yellow"))
+        else:
+            click.echo(click.style(" ✓", fg="green"))
 
         return True
 
@@ -259,9 +264,6 @@ def product_up(dev, prod):
 
     if failed:
         raise SystemExit(1)
-
-    if started:
-        click.echo(click.style("    started: ", dim=True) + ", ".join(started))
 
 
 cli_command = product_up

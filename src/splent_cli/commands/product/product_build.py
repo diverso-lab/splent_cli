@@ -43,11 +43,22 @@ def load_compose_file(path):
         return yaml.safe_load(f) or {}
 
 
-def merge_compose(base, override, label="", build_services=None):
+def merge_compose(
+    base,
+    override,
+    label="",
+    build_services=None,
+    rewrite_mounts=False,
+    product_host_docker_dir="",
+):
     """Merge two docker-compose YAML dicts. Reports conflicts via warnings.
 
     For services with custom builds, rewrites ``build:`` to point to the
     copied Dockerfile in the product's docker/features/ directory.
+
+    When ``rewrite_mounts`` is True (deploy builds), bind mounts that
+    reference ``${*FEATURE_HOST_DIR}`` are rewritten to use the host-side
+    absolute path to the product's docker/features/ directory.
     """
     if build_services is None:
         build_services = set()
@@ -62,21 +73,51 @@ def merge_compose(base, override, label="", build_services=None):
                         f"  ⚠️  Service '{svc}' overridden by: {label}",
                         fg="yellow",
                     )
+                svc_def = dict(svc_def)
                 if "build" in svc_def:
-                    svc_def = dict(svc_def)
                     if svc in build_services:
-                        # Rewrite build context to product-local path
+                        # Context = feature dir, dockerfile = original name
+                        df_name = build_services[svc]
                         svc_def["build"] = {
-                            "context": ".",
-                            "dockerfile": f"features/{svc}/Dockerfile",
+                            "context": f"features/{svc}",
+                            "dockerfile": df_name,
                         }
                         if "image" not in svc_def:
                             svc_def["image"] = f"splent/{svc}:latest"
                     else:
-                        # No Dockerfile found — fall back to image only
                         if "image" not in svc_def:
                             svc_def["image"] = f"splent/{svc}:latest"
                         del svc_def["build"]
+                # Rewrite bind mounts from FEATURE_HOST_DIR to local features/
+                if rewrite_mounts and "volumes" in svc_def:
+                    new_vols = []
+                    for vol in svc_def["volumes"]:
+                        if isinstance(vol, str) and "FEATURE_HOST_DIR" in vol:
+                            # ${NGINX_FEATURE_HOST_DIR}/docker/nginx/templates/x.conf
+                            # → ./features/splent_feature_nginx/nginx/templates/x.conf
+                            parts = vol.split(":", 1)
+                            host_path = parts[0]
+                            rest = ":" + parts[1] if len(parts) > 1 else ""
+                            # Strip the env var and /docker/ prefix
+                            # e.g. ${NGINX_FEATURE_HOST_DIR}/docker/nginx/... → nginx/...
+                            idx = host_path.find("/docker/")
+                            if idx != -1:
+                                relative = host_path[idx + len("/docker/") :]
+                            else:
+                                relative = (
+                                    host_path.split("/", 1)[-1]
+                                    if "/" in host_path
+                                    else host_path
+                                )
+                            if product_host_docker_dir:
+                                new_vols.append(
+                                    f"{product_host_docker_dir}/features/{svc}/{relative}{rest}"
+                                )
+                            else:
+                                new_vols.append(f"./features/{svc}/{relative}{rest}")
+                        else:
+                            new_vols.append(vol)
+                    svc_def["volumes"] = new_vols
                 result["services"][svc] = svc_def
         elif key in ("networks", "volumes"):
             result.setdefault(key, {})
@@ -90,12 +131,12 @@ def merge_compose(base, override, label="", build_services=None):
 def _collect_feature_dockerfiles(workspace, declared_features, docker_path, env="prod"):
     """Copy feature Dockerfiles into the product's docker/features/ directory.
 
-    Returns set of service names that have custom builds.
+    Returns dict of {service_name: dockerfile_name} for services with custom builds.
     """
     import shutil
 
     features_build_dir = os.path.join(docker_path, "features")
-    build_services = set()
+    build_services = {}
 
     for feat in declared_features:
         clean = compose.normalize_feature_ref(feat)
@@ -155,7 +196,7 @@ def _collect_feature_dockerfiles(workspace, declared_features, docker_path, env=
                 elif os.path.isdir(src_item) and not os.path.exists(dest_item):
                     shutil.copytree(src_item, dest_item)
 
-            build_services.add(svc_name)
+            build_services[svc_name] = dockerfile
 
             short = svc_name.replace("splent_feature_", "")
             click.echo(
@@ -165,6 +206,62 @@ def _collect_feature_dockerfiles(workspace, declared_features, docker_path, env=
             )
 
     return build_services
+
+
+def _collect_feature_assets(workspace, declared_features, docker_path, env="prod"):
+    """Copy non-compose, non-env supporting files (config templates, etc.)
+    from every feature that has a docker/ directory into the product's
+    docker/features/<service_name>/ directory.
+
+    This ensures files needed by bind mounts (e.g. nginx templates) are
+    available in the deploy artifact — even for features that use a stock
+    image without a custom Dockerfile.
+    """
+    import shutil
+
+    features_dir = os.path.join(docker_path, "features")
+    copied = 0
+
+    for feat in declared_features:
+        clean = compose.normalize_feature_ref(feat)
+        f_docker = compose.feature_docker_dir(workspace, clean)
+        if not os.path.isdir(f_docker):
+            continue
+
+        compose_file = (
+            os.path.join(f_docker, f"docker-compose.{env}.yml")
+            if os.path.isfile(os.path.join(f_docker, f"docker-compose.{env}.yml"))
+            else os.path.join(f_docker, "docker-compose.yml")
+        )
+        if not os.path.isfile(compose_file):
+            continue
+
+        # Determine service name(s) from compose
+        with open(compose_file) as f:
+            data = yaml.safe_load(f) or {}
+        services = list(data.get("services", {}).keys())
+        if not services:
+            continue
+
+        # Use first service name as directory name
+        svc_name = services[0]
+        dest_dir = os.path.join(features_dir, svc_name)
+
+        for item in os.listdir(f_docker):
+            src_item = os.path.join(f_docker, item)
+            if item.startswith("docker-compose") or item.startswith(".env"):
+                continue
+            dest_item = os.path.join(dest_dir, item)
+            if os.path.exists(dest_item):
+                continue  # Already copied by _collect_feature_dockerfiles
+            os.makedirs(dest_dir, exist_ok=True)
+            if os.path.isfile(src_item):
+                shutil.copy2(src_item, dest_item)
+            elif os.path.isdir(src_item):
+                shutil.copytree(src_item, dest_item)
+            copied += 1
+
+    return copied
 
 
 @click.command(
@@ -195,7 +292,7 @@ def product_build(no_image, skip_preflight):
     # Pre-flight checks (UVL + feature contracts)
     # ---------------------------------------------------------
     if not skip_preflight:
-        if not run_preflight(interactive=True):
+        if not run_preflight(interactive=True, build_mode=True):
             raise SystemExit(1)
 
     # ---------------------------------------------------------
@@ -264,6 +361,22 @@ def product_build(no_image, skip_preflight):
             except ValueError:
                 pass
 
+    # Resolve __PRODUCT__ placeholder
+    for k, v in env_result.items():
+        if "__PRODUCT__" in v:
+            env_result[k] = v.replace("__PRODUCT__", product)
+
+    # Remove __FEATURE_HOST_DIR__ variables — not needed in prod
+    # (templates are baked into Docker images, no bind mounts)
+    env_result = {
+        k: v
+        for k, v in env_result.items()
+        if "__FEATURE_HOST_DIR__" not in v and "FEATURE_HOST_DIR" not in k
+    }
+
+    # Ensure SPLENT_ENV is set to prod in deploy artifacts
+    env_result["SPLENT_ENV"] = "prod"
+
     env_deploy_path = os.path.join(docker_path, ".env.deploy.example")
     with open(env_deploy_path, "w", encoding="utf-8") as f:
         for k, v in env_result.items():
@@ -282,6 +395,15 @@ def product_build(no_image, skip_preflight):
             f"✅ Copied Dockerfiles for {len(build_services)} feature service(s)."
         )
 
+    # Copy supporting files (config templates, etc.) for ALL features with docker/
+    assets_copied = _collect_feature_assets(
+        workspace, declared_features, docker_path, "prod"
+    )
+    if assets_copied:
+        click.echo(
+            f"✅ Copied {assets_copied} supporting asset(s) to docker/features/."
+        )
+
     # ---------------------------------------------------------
     # 3) docker-compose.deploy.yml (product + features merged)
     # ---------------------------------------------------------
@@ -294,6 +416,9 @@ def product_build(no_image, skip_preflight):
     )
 
     compose_result = load_compose_file(product_compose_file)
+
+    host_project_dir = os.getenv("SPLENT_HOST_PROJECT_DIR", workspace)
+    product_host_docker_dir = os.path.join(host_project_dir, product, "docker")
 
     seen_compose: set[str] = set()
     for feat in declared_features:
@@ -315,7 +440,12 @@ def product_build(no_image, skip_preflight):
         feature_compose = load_compose_file(feature_compose_file)
         label = clean.split("/")[-1] if "/" in clean else clean
         compose_result = merge_compose(
-            compose_result, feature_compose, label=label, build_services=build_services
+            compose_result,
+            feature_compose,
+            label=label,
+            build_services=build_services,
+            rewrite_mounts=True,
+            product_host_docker_dir=product_host_docker_dir,
         )
 
     # Check for port conflicts in merged result
@@ -331,6 +461,18 @@ def product_build(no_image, skip_preflight):
                 f"  ⚠️  Port {port} declared by multiple services: {', '.join(services)}",
                 fg="yellow",
             )
+
+    # Inject .env.deploy volume mount into the web service so the
+    # entrypoint can sync deploy vars over the baked dev .env.
+    env_deploy_mount = (
+        f"{host_project_dir}/{product}/docker/.env.deploy"
+        f":/workspace/{product}/docker/.env.deploy:ro"
+    )
+    for svc_name, svc_def in compose_result.get("services", {}).items():
+        if svc_name == f"{product}_web":
+            svc_def.setdefault("volumes", [])
+            svc_def["volumes"].append(env_deploy_mount)
+            break
 
     deploy_compose_path = os.path.join(docker_path, "docker-compose.deploy.yml")
     with open(deploy_compose_path, "w", encoding="utf-8") as f:

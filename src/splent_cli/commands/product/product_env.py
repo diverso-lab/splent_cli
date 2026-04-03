@@ -189,7 +189,13 @@ def product_env(generate, merge, env_name, process_all):
                     k, v = line.strip().split("=", 1)
                     merged[k] = v
 
+        # Always set SPLENT_ENV to match the current merge target
+        merged["SPLENT_ENV"] = env_name
+
+        host_project_dir = os.getenv("SPLENT_HOST_PROJECT_DIR", workspace)
+
         feature_env_paths = []
+        feature_host_dirs = {}  # env_path → host dir of the feature root
         for feature in features:
             clean_ref = compose.normalize_feature_ref(feature)
             docker_dir_f = compose.feature_docker_dir(workspace, clean_ref)
@@ -206,6 +212,20 @@ def product_env(generate, merge, env_name, process_all):
             target_f = os.path.join(docker_dir_f, ".env")
             if base_f != target_f:
                 shutil.copyfile(base_f, target_f)
+
+            # Resolve __FEATURE_HOST_DIR__ in the feature's own .env so that
+            # docker compose (which reads this file) sees the real host path.
+            container_feature_root = os.path.dirname(docker_dir_f)
+            relative = os.path.relpath(container_feature_root, workspace)
+            f_host_dir = os.path.join(host_project_dir, relative)
+            feature_host_dirs[target_f] = f_host_dir
+
+            with open(target_f, "r", encoding="utf-8") as fh:
+                content = fh.read()
+            if "__FEATURE_HOST_DIR__" in content:
+                content = content.replace("__FEATURE_HOST_DIR__", f_host_dir)
+                with open(target_f, "w", encoding="utf-8") as fh:
+                    fh.write(content)
 
             feature_env_paths.append(target_f)
 
@@ -233,9 +253,22 @@ def product_env(generate, merge, env_name, process_all):
                         else:
                             merged.setdefault(k, v)
 
+        # Replace __PRODUCT__ placeholder with the actual product name
+        product_replaced = []
+        for k, v in merged.items():
+            if "__PRODUCT__" in v:
+                merged[k] = v.replace("__PRODUCT__", product)
+                product_replaced.append(k)
+
         with open(target_env, "w", encoding="utf-8") as f:
             for k, v in merged.items():
                 f.write(f"{k}={v}\n")
+
+        if product_replaced:
+            click.echo(
+                click.style("  product  ", dim=True)
+                + f"resolved __PRODUCT__ in {len(product_replaced)} variable(s) → {product}"
+            )
 
         if port_adjusted:
             click.echo(

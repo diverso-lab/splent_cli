@@ -84,6 +84,11 @@ def db_upgrade(feature):
                     name=name,
                     version=version,
                 )
+        except ImportError as e:
+            if "models" in str(e):
+                # Feature has migrations/ dir but no models module — skip silently
+                continue
+            click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
         except Exception as e:
             click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
 

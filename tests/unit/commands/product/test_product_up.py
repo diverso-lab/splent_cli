@@ -53,7 +53,7 @@ class TestSuccessfulStartup:
             result = runner.invoke(product_up, ["--dev"])
         assert result.exit_code == 0
         assert "test_app" in result.output
-        assert "started" in result.output
+        assert "✓" in result.output
 
     def test_starts_with_prod_flag(self, runner, product_workspace):
         with patch("subprocess.run", side_effect=_success_run):

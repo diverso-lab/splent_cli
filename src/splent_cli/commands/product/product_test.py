@@ -100,6 +100,20 @@ def product_test(products, level_unit, level_integration, level_functional, verb
     if level_functional:
         levels.append("--functional")
 
+    # Check SPLENT_ENV before running any tests
+    from splent_cli.commands.feature.feature_test import _is_prod_active
+
+    if _is_prod_active():
+        click.secho(
+            "❌ Cannot run tests in production.\n"
+            "   A production deployment is active.\n\n"
+            "   Stop the deployment and start dev:\n"
+            "     splent product:deploy --down\n"
+            "     splent product:derive --dev",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     click.secho(f"\n🧪 product:test — {len(products)} product(s)", bold=True)
 
     failed = []

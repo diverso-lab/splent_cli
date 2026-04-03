@@ -73,7 +73,7 @@ def product_deploy(down, ci):
         raise SystemExit(1)
 
     # ---------------------------------------------------------
-    # Create .env.deploy if missing
+    # Create or sync .env.deploy from template
     # ---------------------------------------------------------
     if not os.path.isfile(env_path):
         click.echo(
@@ -85,14 +85,49 @@ def product_deploy(down, ci):
             dst.write(content)
 
     # ---------------------------------------------------------
-    # Load .env.deploy and detect <SET>
+    # Sync .env.deploy with template
     # ---------------------------------------------------------
-    env_vars = {}
+    # Strategy: the template (.env.deploy.example) is the source of truth
+    # for all infrastructure variables. User-configured values (those that
+    # were <SET> in the template and filled in by the user) are preserved.
+    # Everything else is updated from the template on every deploy.
+    existing_vars = {}
     with open(env_path, "r", encoding="utf-8") as f:
         for line in f:
             if "=" in line and not line.strip().startswith("#"):
                 k, v = line.strip().split("=", 1)
-                env_vars[k] = v
+                existing_vars[k] = v
+
+    example_vars = {}
+    with open(env_example_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                example_vars[k] = v
+
+    # Build final env: start from template, preserve user-configured values
+    env_vars = {}
+    updated = []
+    for k, v in example_vars.items():
+        if (
+            v.strip() == "<SET>"
+            and k in existing_vars
+            and existing_vars[k].strip() != "<SET>"
+        ):
+            # User already configured this — keep their value
+            env_vars[k] = existing_vars[k]
+        elif k in existing_vars and existing_vars[k] != v:
+            # Infrastructure value changed in template — update it
+            env_vars[k] = v
+            updated.append(k)
+        else:
+            env_vars[k] = v
+
+    if updated:
+        click.echo(
+            click.style("  env      ", dim=True)
+            + f"updated {len(updated)} variable(s) from template"
+        )
 
     # ---------------------------------------------------------
     # Ask interactively for missing (<SET>) values
@@ -126,6 +161,25 @@ def product_deploy(down, ci):
     with open(env_path, "w", encoding="utf-8") as f:
         for k, v in env_vars.items():
             f.write(f"{k}={v}\n")
+
+    # ---------------------------------------------------------
+    # Update product .env with SPLENT_ENV=prod
+    # ---------------------------------------------------------
+    product_env_path = os.path.join(docker_dir, ".env")
+    if os.path.isfile(product_env_path):
+        lines = []
+        found = False
+        with open(product_env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("SPLENT_ENV="):
+                    lines.append("SPLENT_ENV=prod\n")
+                    found = True
+                else:
+                    lines.append(line)
+        if not found:
+            lines.append("SPLENT_ENV=prod\n")
+        with open(product_env_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
 
     # ---------------------------------------------------------
     # Port conflict check
@@ -220,7 +274,7 @@ def product_deploy(down, ci):
                         [
                             "docker",
                             "exec",
-                            f"{product}_web_deploy",
+                            f"{product}_web",
                             "bash",
                             "-c",
                             "curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/",
@@ -262,7 +316,7 @@ def product_deploy(down, ci):
                     "  deployed but app may not be healthy. Check logs with:",
                     fg="yellow",
                 )
-                click.echo(f"    docker logs {product}_web_deploy")
+                click.echo(f"    docker logs {product}_web")
         else:
             click.secho("  done.", fg="green")
     except subprocess.CalledProcessError as e:

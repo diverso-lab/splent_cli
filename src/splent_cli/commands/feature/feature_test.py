@@ -15,7 +15,55 @@ TEST_LEVELS = ("unit", "integration", "functional", "e2e", "load")
 DEFAULT_LEVELS = ("unit", "integration", "functional")
 
 
+def _is_prod_active():
+    """Check if the product is running in prod mode.
+
+    Checks two sources:
+    1. SPLENT_ENV in the product's .env file
+    2. SPLENT_ENV from the running web container
+    """
+    product = os.getenv("SPLENT_APP", "")
+    if not product:
+        return False
+
+    # Check .env file
+    workspace = os.getenv("WORKING_DIR", "/workspace")
+    product_env_path = os.path.join(workspace, product, "docker", ".env")
+    if os.path.isfile(product_env_path):
+        with open(product_env_path, "r") as f:
+            for line in f:
+                if line.strip().startswith("SPLENT_ENV="):
+                    if line.strip().split("=", 1)[1] == "prod":
+                        return True
+
+    # Check running container
+    try:
+        result = subprocess.run(
+            ["docker", "exec", f"{product}_web", "printenv", "SPLENT_ENV"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.stdout.strip() == "prod":
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
 def _validate_testing_environment():
+    if _is_prod_active():
+        click.secho(
+            "❌ Cannot run tests in production.\n"
+            "   A production deployment is active.\n\n"
+            "   Stop the deployment and start dev:\n"
+            "     splent product:deploy --down\n"
+            "     splent product:derive --dev",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     try:
         env = get_current_app_config_value("TESTING")
         db_url = get_current_app_config_value("SQLALCHEMY_DATABASE_URI")

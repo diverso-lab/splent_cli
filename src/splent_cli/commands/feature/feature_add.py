@@ -59,6 +59,25 @@ def feature_add(full_name, env_scope):
         )
         raise SystemExit(1)
 
+    # ── Auto-detect env scope from feature contract ───────────────────
+    if not env_scope:
+        feat_pyproject = os.path.join(feature_dir, "pyproject.toml")
+        if os.path.isfile(feat_pyproject):
+            with open(feat_pyproject, "rb") as f:
+                feat_data = tomllib.load(f)
+            contract_env = (
+                feat_data.get("tool", {})
+                .get("splent", {})
+                .get("contract", {})
+                .get("env")
+            )
+            if contract_env:
+                env_scope = contract_env
+                click.echo(
+                    click.style("  scope    ", dim=True)
+                    + f"contract declares env={contract_env} → features_{contract_env}"
+                )
+
     # ── Update pyproject.toml ─────────────────────────────────────────
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")
     if not os.path.exists(pyproject_path):

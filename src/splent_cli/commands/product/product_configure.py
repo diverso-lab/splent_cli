@@ -824,6 +824,53 @@ def _configure_subtree(
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _read_contract_env(
+    workspace: str,
+    cache_dir: str,
+    org_safe: str,
+    package: str,
+    version: str | None,
+) -> str | None:
+    """Read ``[tool.splent.contract].env`` from a feature's pyproject.toml.
+
+    Searches in order:
+      1. Workspace root (editable feature)
+      2. Cache (pinned feature at version)
+
+    Returns ``"dev"``, ``"prod"``, or ``None`` (always loaded).
+    """
+    candidates = [
+        os.path.join(workspace, package, "pyproject.toml"),
+    ]
+    if version:
+        candidates.append(
+            os.path.join(cache_dir, org_safe, f"{package}@{version}", "pyproject.toml")
+        )
+
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "rb") as f:
+                    data = tomllib.load(f)
+                env = (
+                    data.get("tool", {})
+                    .get("splent", {})
+                    .get("contract", {})
+                    .get("env")
+                )
+                if env in ("dev", "prod"):
+                    return env
+            except Exception:
+                pass
+
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════
 # CLI command
 # ═══════════════════════════════════════════════════════════════════
 
@@ -994,7 +1041,9 @@ def product_configure():
 
     # Resolve versions and build feature entries
     cache_dir = os.path.join(workspace, ".splent_cache", "features")
-    feature_entries = []
+    feature_entries = []  # env=None → always loaded
+    feature_entries_dev = []  # env="dev"
+    feature_entries_prod = []  # env="prod"
 
     for name in sorted(all_selected):
         feat = model.features.get(name)
@@ -1030,13 +1079,27 @@ def product_configure():
                 pass
 
         entry = f"{org}/{package}@{version}" if version else f"{org}/{package}"
-        feature_entries.append(entry)
-        click.echo(f"    {entry}")
+
+        # Read contract env to classify into features / features_dev / features_prod
+        contract_env = _read_contract_env(
+            workspace, cache_dir, org_safe, package, version
+        )
+        if contract_env == "dev":
+            feature_entries_dev.append(entry)
+            click.echo(f"    {entry}  " + click.style("(dev)", fg="cyan"))
+        elif contract_env == "prod":
+            feature_entries_prod.append(entry)
+            click.echo(f"    {entry}  " + click.style("(prod)", fg="yellow"))
+        else:
+            feature_entries.append(entry)
+            click.echo(f"    {entry}")
 
     # Write to pyproject
     with open(pyproject_path, "rb") as pf:
         current_data = tomllib.load(pf)
     write_features_to_data(current_data, feature_entries)
+    write_features_to_data(current_data, feature_entries_dev, key="features_dev")
+    write_features_to_data(current_data, feature_entries_prod, key="features_prod")
     with open(pyproject_path, "wb") as pf:
         tomli_w.dump(current_data, pf)
 

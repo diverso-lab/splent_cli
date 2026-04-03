@@ -58,7 +58,7 @@ class TestFeatureFailurePropagation:
             result = runner.invoke(product_up, ["--dev"])
 
         assert result.exit_code == 1
-        assert "failed" in result.output.lower() or "❌" in result.output
+        assert "✗" in result.output
         # Product was not launched (only 1 compose call, not 2)
         assert call_count["n"] == 1
 
