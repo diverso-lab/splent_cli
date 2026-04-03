@@ -149,8 +149,8 @@ def _parse_models(models_path: str) -> list[dict]:
     text = "\n".join(joined_lines)
 
     classes = []
-    # Split by class definition
-    class_blocks = re.split(r"^(class \w+\(.*?\):)", text, flags=re.MULTILINE)
+    # Split by class definition (with or without parentheses for mixins)
+    class_blocks = re.split(r"^(class \w+(?:\(.*?\))?:)", text, flags=re.MULTILINE)
 
     i = 1
     while i < len(class_blocks):
@@ -158,7 +158,7 @@ def _parse_models(models_path: str) -> list[dict]:
         body = class_blocks[i + 1] if i + 1 < len(class_blocks) else ""
         i += 2
 
-        class_m = re.match(r"class (\w+)\(", header)
+        class_m = re.match(r"class (\w+)", header)
         if not class_m:
             continue
         class_name = class_m.group(1)
@@ -213,8 +213,11 @@ def _parse_models(models_path: str) -> list[dict]:
             if rel_m:
                 rel_name = rel_m.group(1)
                 rel_args = rel_m.group(2)
-                target_m = re.match(r"(\w+)", rel_args)
-                target = target_m.group(1) if target_m else "?"
+                # Target can be unquoted (User) or quoted ("User" / 'User')
+                target_m = re.match(r"""[\"']?(\w+)[\"']?""", rel_args)
+                target = target_m.group(1) if target_m else None
+                if not target:
+                    continue
                 uselist = "uselist=False" not in rel_args
                 relationships.append(
                     {
@@ -668,11 +671,16 @@ def _render_exports(
         )
     except subprocess.CalledProcessError as e:
         click.secho("❌ PlantUML failed to render diagram.", fg="red")
-        if os.getenv("SPLENT_DEBUG"):
-            stderr = e.stderr
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode(errors="replace")
-            click.secho(stderr[:500], fg="bright_black")
+        stderr = e.stderr
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode(errors="replace")
+        if stderr:
+            click.secho(stderr.strip(), fg="bright_black")
+        stdout = e.stdout
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode(errors="replace")
+        if stdout:
+            click.secho(stdout.strip(), fg="bright_black")
         return
 
     try:
@@ -780,21 +788,39 @@ def export_puml(
     product = context.require_app()
     product_dir = os.path.join(workspace, product)
 
-    # Read UVL
-    try:
-        uvl_cfg = PyprojectReader.for_product(product_dir).uvl_config
-    except (FileNotFoundError, RuntimeError) as e:
-        click.secho(f"❌ Cannot read pyproject.toml: {e}", fg="red")
-        raise SystemExit(1)
+    # Read UVL — try SPL catalog first, fall back to legacy [tool.splent.uvl]
+    import tomllib
 
-    uvl_file = uvl_cfg.get("file")
-    if not uvl_file:
-        click.secho("❌ No UVL file configured in [tool.splent.uvl].", fg="red")
-        raise SystemExit(1)
+    uvl_path = None
+    pyproject_path = os.path.join(product_dir, "pyproject.toml")
+    if os.path.isfile(pyproject_path):
+        with open(pyproject_path, "rb") as f:
+            pydata = tomllib.load(f)
+        spl_name = pydata.get("tool", {}).get("splent", {}).get("spl")
+        if spl_name:
+            candidate = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+            if os.path.isfile(candidate):
+                uvl_path = candidate
 
-    uvl_path = os.path.join(product_dir, "uvl", uvl_file)
-    if not os.path.isfile(uvl_path):
-        click.secho(f"❌ UVL file not found: {uvl_path}", fg="red")
+    # Legacy fallback: [tool.splent.uvl].file
+    if not uvl_path:
+        try:
+            uvl_cfg = PyprojectReader.for_product(product_dir).uvl_config
+            uvl_file = uvl_cfg.get("file")
+            if uvl_file:
+                candidate = os.path.join(product_dir, "uvl", uvl_file)
+                if os.path.isfile(candidate):
+                    uvl_path = candidate
+        except (FileNotFoundError, RuntimeError):
+            pass
+
+    if not uvl_path:
+        click.secho(
+            "❌ No UVL file found.\n"
+            "   Set [tool.splent].spl in pyproject.toml (SPL catalog)\n"
+            "   or [tool.splent.uvl].file (legacy).",
+            fg="red",
+        )
         raise SystemExit(1)
 
     click.echo(f"📖 Reading UVL model: {uvl_path}")
@@ -848,6 +874,50 @@ def export_puml(
                     if parsed:
                         all_models[package] = parsed
                     break
+        # Apply refinement mixins: merge mixin attributes into target models
+        for package, fpath in feature_paths.items():
+            pyproject_path = os.path.join(fpath, "pyproject.toml")
+            if not os.path.isfile(pyproject_path):
+                continue
+            import tomllib as _tomllib
+            with open(pyproject_path, "rb") as f:
+                feat_data = _tomllib.load(f)
+            extends = (
+                feat_data.get("tool", {})
+                .get("splent", {})
+                .get("refinement", {})
+                .get("extends", {})
+                .get("models", [])
+            )
+            if not extends:
+                continue
+            # Parse the mixin's models.py
+            mixin_models = []
+            src_root = os.path.join(fpath, "src")
+            if os.path.isdir(src_root):
+                for org_dir in os.listdir(src_root):
+                    mpath = os.path.join(src_root, org_dir, package, "models.py")
+                    if os.path.isfile(mpath):
+                        mixin_models = _parse_models(mpath)
+                        break
+            # Merge each mixin into its target model
+            for ext in extends:
+                target_name = ext.get("target")
+                mixin_name = ext.get("mixin")
+                if not target_name or not mixin_name:
+                    continue
+                # Find the mixin class in parsed mixin_models
+                mixin_cls = next((m for m in mixin_models if m["name"] == mixin_name), None)
+                if not mixin_cls:
+                    continue
+                # Find the target model across all parsed features
+                for feat_models in all_models.values():
+                    for model in feat_models:
+                        if model["name"] == target_name:
+                            model["attributes"].extend(mixin_cls["attributes"])
+                            model["methods"].extend(mixin_cls["methods"])
+                            break
+
         click.echo(
             f"📋 Parsed models from {len(all_models)}/{len(feature_paths)} features."
         )

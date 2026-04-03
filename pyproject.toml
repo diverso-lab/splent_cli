@@ -14,6 +14,7 @@ license-files = ["LICENSE"]
 dependencies = [
     "click==8.1.8",
     "packaging>=24.0",
+    "requests>=2.31.0",
 ]
 
 [project.optional-dependencies]
