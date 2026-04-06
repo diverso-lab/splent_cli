@@ -2,6 +2,7 @@ import subprocess
 import click
 from pathlib import Path
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 def _editable_features(cache_root: Path) -> list:
@@ -42,6 +43,7 @@ def _git_pull(path: Path) -> tuple:
     "feature:pull", short_help="Git pull on one or all editable features in cache."
 )
 @click.argument("feature_ref", required=False)
+@context.requires_product
 def feature_pull(feature_ref):
     """
     Run git pull on editable (non-versioned) features in the local cache.
@@ -64,7 +66,7 @@ def feature_pull(feature_ref):
         name_filter = feature_ref
         if "/" in feature_ref:
             ns_filter, name_filter = feature_ref.split("/", 1)
-            ns_filter = ns_filter.replace("-", "_")
+            ns_filter = normalize_namespace(ns_filter)
 
         targets = [
             f

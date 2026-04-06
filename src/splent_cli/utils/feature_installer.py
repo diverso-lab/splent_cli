@@ -42,7 +42,9 @@ def ensure_editable_features_installed():
         package_name = get_package_name(feature_path)
 
         if not package_name:
-            click.secho(f"⚠️  Skipping {feature}: no valid pyproject.toml or name.", fg="yellow")
+            click.secho(
+                f"⚠️  Skipping {feature}: no valid pyproject.toml or name.", fg="yellow"
+            )
             continue
 
         if package_name in installed:

@@ -1,1 +1,8 @@
+# Compiled frontend bundles
 recursive-include src/{{ org_safe }}/{{ feature_name }}/assets/dist *.js *.css *.map
+
+# Jinja templates (feature views + hook fragments)
+recursive-include src/{{ org_safe }}/{{ feature_name }}/templates *.html
+
+# Alembic migration config and scripts
+recursive-include src/{{ org_safe }}/{{ feature_name }}/migrations *.py *.ini *.mako

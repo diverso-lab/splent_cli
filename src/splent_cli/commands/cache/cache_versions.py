@@ -1,4 +1,5 @@
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 import click
 
 
@@ -17,7 +18,7 @@ def cache_versions(feature_ref: str):
         raise SystemExit(1)
 
     ns, name = feature_ref.split("/", 1)
-    ns_fs = ns.replace("-", "_")
+    ns_fs = normalize_namespace(ns)
 
     workspace = context.workspace()
     ns_dir = workspace / ".splent_cache" / "features" / ns_fs

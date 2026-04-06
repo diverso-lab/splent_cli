@@ -36,6 +36,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from splent_cli.utils.feature_utils import normalize_namespace
+
 MANIFEST_FILENAME = "splent.manifest.json"
 SCHEMA_VERSION = "1"
 
@@ -45,7 +47,7 @@ VALID_STATES = {"declared", "installed", "migrated", "active", "disabled"}
 
 STATE_COLORS = {
     "declared": "yellow",
-    "installed": "cyan",
+    "installed": "bright_cyan",
     "migrated": "blue",
     "active": "green",
     "disabled": "bright_black",
@@ -55,6 +57,7 @@ STATE_COLORS = {
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -69,7 +72,10 @@ def _load(product_path: str) -> dict:
     if not p.exists():
         return {"schema_version": SCHEMA_VERSION, "features": {}}
     with open(p, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    if not isinstance(data.get("features"), dict):
+        data["features"] = {}
+    return data
 
 
 def _save(product_path: str, product_name: str, data: dict) -> None:
@@ -85,9 +91,10 @@ def _save(product_path: str, product_name: str, data: dict) -> None:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def feature_key(namespace: str, name: str, version: str | None = None) -> str:
     """Build the canonical manifest key for a feature."""
-    ns = namespace.replace("-", "_")
+    ns = normalize_namespace(namespace)
     return f"{ns}/{name}@{version}" if version else f"{ns}/{name}"
 
 
@@ -114,7 +121,7 @@ def set_feature_state(
     existing = data["features"].get(key, {})
 
     entry: dict = {
-        "namespace": namespace.replace("-", "_"),
+        "namespace": normalize_namespace(namespace),
         "name": name,
         "version": version,
         "mode": mode,
@@ -188,7 +195,7 @@ def get_dependents(product_path: str, feature_name: str) -> list[str]:
             )
             if feature_name in requires:
                 dependents.append(name)
-        except Exception:
+        except (tomllib.TOMLDecodeError, OSError):
             continue
 
     return dependents
@@ -199,3 +206,20 @@ def get_feature_state(product_path: str, key: str) -> str | None:
     data = _load(product_path)
     entry = data.get("features", {}).get(key)
     return entry.get("state") if entry else None
+
+
+def cleanup_stale_entries(
+    product_path: str, product_name: str, active_keys: set[str]
+) -> int:
+    """Remove manifest entries whose keys are not in active_keys.
+
+    Returns the number of entries removed.
+    """
+    data = _load(product_path)
+    features = data.get("features", {})
+    stale = [k for k in features if k not in active_keys]
+    for k in stale:
+        del features[k]
+    if stale:
+        _save(product_path, product_name, data)
+    return len(stale)

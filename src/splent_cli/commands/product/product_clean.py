@@ -3,15 +3,12 @@ import subprocess
 import click
 import tomllib
 from splent_cli.services import compose, context
+from splent_cli.utils.feature_utils import read_features_from_data
 
 
-def _docker_down(name: str, docker_dir: str, env: str):
-    compose_preferred = os.path.join(docker_dir, f"docker-compose.{env}.yml")
-    compose_fallback = os.path.join(docker_dir, "docker-compose.yml")
-    compose_file = (
-        compose_preferred if os.path.exists(compose_preferred) else compose_fallback
-    )
-    if not os.path.exists(compose_file):
+def _docker_down(name: str, base_path: str, env: str):
+    compose_file = compose.resolve_file(base_path, env)
+    if compose_file is None:
         return
     project_name = compose.project_name(name, env)
     subprocess.run(
@@ -25,7 +22,7 @@ def _docker_down(name: str, docker_dir: str, env: str):
 
 @click.command(
     "product:clean",
-    short_help="Full reset: stop containers, wipe volumes, reset DB, clear files.",
+    short_help="DESTRUCTIVE: stop containers, wipe volumes, reset DB, clear files.",
 )
 @click.option("--dev", "env_dev", is_flag=True, help="Use development environment.")
 @click.option("--prod", "env_prod", is_flag=True, help="Use production environment.")
@@ -70,14 +67,13 @@ def product_clean(env_dev, env_prod, yes):
     if os.path.exists(pyproject_path):
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data, env)
 
-    _docker_down(product, os.path.join(product_path, "docker"), env)
+    _docker_down(product, product_path, env)
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
-        _docker_down(clean, compose.feature_docker_dir(workspace, clean), env)
+        feat_docker = compose.feature_docker_dir(workspace, clean)
+        _docker_down(clean, os.path.dirname(feat_docker), env)
 
     # ── 2. DB reset ──────────────────────────────────────────────────
     click.secho("\n🗄️  Resetting database...", fg="cyan")
@@ -97,12 +93,21 @@ def product_clean(env_dev, env_prod, yes):
     result = subprocess.run(["splent", "clear:uploads"], check=False)
     if result.returncode == 0:
         click.secho("  ✔ Uploads cleared.", fg="green")
+    else:
+        click.secho(
+            "  ⚠️  clear:uploads exited with errors — uploads may not be cleared.",
+            fg="yellow",
+        )
 
     # ── 4. Clear log ─────────────────────────────────────────────────
     click.secho("\n📋 Clearing application log...", fg="cyan")
     result = subprocess.run(["splent", "clear:log"], check=False)
     if result.returncode == 0:
         click.secho("  ✔ Log cleared.", fg="green")
+    else:
+        click.secho(
+            "  ⚠️  clear:log exited with errors — log may not be cleared.", fg="yellow"
+        )
 
     click.echo()
     click.secho(

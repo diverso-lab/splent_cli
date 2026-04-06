@@ -6,6 +6,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from splent_cli.utils.feature_utils import normalize_namespace
+
 
 def project_name(name: str, env: str) -> str:
     """Generate a safe Docker Compose project name from product/feature name and env."""
@@ -28,7 +30,22 @@ def resolve_file(product_path: str, env: str) -> str | None:
 
 
 def feature_docker_dir(workspace: str, feature: str) -> str:
-    """Return the docker/ directory for a feature entry in the cache."""
+    """Return the docker/ directory for a feature.
+
+    Accepts refs like 'splent_io/splent_feature_redis@v1.5.4' or bare 'splent_feature_redis'.
+    Checks workspace root first (editable features), then falls back
+    to the .splent_cache (pinned features).
+    """
+    # Extract bare name (strip org prefix and version)
+    name = feature.split("/")[-1] if "/" in feature else feature
+    bare_name = name.split("@")[0]
+
+    # Editable feature at workspace root
+    root_docker = os.path.join(workspace, bare_name, "docker")
+    if os.path.isdir(root_docker):
+        return root_docker
+
+    # Pinned feature in cache (needs full ref with org and version)
     return os.path.join(workspace, ".splent_cache", "features", feature, "docker")
 
 
@@ -38,11 +55,15 @@ def normalize_feature_ref(feat: str) -> str:
     'features/splent_io/splent_feature_auth' -> 'splent_io/splent_feature_auth'
     'splent_feature_auth'                    -> 'splent_io/splent_feature_auth'
     'splent_io/splent_feature_auth'          -> 'splent_io/splent_feature_auth'
+    'splent-io/splent_feature_auth'          -> 'splent_io/splent_feature_auth'
     """
     if "features/" in feat:
         feat = feat.split("features/")[-1]
     if "/" not in feat:
         feat = f"splent_io/{feat}"
+    else:
+        org, rest = feat.split("/", 1)
+        feat = f"{normalize_namespace(org)}/{rest}"
     return feat
 
 
@@ -69,12 +90,14 @@ def parse_feature_identifier(identifier: str) -> tuple[str, str, str, str]:
         feature_name = identifier
 
     namespace_github = namespace.replace("_", "-")
-    namespace_fs = namespace.replace("-", "_").replace(".", "_")
+    namespace_fs = normalize_namespace(namespace)
 
     return namespace, namespace_github, namespace_fs, feature_name
 
 
-def find_main_container(project_name: str, compose_file: str, docker_dir: str) -> str | None:
+def find_main_container(
+    project_name: str, compose_file: str, docker_dir: str
+) -> str | None:
     """Find the main container for a product — the one with /workspace mounted."""
     result = subprocess.run(
         ["docker", "compose", "-p", project_name, "-f", compose_file, "ps", "-q"],
@@ -87,7 +110,13 @@ def find_main_container(project_name: str, compose_file: str, docker_dir: str) -
     for cid in container_ids:
         mounts = (
             subprocess.run(
-                ["docker", "inspect", "-f", "{{ range .Mounts }}{{ .Destination }} {{ end }}", cid],
+                [
+                    "docker",
+                    "inspect",
+                    "-f",
+                    "{{ range .Mounts }}{{ .Destination }} {{ end }}",
+                    cid,
+                ],
                 capture_output=True,
                 text=True,
             )

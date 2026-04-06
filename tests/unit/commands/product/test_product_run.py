@@ -105,15 +105,20 @@ class TestContainerFound:
         assert exec_calls
         assert "def456" in exec_calls[0]
 
-    def test_shows_container_id_in_output(self, runner, product_workspace):
+    def test_execs_entrypoint_in_found_container(self, runner, product_workspace):
+        call_cmds = []
+
         def fake_run(cmd, **kwargs):
+            call_cmds.append(cmd)
             if "ps" in cmd:
                 return _ps_result(["abc123def456"])
             if "inspect" in cmd:
                 return _inspect_result(["/workspace"])
-            return MagicMock(returncode=0)
+            return MagicMock(returncode=0, stdout="", stderr="")
 
         with patch("subprocess.run", side_effect=fake_run):
             result = runner.invoke(product_runc, ["--dev"])
 
-        assert "abc123def456"[:12] in result.output
+        assert result.exit_code == 0
+        exec_calls = [c for c in call_cmds if "exec" in c]
+        assert exec_calls, "Expected a docker exec call"

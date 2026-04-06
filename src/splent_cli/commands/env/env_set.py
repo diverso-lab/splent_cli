@@ -24,6 +24,14 @@ def load_env():
     return data
 
 
+def _validate_env_value(value: str, label: str) -> str:
+    """Strip whitespace and reject values containing newlines."""
+    value = value.strip()
+    if "\n" in value or "\r" in value:
+        raise click.ClickException(f"{label} must not contain newlines.")
+    return value
+
+
 def write_env(env: dict):
     """Write dict back to .env."""
     lines = [f"{k}={v}" for k, v in env.items()]
@@ -62,6 +70,9 @@ def set_github_interactive():
     user = click.prompt("GitHub username", type=str)
     token = click.prompt("GitHub personal access token", hide_input=True)
 
+    user = _validate_env_value(user, "GitHub username")
+    token = _validate_env_value(token, "GitHub token")
+
     set_var("GITHUB_USER", user)
     set_var("GITHUB_TOKEN", token)
 
@@ -73,22 +84,12 @@ def set_pypi_interactive():
     username = "__token__"
     token = click.prompt("PyPI token", hide_input=True)
 
+    token = _validate_env_value(token, "PyPI token")
+
     set_var("PYPI_USERNAME", username)
     set_var("PYPI_TOKEN", token)
 
     click.secho("✔ PyPI credentials updated.", fg="green")
-    remind_source()
-
-
-def set_developer_interactive():
-    click.echo("Enable SSH usage for SPLENT feature development?")
-
-    answer = click.prompt("(y/n)", type=click.Choice(["y", "n"], case_sensitive=False))
-    enabled = "true" if answer == "y" else "false"
-
-    set_var("SPLENT_DEVELOPER_SSH", enabled)
-
-    click.secho(f"✔ SPLENT_DEVELOPER_SSH set to {enabled}", fg="green")
     remind_source()
 
 
@@ -133,11 +134,6 @@ def env_set_pypi():
     set_pypi_interactive()
 
 
-@env_set_group.command("developer")
-def env_set_developer():
-    set_developer_interactive()
-
-
 # -------------------------
 # WIZARD
 # -------------------------
@@ -149,8 +145,7 @@ def run_wizard():
         click.echo("1. Set mode (dev/prod)")
         click.echo("2. Configure GitHub credentials")
         click.echo("3. Configure PyPI token")
-        click.echo("4. Configure developer SSH mode")
-        click.echo("5. Exit")
+        click.echo("4. Exit")
         click.echo("--------------------------------")
 
         choice = click.prompt("Choose an option", type=int)
@@ -162,8 +157,6 @@ def run_wizard():
         elif choice == 3:
             set_pypi_interactive()
         elif choice == 4:
-            set_developer_interactive()
-        elif choice == 5:
             click.echo("Leaving wizard.")
             break
         else:

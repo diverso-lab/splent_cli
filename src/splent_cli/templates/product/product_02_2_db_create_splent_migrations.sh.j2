@@ -23,7 +23,7 @@
 
 set -e
 
-echo "🚀 [Create splent_migrations] entrypoint starting..."
+echo ""
 
 mariadb \
     -u "$MARIADB_USER" \
@@ -38,4 +38,4 @@ CREATE TABLE IF NOT EXISTS `splent_migrations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL
 
-echo "✅ [Create splent_migrations] table ready."
+echo "    splent_migrations table ready."

@@ -3,14 +3,16 @@ import subprocess
 import os
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.services import context
 
 
 @click.command(
     "coverage",
-    short_help="Runs pytest coverage on the selected feature",
+    short_help="Run pytest with coverage reporting for a feature.",
 )
 @click.argument("module_name", required=False)
 @click.option("--html", is_flag=True, help="Generates an HTML coverage report.")
+@context.requires_product
 def coverage(module_name, html):
     modules_dir = PathUtils.get_modules_dir()
     test_path = modules_dir
@@ -36,5 +38,8 @@ def coverage(module_name, html):
 
     try:
         subprocess.run(coverage_cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        click.echo(click.style(f"Error running coverage: {e}", fg="red"))
+    except subprocess.CalledProcessError:
+        click.echo(
+            click.style("❌ Coverage run failed (tests may be failing).", fg="red")
+        )
+        raise SystemExit(1)

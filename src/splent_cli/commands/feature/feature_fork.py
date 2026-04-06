@@ -3,6 +3,9 @@ import time
 import click
 import requests
 from splent_cli.commands.feature.feature_clone import feature_clone
+from splent_cli.utils.cache_utils import make_feature_writable
+from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 @click.command(
@@ -33,7 +36,9 @@ def feature_fork(feature_name, version):
     )
     resp = requests.post(api_url, headers=headers, json={"default_branch_only": False})
     if resp.status_code not in (201, 202):
-        click.secho(f"❌ Failed: {resp.status_code} {resp.text}", fg="red")
+        click.secho(f"❌ Fork failed (HTTP {resp.status_code}).", fg="red")
+        if os.getenv("SPLENT_DEBUG"):
+            click.secho(f"   {resp.text[:300]}", fg="bright_black")
         raise SystemExit(2)
 
     fork_html_url = resp.json()["html_url"]
@@ -57,3 +62,13 @@ def feature_fork(feature_name, version):
     click.secho("\n🚀 Cloning fork into local namespace...\n", fg="cyan")
     ctx = click.get_current_context()
     ctx.invoke(feature_clone, full_name=f"{github_user}/{feature_name}@{version}")
+
+    # Forked features are meant to be edited — unlock the cached copy
+    ns_safe = normalize_namespace(github_user)
+    workspace = str(context.workspace())
+    forked_path = os.path.join(
+        workspace, ".splent_cache", "features", ns_safe, f"{feature_name}@{version}"
+    )
+    if os.path.exists(forked_path):
+        make_feature_writable(forked_path)
+        click.secho("🔓 Fork unlocked for editing.", fg="green")

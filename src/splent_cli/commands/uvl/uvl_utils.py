@@ -11,26 +11,44 @@ from pathlib import Path
 import click
 import tomllib
 
-from flamapy.core.discover import DiscoverMetamodels
+from splent_cli.utils.feature_utils import read_features_from_data
+
+
+def _require_flamapy():
+    try:
+        import flamapy  # noqa: F401
+    except ImportError:
+        raise click.ClickException(
+            "flamapy is not installed. Install it with: pip install splent_cli[uvl]"
+        )
+
+
+def _discover_metamodels():
+    _require_flamapy()
+    from flamapy.core.discover import DiscoverMetamodels
+
+    return DiscoverMetamodels()
 
 
 def read_splent_app(workspace: str) -> str:
-    """Read SPLENT_APP from workspace .env and validate the product directory exists."""
-    env_path = os.path.join(workspace, ".env")
-    if not os.path.exists(env_path):
-        raise click.ClickException(
-            f"Missing {env_path} (run: splent product:select <app>)"
-        )
+    """Read SPLENT_APP from env var or workspace .env and validate the product directory exists."""
+    # Prefer environment variable (set by product:select or passed via -e)
+    app_name = os.getenv("SPLENT_APP")
 
-    app_name = None
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.startswith("SPLENT_APP="):
-                app_name = line.strip().split("=", 1)[1]
+    # Fallback: read from .env file
+    if not app_name:
+        env_path = os.path.join(workspace, ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("SPLENT_APP="):
+                        val = line.strip().split("=", 1)[1].strip()
+                        if val:
+                            app_name = val
 
     if not app_name:
         raise click.ClickException(
-            f"SPLENT_APP not set in {env_path} (run: splent product:select <app>)"
+            "SPLENT_APP not set. Run: splent product:select <app>"
         )
 
     product_path = os.path.join(workspace, app_name)
@@ -50,16 +68,50 @@ def load_pyproject(pyproject_path: str) -> dict:
 
 
 def get_uvl_cfg(data: dict) -> dict:
-    """Extract [tool.splent.uvl] section from pyproject data."""
+    """Extract [tool.splent.uvl] section from pyproject data (legacy)."""
     try:
         return data["tool"]["splent"]["uvl"]
     except KeyError:
         raise click.ClickException("Missing [tool.splent.uvl] in pyproject.toml")
 
 
+def resolve_uvl_path(workspace: str, app_name: str, data: dict) -> str:
+    """Resolve the absolute path to the UVL file, downloading from UVLHub if missing.
+
+    Resolution order:
+      1. SPL catalog: [tool.splent].spl → workspace/splent_catalog/{spl}/{spl}.uvl
+         If the UVL is not on disk, it is fetched automatically from UVLHub.
+      2. Legacy: [tool.splent.uvl].file → product_dir/uvl/{file}
+
+    Raises ClickException if UVL not found and cannot be downloaded.
+    """
+    splent = data.get("tool", {}).get("splent", {})
+    product_path = os.path.join(workspace, app_name)
+
+    # 1. Catalog resolution (with auto-fetch)
+    spl_name = splent.get("spl")
+    if spl_name:
+        from splent_cli.commands.spl.spl_utils import _ensure_uvl
+
+        return _ensure_uvl(spl_name)
+
+    # 2. Legacy: product/uvl/{file}
+    uvl_cfg = splent.get("uvl", {})
+    uvl_file = uvl_cfg.get("file")
+    if uvl_file:
+        legacy_path = os.path.join(product_path, "uvl", uvl_file)
+        if os.path.isfile(legacy_path):
+            return legacy_path
+
+    raise click.ClickException(
+        "UVL file not found. Set [tool.splent].spl in pyproject.toml "
+        "or ensure [tool.splent.uvl].file points to an existing file."
+    )
+
+
 def get_feature_deps(data: dict) -> list[str]:
     """Return the features list from [project.optional-dependencies]."""
-    return data.get("project", {}).get("optional-dependencies", {}).get("features", [])
+    return read_features_from_data(data)
 
 
 def normalize_feature_name(dep: str) -> str:
@@ -113,7 +165,7 @@ def list_all_features_from_uvl(uvl_path: str) -> tuple[list[str], str]:
     """
     Parse a UVL file and return (sorted_feature_names, root_name).
     """
-    dm = DiscoverMetamodels()
+    dm = _discover_metamodels()
     fm = dm.use_transformation_t2m(uvl_path, "fm")
 
     root = get_root_feature(fm)
@@ -155,7 +207,9 @@ def extract_implications_from_uvl_text(uvl_text: str) -> list[tuple[str, str]]:
     return pairs
 
 
-def print_uvl_header(command: str, app_name: str, local_uvl: str, n_features: int) -> None:
+def print_uvl_header(
+    command: str, app_name: str, local_uvl: str, n_features: int
+) -> None:
     """Print the standard UVL command header."""
     click.echo()
     click.echo(f"UVL {command}")
@@ -163,6 +217,58 @@ def print_uvl_header(command: str, app_name: str, local_uvl: str, n_features: in
     click.echo(f"UVL      : {local_uvl}")
     click.echo(f"Features : {n_features}")
     click.echo()
+
+
+def run_uvl_check(workspace: str) -> tuple[bool, str]:
+    """
+    Programmatic UVL validation. Returns (ok, message).
+    Does not print anything and does not call sys.exit.
+    """
+    from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
+
+    try:
+        app_name = read_splent_app(workspace=workspace)
+        product_path = os.path.join(workspace, app_name)
+        pyproject_path = os.path.join(product_path, "pyproject.toml")
+        data = load_pyproject(pyproject_path)
+        try:
+            local_uvl = resolve_uvl_path(workspace, app_name, data)
+        except Exception:
+            return (
+                False,
+                "UVL file not found. Check [tool.splent].spl or [tool.splent.uvl].",
+            )
+        universe, root_name = list_all_features_from_uvl(local_uvl)
+        env = os.getenv("SPLENT_ENV", "dev")
+        deps = read_features_from_data(data, env)
+        selected = {normalize_feature_name(d) for d in deps}
+        selected.add(root_name)
+
+        # Activate parent features (abstract groups like session_type)
+        from splent_cli.commands.product.product_validate import _infer_parents
+
+        selected |= _infer_parents(local_uvl, selected)
+
+        unknown = sorted(f for f in selected if f not in universe)
+        if unknown:
+            return (
+                False,
+                f"pyproject contains features not in UVL: {', '.join(unknown)}",
+            )
+        conf_path = write_csvconf_full(universe, selected)
+        try:
+            fm = FLAMAFeatureModel(local_uvl)
+            ok = fm.satisfiable_configuration(conf_path, full_configuration=False)
+        finally:
+            try:
+                os.remove(conf_path)
+            except OSError:
+                pass
+        if not ok:
+            return False, "Configuration is NOT satisfiable under the UVL constraints."
+        return True, "OK"
+    except Exception as exc:
+        return False, str(exc)
 
 
 def write_csvconf_full(universe: list[str], selected: set[str]) -> str:

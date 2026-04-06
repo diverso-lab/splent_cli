@@ -8,6 +8,7 @@ from splent_cli.services import context
 
 @click.command("selenium", help="Executes Selenium tests based on the environment.")
 @click.argument("module", required=False)
+@context.requires_product
 def selenium(module):
     # Absolute paths
     working_dir = str(context.workspace())
@@ -43,7 +44,11 @@ def selenium(module):
             test_command = ["python"] + selenium_test_paths
 
         click.echo(f"Running Selenium tests with command: {' '.join(test_command)}")
-        subprocess.run(test_command, check=True)
+        try:
+            subprocess.run(test_command, check=True)
+        except subprocess.CalledProcessError:
+            click.secho("❌ Selenium tests failed.", fg="red")
+            raise SystemExit(1)
 
     # Validate module if provided
     if module:

@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
-from splent_cli.commands.product.product_status import product_status, _status_color
+from splent_cli.commands.product.product_containers import product_docker, _status_color
 
 
 @pytest.fixture
@@ -29,12 +29,12 @@ def _mock_run(containers: list[dict], returncode: int = 0):
 
 class TestFlagValidation:
     def test_rejects_both_dev_and_prod(self, runner, product_workspace):
-        result = runner.invoke(product_status, ["--dev", "--prod"])
+        result = runner.invoke(product_docker, ["--dev", "--prod"])
         assert result.exit_code == 1
         assert "Cannot specify both" in result.output
 
     def test_requires_splent_app(self, runner, workspace):
-        result = runner.invoke(product_status, ["--dev"])
+        result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 1
         assert "SPLENT_APP" in result.output
 
@@ -44,14 +44,14 @@ class TestFlagValidation:
 # ---------------------------------------------------------------------------
 
 class TestNoComposeFile:
-    def test_exits_when_no_compose_file(self, runner, tmp_path, monkeypatch):
+    def test_shows_no_containers_when_no_compose_file(self, runner, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
         (tmp_path / "test_app" / "docker").mkdir(parents=True)  # docker dir but no compose file
 
-        result = runner.invoke(product_status, ["--dev"])
-        assert result.exit_code == 1
-        assert "No docker-compose file" in result.output
+        result = runner.invoke(product_docker, ["--dev"])
+        assert result.exit_code == 0
+        assert "No containers" in result.output or "Is it up?" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -67,26 +67,26 @@ CONTAINERS = [
 class TestRunningContainers:
     def test_shows_service_names(self, runner, product_workspace):
         with patch("subprocess.run", return_value=_mock_run(CONTAINERS)):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "web" in result.output
         assert "db" in result.output
 
     def test_shows_container_state(self, runner, product_workspace):
         with patch("subprocess.run", return_value=_mock_run(CONTAINERS)):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "running" in result.output.lower()
 
     def test_shows_port_mapping(self, runner, product_workspace):
         with patch("subprocess.run", return_value=_mock_run(CONTAINERS)):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "8080" in result.output
 
     def test_uses_prod_env(self, runner, product_workspace):
         with patch("subprocess.run", return_value=_mock_run(CONTAINERS)) as mock_run:
-            result = runner.invoke(product_status, ["--prod"])
+            result = runner.invoke(product_docker, ["--prod"])
         assert result.exit_code == 0
         # Verify the compose file used was the prod one
         call_args = mock_run.call_args[0][0]
@@ -100,7 +100,7 @@ class TestRunningContainers:
 class TestNoContainers:
     def test_empty_output_shows_info(self, runner, product_workspace):
         with patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "No containers" in result.output or "Is it up?" in result.output
 
@@ -110,13 +110,14 @@ class TestNoContainers:
 # ---------------------------------------------------------------------------
 
 class TestDockerFailure:
-    def test_exits_on_docker_error(self, runner, product_workspace):
+    def test_shows_no_containers_on_docker_error(self, runner, product_workspace):
         with patch("subprocess.run", return_value=MagicMock(
             returncode=1, stdout="", stderr="Cannot connect to Docker daemon"
         )):
-            result = runner.invoke(product_status, ["--dev"])
-        assert result.exit_code == 1
-        assert "failed" in result.output.lower()
+            result = runner.invoke(product_docker, ["--dev"])
+        # Docker errors result in empty container list, not a hard failure
+        assert result.exit_code == 0
+        assert "No containers" in result.output or "Is it up?" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +128,7 @@ class TestContainerStates:
     def test_exited_container(self, runner, product_workspace):
         containers = [{"Service": "worker", "State": "exited", "Publishers": []}]
         with patch("subprocess.run", return_value=_mock_run(containers)):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "worker" in result.output
         assert "exited" in result.output.lower()
@@ -188,7 +189,7 @@ class TestJsonParsing:
         with patch("subprocess.run", return_value=MagicMock(
             returncode=0, stdout=stdout_with_blanks, stderr=""
         )):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "web" in result.output
 
@@ -199,7 +200,7 @@ class TestJsonParsing:
         with patch("subprocess.run", return_value=MagicMock(
             returncode=0, stdout=stdout_mixed, stderr=""
         )):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "db" in result.output
 
@@ -208,6 +209,6 @@ class TestJsonParsing:
         with patch("subprocess.run", return_value=MagicMock(
             returncode=0, stdout="not-json\nalso-not-json\n", stderr=""
         )):
-            result = runner.invoke(product_status, ["--dev"])
+            result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "No containers" in result.output

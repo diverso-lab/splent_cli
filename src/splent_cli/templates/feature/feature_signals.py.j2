@@ -1,0 +1,19 @@
+"""
+Signals for {{ feature_name }}.
+
+Use ``define_signal`` to declare signals this feature emits.
+Use ``connect_signal`` to listen to signals from other features.
+
+Examples::
+
+    # Define a signal (this feature emits it):
+    from splent_framework.signals.signal_utils import define_signal
+    item_created = define_signal("item-created", "{{ feature_name }}")
+
+    # Connect to a signal from another feature:
+    from splent_framework.signals.signal_utils import connect_signal
+
+    @connect_signal("user-registered", "{{ feature_name }}")
+    def on_user_registered(sender, user, **kwargs):
+        pass
+"""

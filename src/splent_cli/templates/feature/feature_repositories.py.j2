@@ -1,7 +1,7 @@
-from {{ feature_import }}.models import {{ feature_name | pascalcase }}
+from {{ feature_import }}.models import {{ short_name | pascalcase }}
 from splent_framework.repositories.BaseRepository import BaseRepository
 
 
-class {{ feature_name | pascalcase }}Repository(BaseRepository):
+class {{ short_name | pascalcase }}Repository(BaseRepository):
     def __init__(self):
-        super().__init__({{ feature_name | pascalcase }})
+        super().__init__({{ short_name | pascalcase }})

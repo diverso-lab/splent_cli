@@ -29,7 +29,7 @@ def _make_product(workspace, name, features=None):
     features_list = "\n".join(f'  "{f}",' for f in (features or []))
     (product_dir / "pyproject.toml").write_text(
         f'[project]\nname = "{name}"\nversion = "1.0.0"\n\n'
-        f'[project.optional-dependencies]\nfeatures = [\n{features_list}\n]\n'
+        f'[tool.splent]\nfeatures = [\n{features_list}\n]\n'
     )
     return product_dir
 

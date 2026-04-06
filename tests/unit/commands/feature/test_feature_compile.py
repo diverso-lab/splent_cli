@@ -1,7 +1,7 @@
 """
 Tests for feature_compile command helpers.
 
-Focus: _is_inside_container() and the container/direct branching in
+Focus: _is_product_container() and the container/direct branching in
 _compile_in_container(). Full integration (docker exec) is not testable
 in unit tests — those paths require a running container.
 """
@@ -9,23 +9,28 @@ in unit tests — those paths require a running container.
 import subprocess
 import pytest
 from unittest.mock import MagicMock, patch
-from splent_cli.commands.feature_compile import _is_inside_container, _compile_in_container
+from splent_cli.commands.feature.feature_compile import _is_product_container, _compile_in_container
 
 
 # ---------------------------------------------------------------------------
-# _is_inside_container
+# _is_product_container
 # ---------------------------------------------------------------------------
 
 class TestIsInsideContainer:
-    def test_returns_true_when_dockerenv_exists(self, tmp_path, monkeypatch):
-        dockerenv = tmp_path / ".dockerenv"
-        dockerenv.touch()
-        with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=True):
-            assert _is_inside_container() is True
+    def test_returns_true_in_product_container(self, monkeypatch):
+        monkeypatch.delenv("SPLENT_CONTAINER", raising=False)
+        with patch("splent_cli.commands.feature.feature_compile.os.path.exists", return_value=True):
+            assert _is_product_container() is True
 
-    def test_returns_false_when_dockerenv_absent(self):
-        with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=False):
-            assert _is_inside_container() is False
+    def test_returns_false_in_cli_container(self, monkeypatch):
+        monkeypatch.setenv("SPLENT_CONTAINER", "cli")
+        with patch("splent_cli.commands.feature.feature_compile.os.path.exists", return_value=True):
+            assert _is_product_container() is False
+
+    def test_returns_false_when_not_in_docker(self, monkeypatch):
+        monkeypatch.delenv("SPLENT_CONTAINER", raising=False)
+        with patch("splent_cli.commands.feature.feature_compile.os.path.exists", return_value=False):
+            assert _is_product_container() is False
 
 
 # ---------------------------------------------------------------------------
@@ -36,12 +41,12 @@ class TestCompileInContainerDirect:
     """When container_id is None the command runs webpack directly."""
 
     def _call(self, watch=False, production=False, extra_patch=None):
-        with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=True), \
+        with patch("splent_cli.commands.feature.feature_compile.os.path.exists", return_value=True), \
              patch("subprocess.run") as mock_run, \
              patch("subprocess.Popen") as mock_popen:
             _compile_in_container(
                 container_id=None,
-                feature="splent_io/splent_feature_auth@v1.0.0",
+                feature="splent_io/splent_feature_auth",
                 watch=watch,
                 production=production,
                 workspace="/workspace",
@@ -80,11 +85,11 @@ class TestCompileInContainerDirect:
 
 class TestCompileInContainerViaDocker:
     def test_uses_docker_exec_when_container_id_given(self):
-        with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=True), \
+        with patch("splent_cli.commands.feature.feature_compile.os.path.exists", return_value=True), \
              patch("subprocess.run") as mock_run:
             _compile_in_container(
                 container_id="abc123",
-                feature="splent_io/splent_feature_auth@v1.0.0",
+                feature="splent_io/splent_feature_auth",
                 watch=False,
                 production=False,
                 workspace="/workspace",
@@ -96,11 +101,11 @@ class TestCompileInContainerViaDocker:
         assert "abc123" in cmd
 
     def test_skips_when_no_webpack_config(self):
-        with patch("splent_cli.commands.feature_compile.os.path.exists", return_value=False), \
+        with patch("splent_cli.commands.feature.feature_compile.os.path.exists", return_value=False), \
              patch("subprocess.run") as mock_run:
             _compile_in_container(
                 container_id="abc123",
-                feature="splent_io/splent_feature_auth@v1.0.0",
+                feature="splent_io/splent_feature_auth",
                 watch=False,
                 production=False,
                 workspace="/workspace",

@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import patch
 from click.testing import CliRunner
 
-from splent_cli.commands.clear_log import clear_log
+from splent_cli.commands.clear.clear_log import clear_log
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ class TestClearLog:
         log_file = tmp_path / "app.log"
         log_file.write_text("old log content")
 
-        with patch("splent_cli.commands.clear_log.PathUtils.get_app_log_dir", return_value=str(log_file)):
+        with patch("splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir", return_value=str(log_file)):
             result = runner.invoke(clear_log, [])
 
         assert result.exit_code == 0
@@ -28,7 +28,7 @@ class TestClearLog:
     def test_shows_warning_when_log_missing(self, runner, tmp_path):
         missing = tmp_path / "app.log"
 
-        with patch("splent_cli.commands.clear_log.PathUtils.get_app_log_dir", return_value=str(missing)):
+        with patch("splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir", return_value=str(missing)):
             result = runner.invoke(clear_log, [])
 
         assert result.exit_code == 0
@@ -41,7 +41,7 @@ class TestClearLog:
         def boom(path):
             raise PermissionError("denied")
 
-        with patch("splent_cli.commands.clear_log.PathUtils.get_app_log_dir", return_value=str(log_file)):
+        with patch("splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir", return_value=str(log_file)):
             with patch("os.remove", side_effect=boom):
                 result = runner.invoke(clear_log, [])
 

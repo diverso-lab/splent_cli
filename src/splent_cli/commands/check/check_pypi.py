@@ -26,6 +26,9 @@ def check_pypi(test: bool):
     # --- presence checks ---
     if not username:
         click.echo(click.style("[✖] ", fg="red") + "TWINE_USERNAME not set in .env")
+        click.secho(
+            "   Run 'splent tokens:setup' for setup instructions.", fg="bright_black"
+        )
         raise SystemExit(1)
     click.echo(click.style("[✔] ", fg="green") + f"TWINE_USERNAME = {username}")
 
@@ -33,6 +36,9 @@ def check_pypi(test: bool):
         click.echo(
             click.style("[✖] ", fg="red")
             + "TWINE_PASSWORD (or PYPI_PASSWORD) not set in .env"
+        )
+        click.secho(
+            "   Run 'splent tokens:setup' for setup instructions.", fg="bright_black"
         )
         raise SystemExit(1)
 
@@ -90,6 +96,10 @@ def check_pypi(test: bool):
             click.echo(
                 click.style("[✖] ", fg="red")
                 + f"Credentials rejected by {registry} (HTTP {e.code}) — token invalid or expired"
+            )
+            click.secho(
+                "   Run 'splent tokens:setup' for instructions on obtaining a valid token.",
+                fg="bright_black",
             )
             raise SystemExit(1)
         else:

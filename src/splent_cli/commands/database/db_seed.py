@@ -3,9 +3,12 @@ import importlib
 import os
 import click
 
-from splent_cli.commands.database.db_reset import db_reset
-from splent_cli.utils.decorators import requires_app
-from splent_cli.utils.feature_utils import get_features_from_pyproject
+from splent_cli.utils.decorators import requires_db
+from splent_cli.services import context
+from splent_cli.utils.feature_utils import (
+    get_features_from_pyproject,
+    normalize_namespace,
+)
 from splent_framework.seeders.BaseSeeder import BaseSeeder
 from splent_framework.managers.feature_order import FeatureLoadOrderResolver
 from splent_framework.utils.pyproject_reader import PyprojectReader
@@ -23,11 +26,19 @@ def _resolve_feature_order(features_raw: list[str]) -> list[str]:
     uvl_path = None
     if product_dir:
         try:
-            uvl_cfg = PyprojectReader.for_product(product_dir).uvl_config
-            uvl_file = uvl_cfg.get("file")
-            if uvl_file:
-                uvl_path = os.path.join(product_dir, "uvl", uvl_file)
-        except Exception:
+            reader = PyprojectReader.for_product(product_dir)
+            spl_name = reader.splent_config.get("spl")
+            if spl_name:
+                candidate = os.path.join(
+                    working_dir, "splent_catalog", spl_name, f"{spl_name}.uvl"
+                )
+                if os.path.isfile(candidate):
+                    uvl_path = candidate
+            if not uvl_path:
+                uvl_file = reader.uvl_config.get("file")
+                if uvl_file:
+                    uvl_path = os.path.join(product_dir, "uvl", uvl_file)
+        except (OSError, KeyError, AttributeError):
             pass
 
     return FeatureLoadOrderResolver().resolve(features_raw, uvl_path)
@@ -43,9 +54,14 @@ def get_installed_seeders(specific_module=None):
 
     seeders = []
     for feature in ordered:
-        # Handle versioned feature names like "splent_feature_auth@v1.0.0"
+        # Handle "splent-io/splent_feature_auth@v1.0.0" → org_safe.base_name.seeders
         base_name = feature.split("@")[0]
-        module_name = f"splent_io.{base_name}.seeders"
+        if "/" in base_name:
+            org_raw, base_name = base_name.split("/", 1)
+            org_safe = normalize_namespace(org_raw)
+        else:
+            org_safe = "splent_io"
+        module_name = f"{org_safe}.{base_name}.seeders"
 
         if specific_module and not base_name.endswith(specific_module):
             continue
@@ -78,24 +94,55 @@ def get_installed_seeders(specific_module=None):
     return seeders
 
 
-@requires_app
+def _truncate_data():
+    """Delete all row data from feature tables, preserving schema and migrations."""
+    from splent_framework.db import db
+    from sqlalchemy import text, MetaData
+    from splent_framework.managers.migration_manager import SPLENT_MIGRATIONS_TABLE
+
+    skip_prefixes = ("alembic_",)
+    skip_names = (SPLENT_MIGRATIONS_TABLE,)
+
+    meta = MetaData()
+    meta.reflect(bind=db.engine)
+
+    with db.engine.connect() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        for table in reversed(meta.sorted_tables):
+            if table.name.startswith(skip_prefixes) or table.name in skip_names:
+                continue
+            conn.execute(table.delete())
+            click.echo(click.style(f"  🗑️  Cleared {table.name}", fg="bright_black"))
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        conn.commit()
+
+
+@requires_db
 @click.command(
     "db:seed", short_help="Populate the database using feature-level seeders."
 )
-@click.option("--reset", is_flag=True, help="Reset the database before seeding.")
+@click.option(
+    "--reset",
+    is_flag=True,
+    help="Clear all data before seeding (keeps schema and migrations).",
+)
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
 @click.argument("module", required=False)
+@context.requires_product
 def db_seed(reset, yes, module):
     if reset:
         if yes or click.confirm(
-            click.style("⚠️  This will reset the database. Continue?", fg="red"),
+            click.style(
+                "⚠️  This will delete all data (tables and migrations are preserved). Continue?",
+                fg="red",
+            ),
             abort=True,
         ):
-            click.echo(click.style("🔄 Resetting the database...", fg="yellow"))
-            ctx = click.get_current_context()
-            ctx.invoke(db_reset, clear_migrations=False, yes=True)
+            click.echo(click.style("🔄 Clearing data...", fg="yellow"))
+            _truncate_data()
+            click.secho("✅ Data cleared.\n", fg="yellow")
         else:
-            click.echo(click.style("❌ Database reset cancelled.", fg="yellow"))
+            click.echo(click.style("❌ Cancelled.", fg="yellow"))
             return
 
     seeders = get_installed_seeders(specific_module=module)
@@ -118,9 +165,22 @@ def db_seed(reset, yes, module):
                 click.style(f"✔ {seeder.__class__.__name__} completed.", fg="blue")
             )
         except Exception as e:
-            click.echo(
-                click.style(f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red")
-            )
+            err_str = str(e)
+            if "Duplicate entry" in err_str or "IntegrityError" in err_str:
+                click.echo(
+                    click.style(
+                        f"❌ {seeder.__class__.__name__}: duplicate data detected.\n"
+                        f"   The database already contains seeded data.\n"
+                        f"   Run: splent db:seed --reset",
+                        fg="red",
+                    )
+                )
+            else:
+                click.echo(
+                    click.style(
+                        f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red"
+                    )
+                )
             success = False
             break
 

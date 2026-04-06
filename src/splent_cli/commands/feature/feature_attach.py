@@ -1,26 +1,39 @@
 import os
-import re
-import subprocess
+import tomllib
+import tomli_w
 import click
-import requests
 from splent_cli.services import context, compose
+from splent_cli.utils.feature_utils import hot_reinstall
 from splent_cli.utils.manifest import feature_key, set_feature_state
 
 
 @click.command(
     "feature:attach",
-    short_help="Attach a released feature version to the current product.",
+    short_help="Register a cached versioned feature in the active product.",
 )
 @click.argument("feature_identifier", required=True)
 @click.argument("version", required=True)
-def feature_attach(feature_identifier, version):
+@click.option(
+    "--dev",
+    "env_scope",
+    flag_value="dev",
+    help="Add to features_dev (development only).",
+)
+@click.option(
+    "--prod",
+    "env_scope",
+    flag_value="prod",
+    help="Add to features_prod (production only).",
+)
+def feature_attach(feature_identifier, version, env_scope):
     """
-    Attach a released feature version to the current product.
+    Attach a cached feature version to the current product.
 
-    - Verifies that the GitHub tag exists.
-    - Clones the feature version into the cache if missing.
+    - Requires the feature to already be in the local cache.
+      If not, run: splent feature:clone <namespace>/<feature>@<version>
     - Updates pyproject.toml referencing feature@version.
     - Creates/updates the versioned symlink in features/<namespace>/.
+    - Reinstalls the feature in the web container for hot reload.
     """
     product = context.require_app()
     ws = context.workspace()
@@ -35,114 +48,104 @@ def feature_attach(feature_identifier, version):
     pyproject_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(pyproject_path):
-        click.echo("❌ pyproject.toml not found in product.")
+        click.secho("  pyproject.toml not found.", fg="red")
         raise SystemExit(1)
 
-    # --- 1️⃣ Verify GitHub tag ----------------------------------------------
-    click.echo(f"🔍 Checking GitHub for {namespace_github}/{feature_name}@{version}...")
-
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "splent-cli"}
-    token = os.getenv("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"token {token}"
-
-    tag_api_urls = [
-        f"https://api.github.com/repos/{namespace_github}/{feature_name}/git/refs/tags/{version}",
-        f"https://api.github.com/repos/{namespace_github}/{feature_name}/releases/tags/{version}",
-    ]
-    html_url = (
-        f"https://github.com/{namespace_github}/{feature_name}/releases/tag/{version}"
-    )
-
-    exists = False
-    for url in tag_api_urls:
-        try:
-            resp = requests.get(url, headers=headers, timeout=5)
-            if resp.status_code == 200:
-                exists = True
-                break
-        except requests.RequestException:
-            pass
-
-    if not exists:
-        try:
-            resp = requests.get(html_url, headers=headers, timeout=5)
-            if resp.status_code == 200:
-                exists = True
-        except requests.RequestException:
-            pass
-
-    if not exists:
-        click.echo(f"❌ Tag {version} not found for {namespace_github}/{feature_name}.")
-        raise SystemExit(1)
-
-    click.echo("✅ GitHub tag exists.")
-
-    # --- 2️⃣ Clone into cache if needed -------------------------------------
+    # ── Verify feature exists in cache ────────────────────────────────
     versioned_dir = os.path.join(cache_base, f"{feature_name}@{version}")
 
     if not os.path.exists(versioned_dir):
-        click.echo(f"⬇️  Cloning {namespace_github}/{feature_name}@{version}...")
-
-        use_ssh = os.getenv("SPLENT_USE_SSH", "").lower() == "true"
-        url = (
-            f"git@github.com:{namespace_github}/{feature_name}.git"
-            if use_ssh
-            else f"https://github.com/{namespace_github}/{feature_name}.git"
+        click.secho(f"  {feature_name}@{version} not found in cache.", fg="red")
+        click.echo(
+            click.style("  clone it first: ", dim=True)
+            + f"splent feature:clone {namespace}/{feature_name}@{version}"
         )
+        raise SystemExit(1)
 
-        try:
-            subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--branch",
-                    version,
-                    "--depth",
-                    "1",
-                    url,
-                    versioned_dir,
-                ],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+    short = feature_name.replace("splent_feature_", "")
+
+    # ── Auto-detect env scope from feature contract ───────────────────
+    if not env_scope:
+        feat_pyproject = os.path.join(versioned_dir, "pyproject.toml")
+        if os.path.isfile(feat_pyproject):
+            import tomllib as _tomllib
+
+            with open(feat_pyproject, "rb") as f:
+                feat_data = _tomllib.load(f)
+            contract_env = (
+                feat_data.get("tool", {})
+                .get("splent", {})
+                .get("contract", {})
+                .get("env")
             )
-            click.echo(f"✅ Feature cloned → {versioned_dir}")
-        except subprocess.CalledProcessError as e:
-            click.echo(f"❌ Failed to clone: {e.stderr.strip()}")
-            raise SystemExit(1)
+            if contract_env:
+                env_scope = contract_env
+                click.echo(
+                    click.style("  scope    ", dim=True)
+                    + f"contract declares env={contract_env} → features_{contract_env}"
+                )
+
+    # ── Update pyproject.toml ─────────────────────────────────────────
+    full_name = f"{namespace}/{feature_name}@{version}"
+    bare_name = f"{namespace}/{feature_name}"
+
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+
+    from splent_cli.utils.feature_utils import (
+        read_features_from_data,
+        write_features_to_data,
+    )
+
+    features_key = f"features_{env_scope}" if env_scope else "features"
+    features = (
+        read_features_from_data(data)
+        if not env_scope
+        else (data.get("tool", {}).get("splent", {}).get(features_key, []))
+    )
+
+    if full_name in features:
+        click.echo(f"  {short}@{version} already in {features_key}.")
     else:
-        click.echo(f"✅ Cache exists → {versioned_dir}")
+        # Replace bare entry or old versioned entry if present
+        features = [
+            f for f in features if f != bare_name and not f.startswith(f"{bare_name}@")
+        ]
+        features.append(full_name)
+        write_features_to_data(data, features, key=features_key)
+        with open(pyproject_path, "wb") as f:
+            tomli_w.dump(data, f)
+        scope_label = f" ({env_scope} only)" if env_scope else ""
+        click.echo(f"  {short}@{version} attached{scope_label}")
 
-    # --- 3️⃣ Update pyproject.toml ------------------------------------------
-    with open(pyproject_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    pattern = rf"{feature_name}(?!@)"
-    new_content = re.sub(pattern, f"{feature_name}@{version}", content)
-
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        f.write(new_content)
-
-    click.echo(f"🧩 Updated pyproject.toml → {feature_name}@{version}")
-
-    # --- 4️⃣ Create/update symlink ------------------------------------------
+    # ── Create/update symlink ─────────────────────────────────────────
     product_features_dir = os.path.join(product_path, "features", namespace_fs)
     os.makedirs(product_features_dir, exist_ok=True)
 
     new_link = os.path.join(product_features_dir, f"{feature_name}@{version}")
     if os.path.islink(new_link):
         os.unlink(new_link)
-    os.symlink(versioned_dir, new_link)
+    rel_target = os.path.relpath(versioned_dir, product_features_dir)
+    os.symlink(rel_target, new_link)
 
-    click.echo(f"🔗 Linked {new_link} → {versioned_dir}")
-
-    # --- 5️⃣ Update manifest ------------------------------------------------
+    # ── Update manifest ───────────────────────────────────────────────
     key = feature_key(namespace_fs, feature_name, version)
     set_feature_state(
-        product_path, product, key, "declared",
-        namespace=namespace_fs, name=feature_name, version=version, mode="pinned",
+        product_path,
+        product,
+        key,
+        "declared",
+        namespace=namespace_fs,
+        name=feature_name,
+        version=version,
+        mode="pinned",
     )
 
-    click.echo("🎯 Feature successfully attached.")
+    # ── Hot reinstall in web container ────────────────────────────────
+    # Symlink resolves to cache path — install from there
+    install_path = (
+        f"/workspace/{product}/features/{namespace_fs}/{feature_name}@{version}"
+    )
+    hot_reinstall(product_path, install_path, feature_name)
+
+    click.secho("  done.", fg="green")

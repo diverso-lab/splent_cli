@@ -3,11 +3,19 @@ from pathlib import Path
 import shutil
 import stat
 import click
+import yaml
 import zlib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from splent_cli.utils.path_utils import PathUtils
 from splent_cli.services import context
+
+try:
+    from importlib.metadata import version as _pkg_version
+
+    _CLI_VERSION = _pkg_version("splent_cli")
+except Exception:
+    _CLI_VERSION = "dev"
 
 
 def pascalcase(s):
@@ -36,23 +44,136 @@ def copy_raw_file(template_name, filename):
     shutil.copy(src, filename)
 
 
-@click.command("product:create", help="Creates a new product with a given name.")
+def _has_uvl(spl_dir):
+    """Check if an SPL directory has a UVL file (direct or via metadata.toml)."""
+    # Direct: {name}/{name}.uvl
+    if (spl_dir / f"{spl_dir.name}.uvl").is_file():
+        return True
+    # Via metadata.toml → spl.uvl.file
+    meta = spl_dir / "metadata.toml"
+    if meta.is_file():
+        import tomllib
+
+        with open(meta, "rb") as f:
+            data = tomllib.load(f)
+        uvl_file = data.get("spl", {}).get("uvl", {}).get("file", "")
+        if uvl_file and (spl_dir / uvl_file).is_file():
+            return True
+        # metadata exists with a UVL reference — SPL is valid even if not yet fetched
+        if uvl_file:
+            return True
+    return False
+
+
+@click.command("product:create", short_help="Create a new product in the workspace.")
 @click.argument("name")
+@click.option(
+    "--spl", "spl_name", default=None, help="SPL to derive from (from splent_catalog/)."
+)
 @click.option(
     "--features-file", type=click.Path(exists=True), help="Path to features.txt"
 )
-def make_product(name, features_file):
+@context.requires_detached
+def make_product(name, spl_name, features_file):
+    workspace_path = context.workspace()
+    catalog_dir = workspace_path / "splent_catalog"
+
+    if not spl_name:
+        if not catalog_dir.is_dir():
+            raise click.ClickException(
+                "No splent_catalog/ found in workspace. Clone it first."
+            )
+
+        available = sorted(
+            d.name
+            for d in catalog_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".") and _has_uvl(d)
+        )
+
+        if not available:
+            raise click.ClickException(
+                "No SPLs found in splent_catalog/. Create one with: splent spl:create"
+            )
+
+        click.echo()
+        click.echo(click.style("  Available SPLs:", bold=True))
+        for i, s in enumerate(available, 1):
+            click.echo(f"    {i}. {s}")
+        click.echo()
+        choice = click.prompt(
+            "  Select SPL", type=click.IntRange(1, len(available)), default=1
+        )
+        spl_name = available[choice - 1]
+
+    # Ensure the UVL file is present — download from UVLHub if needed
+    spl_dir = catalog_dir / spl_name
+    uvl_file = spl_dir / f"{spl_name}.uvl"
+    if not uvl_file.is_file():
+        meta = spl_dir / "metadata.toml"
+        if meta.is_file():
+            try:
+                from splent_cli.commands.spl.spl_utils import (
+                    _resolve_spl_metadata,
+                    _fetch_uvl,
+                )
+
+                metadata = _resolve_spl_metadata(spl_name)
+                _fetch_uvl(spl_name, metadata, str(uvl_file))
+            except Exception as e:
+                click.secho(
+                    f"  ⚠️  Could not download UVL: {e}\n"
+                    f"     Run 'splent spl:fetch {spl_name}' manually.",
+                    fg="yellow",
+                )
+
     env = setup_jinja_env()
     offset = zlib.crc32(name.encode("utf-8")) % 1000  # 0–999
     web_port = 5000 + offset
     db_port = 33060 + offset
     redis_port = 6379 + offset
+    mailhog_port_one = 8025 + offset
+    mailhog_port_two = 1025 + offset
+
+    # Check for port collisions with existing products
+    workspace_path = context.workspace()
+    for existing in workspace_path.iterdir():
+        if (
+            not existing.is_dir()
+            or existing.name == name
+            or existing.name.startswith(".")
+        ):
+            continue
+        dev_compose = existing / "docker" / "docker-compose.dev.yml"
+        if not dev_compose.is_file():
+            continue
+        try:
+            with open(dev_compose) as cf:
+                data = yaml.safe_load(cf) or {}
+            for svc in data.get("services", {}).values():
+                for p in svc.get("ports", []):
+                    parts = str(p).split(":")
+                    if len(parts) == 2:
+                        existing_port = int(parts[0])
+                        if existing_port in (web_port, db_port):
+                            click.secho(
+                                f"\u26a0\ufe0f  Port conflict: {existing_port} already used by product '{existing.name}'.\n"
+                                f"   Edit the generated docker-compose files to use different ports.",
+                                fg="yellow",
+                            )
+        except Exception:
+            pass
+
     template_ctx = {
         "product_name": name,
         "pascal_name": pascalcase(name),
         "web_port": web_port,
         "db_port": db_port,
         "redis_port": redis_port,
+        "mailhog_port_one": mailhog_port_one,
+        "mailhog_port_two": mailhog_port_two,
+        "cli_version": _CLI_VERSION,
+        "network_name": "splent_network",
+        "spl_name": spl_name or "",
     }
 
     base_path = str(context.workspace() / name)
@@ -65,7 +186,6 @@ def make_product(name, features_file):
         "docker",
         "entrypoints",
         "scripts",
-        "uvl",
         f"src/{name}",
         f"src/{name}/static",
         f"src/{name}/static/css",
@@ -100,7 +220,6 @@ def make_product(name, features_file):
         "LICENSE": "product/product_LICENSE.j2",
         "package.json": "product/product_package.json.j2",
         "pyproject.toml": "product/product_pyproject.toml.j2",
-        f"uvl/{name}.uvl": "product/product_uvl.j2",
         "README.md": "product/product_README.md.j2",
         f"src/{name}/__init__.py": "product/product_init.py.j2",
         f"src/{name}/config.py": "product/product_config.py.j2",

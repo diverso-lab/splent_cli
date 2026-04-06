@@ -5,11 +5,12 @@ import docker
 import signal
 import psutil
 
+from splent_cli.services import context
 
-@click.command(
-    "locust", short_help="Launches Locust for load testing based on the environment."
-)
+
+@click.command("locust", short_help="Launch the Locust load testing container.")
 @click.argument("module", required=False)
+@context.requires_product
 def locust(module):
     # Absolute paths
     working_dir = os.getenv("WORKING_DIR", "")
@@ -164,7 +165,7 @@ def locust(module):
         click.echo(click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red"))
 
 
-@click.command("locust:stop", short_help="Stops the Locust container if it is running.")
+@click.command("locust:stop", short_help="Stop the Locust load testing container.")
 def stop():
     working_dir = os.getenv("WORKING_DIR", "")
 
@@ -181,11 +182,13 @@ def stop():
         stop_command = ["docker", "stop", "locust_container"]
         rm_command = ["docker", "rm", "locust_container"]
 
-        # Stop the Locust container if it is running
-        subprocess.run(stop_command)
+        result = subprocess.run(stop_command, capture_output=True)
+        if result.returncode != 0:
+            click.secho("⚠️  Could not stop Locust container.", fg="yellow")
 
-        # Remove the Locust container
-        subprocess.run(rm_command)
+        result = subprocess.run(rm_command, capture_output=True)
+        if result.returncode != 0:
+            click.secho("⚠️  Could not remove Locust container.", fg="yellow")
 
     if working_dir == "/workspace/":
         stop_docker_locust()

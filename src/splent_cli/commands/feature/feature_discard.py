@@ -3,12 +3,13 @@ import click
 import shutil
 import tomllib
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 
 def _get_namespace_safe(ns: str):
-    return ns.replace("-", "_")
+    return normalize_namespace(ns)
 
 
 def _find_products_using_editable(workspace, feature_name, ns_safe):
@@ -27,12 +28,10 @@ def _find_products_using_editable(workspace, feature_name, ns_safe):
         try:
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError):
             continue
 
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data)
 
         # Editable feature = aparece SIN @versión
         if feature_name in features:
@@ -43,10 +42,11 @@ def _find_products_using_editable(workspace, feature_name, ns_safe):
 
 @click.command(
     "feature:discard",
-    short_help="Discard the editable version of a feature.",
+    short_help="Delete the editable copy of a feature from cache (versioned snapshots kept).",
 )
 @click.argument("feature_name", required=True)
 @click.option("--namespace", default=DEFAULT_NAMESPACE, help="Feature namespace.")
+@context.requires_product
 def feature_discard(feature_name, namespace):
     """
     Delete the editable version of a feature:
@@ -69,7 +69,7 @@ def feature_discard(feature_name, namespace):
         click.echo(
             f"ℹ️ No editable folder found for {feature_name}. Nothing to discard."
         )
-        raise SystemExit(0)
+        return
 
     click.echo(f"🧩 Editable feature detected at:\n   {editable_path}")
 

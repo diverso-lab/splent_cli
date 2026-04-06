@@ -3,7 +3,26 @@ import tomllib
 import subprocess
 import shutil
 import click
-from splent_cli.services import context
+from splent_cli.services import context, compose
+from splent_cli.utils.feature_utils import read_features_from_data
+
+
+def _is_port_var(key: str, value: str) -> bool:
+    """Check if an env var looks like a port declaration.
+
+    Matches variables ending in _PORT or containing _PORT_ with a numeric value.
+    Excludes internal ports (like MAIL_PORT=1025 which is a container-internal port).
+    """
+    if not value.strip().isdigit():
+        return False
+    key_upper = key.upper()
+    # HOST_PORT suffix = definitely a host port mapping
+    if key_upper.endswith("_HOST_PORT"):
+        return True
+    # _PORT_ONE, _PORT_TWO = mailhog pattern
+    if "_PORT_ONE" in key_upper or "_PORT_TWO" in key_upper:
+        return True
+    return False
 
 
 @click.command(
@@ -49,7 +68,7 @@ def product_env(generate, merge, env_name, process_all):
     product = context.require_app()
 
     if not env_name:
-        click.echo("❌ You must specify --dev or --prod.")
+        click.secho("  You must specify --dev or --prod.", fg="red")
         raise SystemExit(1)
 
     product_path = os.path.join(workspace, product)
@@ -57,29 +76,28 @@ def product_env(generate, merge, env_name, process_all):
     py_path = os.path.join(product_path, "pyproject.toml")
 
     if not os.path.exists(py_path):
-        click.echo(f"❌ pyproject.toml not found at {py_path}")
+        click.secho(f"  pyproject.toml not found at {py_path}", fg="red")
         raise SystemExit(1)
 
     if not os.path.exists(docker_dir):
-        click.echo(f"❌ docker directory not found at {docker_dir}")
+        click.secho(f"  docker directory not found at {docker_dir}", fg="red")
         raise SystemExit(1)
 
     if not (generate or merge):
-        click.echo("❌ You must specify either --generate or --merge.")
+        click.secho("  You must specify either --generate or --merge.", fg="red")
         raise SystemExit(1)
 
-    # ======================================================
-    # 1️⃣ GENERATE MODE
-    # ======================================================
+    # ── Generate mode ─────────────────────────────────────────────────────
     if generate:
         env_file = os.path.join(docker_dir, ".env")
         example_specific = os.path.join(docker_dir, f".env.{env_name}.example")
         example_generic = os.path.join(docker_dir, ".env.example")
 
-        click.echo(f"🚀 Generating .env for product '{product}' ({env_name})...")
-
         if os.path.exists(env_file):
-            click.echo(f"ℹ️  Existing .env found for {product}, skipping creation.")
+            click.echo(
+                click.style("  product ", dim=True)
+                + click.style(".env exists, skipping", dim=True)
+            )
         else:
             selected = (
                 example_specific
@@ -89,30 +107,25 @@ def product_env(generate, merge, env_name, process_all):
             if selected:
                 shutil.copyfile(selected, env_file)
                 click.echo(
-                    f"📄 Created {product}/docker/.env from {os.path.basename(selected)}"
+                    click.style("  product ", dim=True)
+                    + f".env created from {os.path.basename(selected)}"
                 )
             else:
-                click.echo(f"⚠️  No .env template found for {product} in {docker_dir}")
+                click.secho(
+                    f"  product  no .env template found in {docker_dir}", fg="yellow"
+                )
 
-        # If only product env is needed, stop here
         if not process_all:
-            click.echo("✅ Product .env generation complete.")
             return
 
         # Process all declared features
         with open(py_path, "rb") as f:
             data = tomllib.load(f)
 
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data, env_name)
         if not features:
-            click.echo("ℹ️ No features declared in pyproject.toml.")
+            click.echo(click.style("  No features declared.", dim=True))
             return
-
-        click.echo(
-            f"🚀 Generating .env files for {len(features)} features ({env_name})...\n"
-        )
 
         created, skipped, no_template, failed = 0, 0, 0, 0
         for f_entry in features:
@@ -122,35 +135,29 @@ def product_env(generate, merge, env_name, process_all):
             output = result.stdout.strip()
             lines = [line.strip() for line in output.splitlines() if line.strip()]
             cleaned = "\n".join(lines)
-            if cleaned:
-                click.echo(cleaned)
 
             if result.returncode != 0:
                 if "docker directory not found" in cleaned:
                     no_template += 1
                 else:
                     failed += 1
+                    click.secho(f"  {base_name}: {cleaned}", fg="red")
                 continue
             if "No .env template" in cleaned:
                 no_template += 1
             elif "Created" in cleaned:
                 created += 1
+                short = base_name.split("/")[-1] if "/" in base_name else base_name
+                click.echo(f"  {click.style('  +', fg='green')}  {short} .env created")
             else:
                 skipped += 1
 
-        click.echo("\n✅ Feature .env generation complete.")
-        click.echo(f"   📄 Created: {created}")
-        click.echo(f"   ⏩ Skipped: {skipped}")
-        click.echo(f"   📭 No template: {no_template}")
-        click.echo(f"   💥 Failed: {failed}")
+        if failed:
+            click.secho(f"  {created} created, {failed} failed", fg="red")
         return
 
-    # ======================================================
-    # 2️⃣ MERGE MODE
-    # ======================================================
+    # ── Merge mode ────────────────────────────────────────────────────────
     if merge:
-        click.echo(f"🌍 Merging environment: {env_name}")
-
         # Locate product base env file
         candidates = [
             os.path.join(docker_dir, f".env.{env_name}.example"),
@@ -160,24 +167,20 @@ def product_env(generate, merge, env_name, process_all):
         base_env = next((c for c in candidates if os.path.exists(c)), None)
 
         if not base_env:
-            click.echo(
-                f"❌ No .env.{env_name}.example, .env.example or .env found in {docker_dir}"
+            click.secho(
+                f"  No .env template found for {product} ({env_name})", fg="red"
             )
             raise SystemExit(1)
 
         target_env = os.path.join(docker_dir, ".env")
         if base_env != target_env:
             shutil.copyfile(base_env, target_env)
-            click.echo(f"📋 Product: using {os.path.basename(base_env)} → .env")
 
         with open(py_path, "rb") as f:
             data = tomllib.load(f)
-        features = (
-            data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-        )
+        features = read_features_from_data(data, env_name)
         if not features:
-            click.echo("ℹ️ No features declared.")
-            raise SystemExit(0)
+            return
 
         merged = {}
         with open(target_env, "r", encoding="utf-8") as f:
@@ -186,33 +189,51 @@ def product_env(generate, merge, env_name, process_all):
                     k, v = line.strip().split("=", 1)
                     merged[k] = v
 
+        # Always set SPLENT_ENV to match the current merge target
+        merged["SPLENT_ENV"] = env_name
+
+        host_project_dir = os.getenv("SPLENT_HOST_PROJECT_DIR", workspace)
+
         feature_env_paths = []
+        feature_host_dirs = {}  # env_path → host dir of the feature root
         for feature in features:
-            org_part, feat_part = (
-                feature.split("/", 1) if "/" in feature else ("splent_io", feature)
-            )
-            docker_dir_f = os.path.join(
-                workspace, ".splent_cache", "features", org_part, feat_part, "docker"
-            )
+            clean_ref = compose.normalize_feature_ref(feature)
+            docker_dir_f = compose.feature_docker_dir(workspace, clean_ref)
 
             candidates_f = [
-                os.path.join(docker_dir_f, ".env"),  # preferimos la .env ya generada
+                os.path.join(docker_dir_f, ".env"),
                 os.path.join(docker_dir_f, f".env.{env_name}.example"),
                 os.path.join(docker_dir_f, ".env.example"),
             ]
             base_f = next((c for c in candidates_f if os.path.exists(c)), None)
             if not base_f:
-                click.echo(
-                    f"⚠️ {feature}: no .env.{env_name}.example, .env.example or .env found."
-                )
                 continue
 
             target_f = os.path.join(docker_dir_f, ".env")
             if base_f != target_f:
                 shutil.copyfile(base_f, target_f)
-                click.echo(f"📋 {feature}: using {os.path.basename(base_f)} → .env")
+
+            # Resolve __FEATURE_HOST_DIR__ in the feature's own .env so that
+            # docker compose (which reads this file) sees the real host path.
+            container_feature_root = os.path.dirname(docker_dir_f)
+            relative = os.path.relpath(container_feature_root, workspace)
+            f_host_dir = os.path.join(host_project_dir, relative)
+            feature_host_dirs[target_f] = f_host_dir
+
+            with open(target_f, "r", encoding="utf-8") as fh:
+                content = fh.read()
+            if "__FEATURE_HOST_DIR__" in content:
+                content = content.replace("__FEATURE_HOST_DIR__", f_host_dir)
+                with open(target_f, "w", encoding="utf-8") as fh:
+                    fh.write(content)
 
             feature_env_paths.append(target_f)
+
+        # Compute product port offset for feature port adjustment
+        import zlib
+
+        port_offset = zlib.crc32(product.encode("utf-8")) % 1000
+        port_adjusted = []
 
         for f_env in feature_env_paths:
             if not os.path.exists(f_env):
@@ -221,12 +242,41 @@ def product_env(generate, merge, env_name, process_all):
                 for line in f:
                     if "=" in line and not line.strip().startswith("#"):
                         k, v = line.strip().split("=", 1)
-                        merged.setdefault(k, v)
+                        if k not in merged and _is_port_var(k, v):
+                            try:
+                                original = int(v)
+                                adjusted = original + port_offset
+                                merged.setdefault(k, str(adjusted))
+                                port_adjusted.append((k, original, adjusted))
+                            except ValueError:
+                                merged.setdefault(k, v)
+                        else:
+                            merged.setdefault(k, v)
+
+        # Replace __PRODUCT__ placeholder with the actual product name
+        product_replaced = []
+        for k, v in merged.items():
+            if "__PRODUCT__" in v:
+                merged[k] = v.replace("__PRODUCT__", product)
+                product_replaced.append(k)
 
         with open(target_env, "w", encoding="utf-8") as f:
             for k, v in merged.items():
                 f.write(f"{k}={v}\n")
 
+        if product_replaced:
+            click.echo(
+                click.style("  product  ", dim=True)
+                + f"resolved __PRODUCT__ in {len(product_replaced)} variable(s) → {product}"
+            )
+
+        if port_adjusted:
+            click.echo(
+                click.style("  ports    ", dim=True)
+                + f"adjusted {len(port_adjusted)} feature port(s) (+{port_offset})"
+            )
+
         click.echo(
-            f"🔗 Merged {len(feature_env_paths)} feature .env files into {target_env}"
+            click.style("  merged   ", dim=True)
+            + f"{len(feature_env_paths)} feature .env file(s) into product .env"
         )

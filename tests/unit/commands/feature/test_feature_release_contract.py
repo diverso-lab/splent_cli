@@ -260,6 +260,9 @@ class TestWriteContract:
             "blueprints": ["demo_bp"],
             "models": ["DemoModel"],
             "commands": [],
+            "hooks": [],
+            "services": [],
+            "docker": [],
             "requires_features": ["auth"],
             "env_vars": ["API_KEY"],
         }
@@ -302,6 +305,7 @@ class TestWriteContract:
         path = self._base_pyproject(tmp_path)
         contract = {
             "routes": [], "blueprints": [], "models": [], "commands": [],
+            "hooks": [], "services": [], "docker": [],
             "requires_features": [], "env_vars": [],
         }
         write_contract(path, contract, "splent_feature_demo")

@@ -4,17 +4,23 @@ import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import (
+    normalize_namespace,
+    read_features_from_data,
+    write_features_to_data,
+)
 
 
 @click.command(
     "feature:rename",
-    short_help="Renames a local feature (only if non-versioned and non-remote). Updates pyproject and symlink if active.",
+    short_help="Rename a local feature (non-versioned, non-remote only).",
 )
 @click.argument("old_name")
 @click.argument("new_name")
 @click.option(
     "--namespace", "-n", help="Namespace (defaults to GITHUB_USER or 'splent-io')."
 )
+@context.requires_product
 def feature_rename(old_name, new_name, namespace):
     """
     Safe rename for local, non-versioned, non-remote features.
@@ -29,7 +35,7 @@ def feature_rename(old_name, new_name, namespace):
     # -----------------------------
     github_user = os.getenv("GITHUB_USER")
     org = namespace or github_user or "splent-io"
-    org_safe = org.replace("-", "_")
+    org_safe = normalize_namespace(org)
 
     workspace = str(context.workspace())
     cache_root = os.path.join(workspace, ".splent_cache", "features", org_safe)
@@ -87,11 +93,7 @@ def feature_rename(old_name, new_name, namespace):
             try:
                 with open(pyproject_path, "rb") as f:
                     data = tomllib.load(f)
-                features_list = (
-                    data.get("project", {})
-                    .get("optional-dependencies", {})
-                    .get("features", [])
-                )
+                features_list = read_features_from_data(data)
                 if old_name in features_list:
                     feature_is_active = True
             except Exception as e:
@@ -148,7 +150,8 @@ def feature_rename(old_name, new_name, namespace):
         # Update symlink
         if os.path.islink(old_link):
             os.unlink(old_link)
-            os.symlink(new_dir, new_link)
+            rel_target = os.path.relpath(new_dir, product_features_dir)
+            os.symlink(rel_target, new_link)
             symlink_updated = True
 
         # Update pyproject
@@ -156,7 +159,7 @@ def feature_rename(old_name, new_name, namespace):
         try:
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
-            data["project"]["optional-dependencies"]["features"] = updated_features
+            write_features_to_data(data, updated_features)
             with open(pyproject_path, "wb") as f:
                 tomli_w.dump(data, f)
             pyproject_updated = True

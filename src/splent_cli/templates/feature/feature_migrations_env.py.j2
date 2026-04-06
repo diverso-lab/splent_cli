@@ -1,0 +1,9 @@
+"""Alembic migration environment for {{ feature_name }}."""
+
+from {{ feature_import }} import models  # noqa
+from splent_framework.migrations.feature_env import run_feature_migrations
+
+FEATURE_NAME = "{{ feature_name }}"
+FEATURE_TABLES = set()
+
+run_feature_migrations(FEATURE_NAME, FEATURE_TABLES)

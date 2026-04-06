@@ -4,7 +4,10 @@ import click
 from pathlib import Path
 
 
-@click.command("cache:clear", short_help="Clear the feature cache (total or partial).")
+@click.command(
+    "cache:clear",
+    short_help="Clear the feature version cache (.splent_cache), totally or partially.",
+)
 @click.option(
     "--namespace",
     default=None,

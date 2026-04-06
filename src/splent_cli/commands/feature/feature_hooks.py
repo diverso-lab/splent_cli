@@ -11,6 +11,7 @@ import click
 from pathlib import Path
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -20,7 +21,10 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str, str | None]:
+
+def _resolve_feature(
+    feature_ref: str, workspace: str
+) -> tuple[Path, str, str, str | None]:
     """
     Resolve a feature_ref to (cache_path, ns, name, version).
 
@@ -35,7 +39,7 @@ def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str, 
 
     if "/" in base:
         ns_raw, name = base.split("/", 1)
-        ns = ns_raw.replace("-", "_")
+        ns = normalize_namespace(ns_raw)
     else:
         ns = DEFAULT_NAMESPACE
         name = base
@@ -51,13 +55,19 @@ def _resolve_feature(feature_ref: str, workspace: str) -> tuple[Path, str, str, 
             f"   Run: splent feature:attach {ns.replace('_', '-')}/{name} {version}"
         )
 
+    # Editable feature at workspace root
+    ws_root = Path(workspace) / name
+    if ws_root.exists():
+        return ws_root, ns, name, None
+
+    # Legacy: editable in cache
     candidate = cache_root / name
     if candidate.exists():
         return candidate, ns, name, None
 
     raise SystemExit(
-        f"❌ Feature not found in cache: {cache_root / name}\n"
-        f"   Run: splent feature:clone {ns.replace('_', '-')}/{name}"
+        f"❌ Feature not found at workspace root or cache: {name}\n"
+        f"   Run: splent feature:create {ns.replace('_', '-')}/{name}"
     )
 
 
@@ -77,12 +87,14 @@ def _parse_hooks(hooks_path: Path) -> list[dict]:
 # Command
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @click.command(
     "feature:hooks",
     short_help="List template hooks registered by a feature.",
 )
 @click.argument("feature_ref")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON array.")
+@context.requires_product
 def feature_hooks(feature_ref, as_json):
     """
     List all template hook registrations declared in a feature's hooks.py.
@@ -121,7 +133,6 @@ def feature_hooks(feature_ref, as_json):
         click.echo(f"  {'Slot':<42} Function")
         click.echo(click.style(f"  {'─' * 60}", fg="bright_black"))
         for h in hooks:
-            slot_label = click.style(h["slot"], fg="cyan")
             click.echo(f"  {h['slot']:<42} {h['function']}")
 
     click.echo()

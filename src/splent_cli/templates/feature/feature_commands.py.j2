@@ -1,0 +1,21 @@
+"""
+CLI commands contributed by {{ feature_name }}.
+
+These commands are auto-discovered by the framework and exposed in the
+SPLENT CLI under the ``feature:{{ short_name }}`` group.
+
+Usage::
+
+    splent feature:{{ short_name }} hello
+"""
+
+import click
+
+
+@click.command("hello")
+def hello():
+    """Example command — replace with your own."""
+    click.echo("  Hello from {{ feature_name }}!")
+
+
+cli_commands = [hello]

@@ -16,9 +16,11 @@ class TestGetSplentCliDir:
     def test_returns_expected_path(self):
         assert PathUtils.get_splent_cli_dir() == "/workspace/splent_cli/src/splent_cli"
 
-    def test_changes_with_working_dir(self, monkeypatch):
-        monkeypatch.setenv("WORKING_DIR", "/custom")
-        assert PathUtils.get_splent_cli_dir() == "/custom/splent_cli/src/splent_cli"
+    def test_changes_with_working_dir(self, monkeypatch, tmp_path):
+        dev_path = tmp_path / "splent_cli" / "src" / "splent_cli"
+        dev_path.mkdir(parents=True)
+        monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+        assert PathUtils.get_splent_cli_dir() == str(dev_path)
 
 
 class TestGetSplentCliTemplatesDir:

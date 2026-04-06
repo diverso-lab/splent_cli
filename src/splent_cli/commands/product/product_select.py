@@ -1,12 +1,11 @@
 import os
-import sys
 import click
 from splent_cli.services import context
 
 
 @click.command(
     "product:select",
-    short_help="Select the active app (updates .env and session env vars)",
+    short_help="Select the active product (sets SPLENT_APP in .env).",
 )
 @click.argument("app_name", required=True)
 @click.option(
@@ -20,11 +19,13 @@ def select_app(app_name, shell):
     # Check product exists
     if not os.path.isdir(product_path):
         click.echo(f"Error: product '{app_name}' not found in {workspace}", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
 
     # Ensure .env exists
     if not os.path.exists(workspace_env_path):
-        open(workspace_env_path, "w").close()
+        from pathlib import Path
+
+        Path(workspace_env_path).touch()
 
     # Update .env
     lines = []
@@ -49,5 +50,3 @@ def select_app(app_name, shell):
     # If --shell, print commands for eval
     if shell:
         print(f"export SPLENT_APP={app_name}")
-        print(f"source {workspace_env_path}")
-        print("type set_prompt >/dev/null 2>&1 && set_prompt || true")

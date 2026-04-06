@@ -10,36 +10,109 @@ from splent_cli.utils.feature_utils import (
 from splent_cli.services import context
 
 
+# Test levels in execution order (default = first three)
+TEST_LEVELS = ("unit", "integration", "functional", "e2e", "load")
+DEFAULT_LEVELS = ("unit", "integration", "functional")
+
+
+def _is_prod_active():
+    """Check if the product is running in prod mode.
+
+    Checks two sources:
+    1. SPLENT_ENV in the product's .env file
+    2. SPLENT_ENV from the running web container
+    """
+    product = os.getenv("SPLENT_APP", "")
+    if not product:
+        return False
+
+    # Check .env file
+    workspace = os.getenv("WORKING_DIR", "/workspace")
+    product_env_path = os.path.join(workspace, product, "docker", ".env")
+    if os.path.isfile(product_env_path):
+        with open(product_env_path, "r") as f:
+            for line in f:
+                if line.strip().startswith("SPLENT_ENV="):
+                    if line.strip().split("=", 1)[1] == "prod":
+                        return True
+
+    # Check running container
+    try:
+        result = subprocess.run(
+            ["docker", "exec", f"{product}_web", "printenv", "SPLENT_ENV"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.stdout.strip() == "prod":
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
 def _validate_testing_environment():
-    env = get_current_app_config_value("TESTING")
-    db_url = get_current_app_config_value("SQLALCHEMY_DATABASE_URI")
+    if _is_prod_active():
+        click.secho(
+            "❌ Cannot run tests in production.\n"
+            "   A production deployment is active.\n\n"
+            "   Stop the deployment and start dev:\n"
+            "     splent product:deploy --down\n"
+            "     splent product:derive --dev",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+    try:
+        env = get_current_app_config_value("TESTING")
+        db_url = get_current_app_config_value("SQLALCHEMY_DATABASE_URI")
+    except Exception as e:
+        click.secho(
+            f"❌ Cannot connect to the test database.\n"
+            f"   {e}\n\n"
+            f"   If a production deployment is running, stop it first:\n"
+            f"     splent product:deploy --down\n\n"
+            f"   Then start development:\n"
+            f"     splent product:up --dev\n"
+            f"     splent product:run --dev",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     if not env:
-        raise AssertionError(f"❌ TESTING mode is not active. Current DB: {db_url}")
+        click.secho(
+            f"❌ TESTING mode is not active.\n"
+            f"   Current DB: {db_url}\n\n"
+            f"   Make sure you are running in the development environment.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     if "test" not in db_url.lower():
-        raise AssertionError(f"❌ Non-test database in use: {db_url}")
+        click.secho(
+            f"❌ Non-test database in use: {db_url}\n\n"
+            f"   Tests require a database with 'test' in the name.\n"
+            f"   If a production deployment is running, stop it first:\n"
+            f"     splent product:deploy --down",
+            fg="red",
+        )
+        raise SystemExit(1)
 
 
 def _pkg_name(ref: str) -> str:
-    """Extract bare package name from a pyproject feature ref.
-
-    'splent_io/splent_feature_auth@v1.1.0' -> 'splent_feature_auth'
-    'splent_feature_auth@v1.1.0'           -> 'splent_feature_auth'
-    'splent_feature_auth'                  -> 'splent_feature_auth'
-    """
-    name = ref.split("/")[-1]  # strip namespace
-    name = name.split("@")[0]  # strip version
+    name = ref.split("/")[-1]
+    name = name.split("@")[0]
     return name
 
 
 def _find_feature_root(pkg: str, workspace: Path, product: str) -> Path | None:
-    """Locate the feature root directory on disk.
+    # 1. Workspace root (editable features)
+    bare = workspace / pkg
+    if bare.is_dir():
+        return bare
 
-    Checks in order:
-    1. Product's features/ symlink directory (resolves to cache path).
-    2. .splent_cache/features/ directly.
-    3. Bare directory in workspace (editable clone at /workspace/pkg/).
-    """
-    # 1. Product symlinks: {product}/features/{ns}/{name}[@version]
+    # 2. Product symlinks
     features_base = workspace / product / "features"
     if features_base.is_dir():
         for ns_dir in features_base.iterdir():
@@ -49,7 +122,7 @@ def _find_feature_root(pkg: str, workspace: Path, product: str) -> Path | None:
                 if entry.name.split("@")[0] == pkg:
                     return entry.resolve()
 
-    # 2. Cache: .splent_cache/features/{ns}/{name}[@version]
+    # 3. Cache
     cache_root = workspace / ".splent_cache" / "features"
     if cache_root.is_dir():
         for ns_dir in cache_root.iterdir():
@@ -58,11 +131,6 @@ def _find_feature_root(pkg: str, workspace: Path, product: str) -> Path | None:
             for entry in ns_dir.iterdir():
                 if entry.is_dir() and entry.name.split("@")[0] == pkg:
                     return entry
-
-    # 3. Bare workspace directory (legacy / manual clone)
-    bare = workspace / pkg
-    if bare.is_dir():
-        return bare
 
     return None
 
@@ -101,30 +169,32 @@ def _get_feature_roots(feature_ref=None) -> list[tuple[str, Path]]:
 def _collect_test_paths(
     feature_roots: list[tuple[str, Path]],
 ) -> list[tuple[str, Path, Path]]:
-    """Returns [(pkg_name, test_dir, src_dir), ...] for features that have a tests/ directory.
-
-    Handles both flat and namespace-package layouts:
-      src/{pkg}/tests/             (flat)
-      src/{namespace}/{pkg}/tests/ (namespace package, e.g. splent_io/splent_feature_auth)
-    """
     result = []
     for pkg, root in feature_roots:
         src = root / "src"
         if not src.is_dir():
             continue
-        # Search up to two levels deep: src/*/*/tests or src/*/tests
         found = list(src.glob(f"*/{pkg}/tests")) + list(src.glob(f"{pkg}/tests"))
         for test_dir in found:
             if test_dir.is_dir():
                 result.append((pkg, test_dir, src))
-                break  # take first match per feature
+                break
     return result
 
 
 def _all_feature_src_dirs(workspace: Path, product: str) -> list[str]:
-    """Return src/ paths for every feature in the product's cache, for PYTHONPATH."""
-    cache_root = workspace / ".splent_cache" / "features"
+    """Return src/ paths for every feature (workspace root + cache)."""
     src_dirs = []
+
+    # Workspace root editable features
+    for entry in workspace.iterdir():
+        if entry.is_dir() and entry.name.startswith("splent_feature_"):
+            src = entry / "src"
+            if src.is_dir():
+                src_dirs.append(str(src))
+
+    # Cache (pinned features)
+    cache_root = workspace / ".splent_cache" / "features"
     if cache_root.is_dir():
         for ns_dir in cache_root.iterdir():
             if not ns_dir.is_dir():
@@ -133,52 +203,99 @@ def _all_feature_src_dirs(workspace: Path, product: str) -> list[str]:
                 src = entry / "src"
                 if src.is_dir():
                     src_dirs.append(str(src))
+
     return src_dirs
 
 
+def _resolve_levels(unit, integration, functional, e2e, load) -> tuple[str, ...]:
+    """Determine which test levels to run based on CLI flags."""
+    explicit = []
+    if unit:
+        explicit.append("unit")
+    if integration:
+        explicit.append("integration")
+    if functional:
+        explicit.append("functional")
+    if e2e:
+        explicit.append("e2e")
+    if load:
+        explicit.append("load")
+    return tuple(explicit) if explicit else DEFAULT_LEVELS
+
+
 def _run_pytest(
-    test_paths: list[tuple[str, Path, Path]], keyword: str | None, verbose: bool
+    test_paths: list[tuple[str, Path, Path]],
+    levels: tuple[str, ...],
+    keyword: str | None,
+    verbose: bool,
 ):
-    # Build a combined PYTHONPATH with ALL features in the cache so cross-feature
-    # imports resolve correctly even when testing a single feature.
     workspace = context.workspace()
     product = os.getenv("SPLENT_APP", "")
     all_src_dirs = os.pathsep.join(_all_feature_src_dirs(workspace, product))
 
-    passed = failed = 0
+    passed = failed = skipped = 0
     for pkg, test_dir, src_dir in test_paths:
-        feature_name = pkg
+        click.secho(f"\n  ▶  {pkg}", fg="cyan", bold=True)
 
-        click.secho(f"\n  ▶  {feature_name}", fg="cyan", bold=True)
+        for level in levels:
+            level_dir = test_dir / level
+            if not level_dir.is_dir():
+                continue
 
-        env = os.environ.copy()
-        existing = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = all_src_dirs + (os.pathsep + existing if existing else "")
+            # Check there are actual test files
+            test_files = list(level_dir.glob("test_*.py"))
+            if not test_files:
+                continue
 
-        cmd = [
-            "pytest",
-            str(test_dir),
-            "--rootdir=.",
-            "--ignore-glob=*selenium*",
-            "-W",
-            "ignore::DeprecationWarning",
-        ]
-        if verbose:
-            cmd.append("-v")
-        if keyword:
-            cmd.extend(["-k", keyword])
+            env = os.environ.copy()
+            existing = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = all_src_dirs + (
+                os.pathsep + existing if existing else ""
+            )
 
-        result = subprocess.run(cmd, env=env, cwd=src_dir)
-        if result.returncode == 0:
-            passed += 1
-        else:
-            failed += 1
+            cmd = [
+                "pytest",
+                str(level_dir),
+                "--rootdir=.",
+                "-W",
+                "ignore::DeprecationWarning",
+            ]
+            if verbose:
+                cmd.append("-v")
+            if keyword:
+                cmd.extend(["-k", keyword])
+
+            level_color = {
+                "unit": "green",
+                "integration": "yellow",
+                "functional": "blue",
+                "e2e": "magenta",
+                "load": "red",
+            }.get(level, "white")
+
+            click.echo(f"     {click.style(level, fg=level_color, bold=True)}")
+
+            result = subprocess.run(cmd, env=env, cwd=src_dir)
+            if result.returncode == 0:
+                passed += 1
+            elif result.returncode == 5:
+                # pytest exit code 5 = no tests collected (not a failure)
+                skipped += 1
+            else:
+                failed += 1
 
     click.echo()
+    parts = [f"{passed} passed"]
+    if skipped:
+        parts.append(f"{skipped} skipped")
+    if failed:
+        parts.append(f"{failed} failed")
+    summary = ", ".join(parts)
+
     if failed == 0:
-        click.secho(f"✅ All {passed} feature(s) passed.", fg="green")
+        click.secho(f"✅ {summary}.", fg="green")
     else:
-        click.secho(f"❌ {failed} feature(s) failed, {passed} passed.", fg="red")
+        click.secho(f"❌ {summary}.", fg="red")
         raise SystemExit(1)
 
 
@@ -191,21 +308,32 @@ def _run_pytest(
     "-k", "keyword", help="Only run tests matching this keyword (passed to pytest)."
 )
 @click.option("-v", "verbose", is_flag=True, help="Verbose pytest output.")
-def feature_test(feature_ref, keyword, verbose):
+@click.option("--unit", is_flag=True, help="Run only unit tests.")
+@click.option("--integration", is_flag=True, help="Run only integration tests.")
+@click.option("--functional", is_flag=True, help="Run only functional tests.")
+@click.option("--e2e", is_flag=True, help="Run only end-to-end (Selenium) tests.")
+@click.option("--load", is_flag=True, help="Run only load (Locust) tests.")
+def feature_test(
+    feature_ref, keyword, verbose, unit, integration, functional, e2e, load
+):
     """
     Run the test suite for features declared in the active product.
 
     \b
-    With no arguments, tests all declared features.
-    With FEATURE_REF (e.g. splent_feature_auth or auth), tests only that one.
+    By default, runs unit + integration + functional tests.
+    Use flags to select specific levels.
 
+    \b
     Examples:
-        splent feature:test
-        splent feature:test auth
-        splent feature:test -k test_login
-        splent feature:test auth -v
+        splent feature:test                    # all features, default levels
+        splent feature:test auth               # only auth feature
+        splent feature:test --unit             # only unit tests
+        splent feature:test auth --functional  # functional tests for auth
+        splent feature:test -k test_login -v   # keyword filter, verbose
     """
     _validate_testing_environment()
+
+    levels = _resolve_levels(unit, integration, functional, e2e, load)
 
     feature_roots = _get_feature_roots(feature_ref)
     test_paths = _collect_test_paths(feature_roots)
@@ -215,9 +343,10 @@ def feature_test(feature_ref, keyword, verbose):
         return
 
     label = feature_ref or f"{len(test_paths)} feature(s)"
-    click.secho(f"\n🧪 Running tests for {label}...", fg="cyan")
+    level_labels = ", ".join(levels)
+    click.secho(f"\n🧪 Running tests for {label} [{level_labels}]...", fg="cyan")
 
-    _run_pytest(test_paths, keyword, verbose)
+    _run_pytest(test_paths, levels, keyword, verbose)
 
 
 cli_command = feature_test

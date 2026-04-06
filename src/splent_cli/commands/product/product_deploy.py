@@ -1,87 +1,231 @@
 import os
-import click
 import subprocess
+
+import click
+import yaml
 from splent_cli.services import context
 
 
 @click.command(
     "product:deploy",
-    short_help="Deploy the product using docker-compose.deploy.yml and .env.",
+    short_help="Deploy or stop the product using docker-compose.deploy.yml.",
 )
-def product_deploy():
+@click.option("--down", is_flag=True, help="Stop the running deployment.")
+@click.option("--ci", is_flag=True, help="Non-interactive mode for CI/CD pipelines.")
+def product_deploy(down, ci):
     """
     Deploy the SPLENT product:
 
+    \b
     - Ensures .env exists (creates it from .env.deploy.example if missing).
     - Prompts interactively for variables with <SET> values.
+    - Checks for port conflicts before starting containers.
     - Writes final .env.
     - Executes `docker compose up -d` with docker-compose.deploy.yml.
+
+    Use --down to stop a running deployment.
     """
     product = context.require_app()
     product_path = str(context.workspace() / product)
     docker_dir = os.path.join(product_path, "docker")
 
-    env_example_path = os.path.join(docker_dir, ".env.deploy.example")
-    env_path = os.path.join(docker_dir, ".env")
     compose_path = os.path.join(docker_dir, "docker-compose.deploy.yml")
+    env_path = os.path.join(docker_dir, ".env.deploy")
+    env_example_path = os.path.join(docker_dir, ".env.deploy.example")
+
+    # ---------------------------------------------------------
+    # --down: stop deployment
+    # ---------------------------------------------------------
+    if down:
+        if not os.path.isfile(compose_path):
+            click.secho("  docker-compose.deploy.yml not found.", fg="red")
+            raise SystemExit(1)
+
+        click.echo(click.style("  stopping ", dim=True) + f"{product} (prod)...")
+        try:
+            subprocess.run(
+                ["docker", "compose", "-f", compose_path, "down"],
+                check=True,
+                capture_output=True,
+                cwd=docker_dir,
+            )
+            click.secho("  done.", fg="green")
+        except subprocess.CalledProcessError:
+            click.secho("  Failed to stop deployment.", fg="red")
+            raise SystemExit(1)
+        return
 
     # ---------------------------------------------------------
     # Validate required build artifacts
     # ---------------------------------------------------------
     if not os.path.isfile(env_example_path):
-        click.echo(
-            "❌ .env.deploy.example not found. Run `splent product:build` first."
+        click.secho(
+            "  .env.deploy.example not found. Run 'splent product:build' first.",
+            fg="red",
         )
         raise SystemExit(1)
 
     if not os.path.isfile(compose_path):
-        click.echo(
-            "❌ docker-compose.deploy.yml not found. Run `splent product:build` first."
+        click.secho(
+            "  docker-compose.deploy.yml not found. Run 'splent product:build' first.",
+            fg="red",
         )
         raise SystemExit(1)
 
     # ---------------------------------------------------------
-    # Create .env if missing
+    # Create or sync .env.deploy from template
     # ---------------------------------------------------------
     if not os.path.isfile(env_path):
-        click.echo("📄 .env not found → creating it from .env.deploy.example")
+        click.echo(
+            click.style("  env      ", dim=True) + "creating .env.deploy from template"
+        )
         with open(env_example_path, "r", encoding="utf-8") as src:
             content = src.read()
         with open(env_path, "w", encoding="utf-8") as dst:
             dst.write(content)
-        click.echo("✅ Created .env")
 
     # ---------------------------------------------------------
-    # Load .env and detect <SET>
+    # Sync .env.deploy with template
     # ---------------------------------------------------------
-    env_vars = {}
+    # Strategy: the template (.env.deploy.example) is the source of truth
+    # for all infrastructure variables. User-configured values (those that
+    # were <SET> in the template and filled in by the user) are preserved.
+    # Everything else is updated from the template on every deploy.
+    existing_vars = {}
     with open(env_path, "r", encoding="utf-8") as f:
         for line in f:
             if "=" in line and not line.strip().startswith("#"):
                 k, v = line.strip().split("=", 1)
-                env_vars[k] = v
+                existing_vars[k] = v
+
+    example_vars = {}
+    with open(env_example_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                example_vars[k] = v
+
+    # Build final env: start from template, preserve user-configured values
+    env_vars = {}
+    updated = []
+    for k, v in example_vars.items():
+        if (
+            v.strip() == "<SET>"
+            and k in existing_vars
+            and existing_vars[k].strip() != "<SET>"
+        ):
+            # User already configured this — keep their value
+            env_vars[k] = existing_vars[k]
+        elif k in existing_vars and existing_vars[k] != v:
+            # Infrastructure value changed in template — update it
+            env_vars[k] = v
+            updated.append(k)
+        else:
+            env_vars[k] = v
+
+    if updated:
+        click.echo(
+            click.style("  env      ", dim=True)
+            + f"updated {len(updated)} variable(s) from template"
+        )
 
     # ---------------------------------------------------------
     # Ask interactively for missing (<SET>) values
     # ---------------------------------------------------------
+    missing_vars = []
     for key, value in env_vars.items():
         if value.strip() == "<SET>":
-            new_value = click.prompt(f"🔧 Value required for {key}", hide_input=False)
-            env_vars[key] = new_value
+            if ci:
+                env_value = os.getenv(key)
+                if env_value:
+                    env_vars[key] = env_value
+                else:
+                    missing_vars.append(key)
+            else:
+                new_value = click.prompt(
+                    f"  Value required for {key}", hide_input=False
+                )
+                env_vars[key] = new_value
+
+    if missing_vars:
+        click.secho(
+            f"  Missing required variables: {', '.join(missing_vars)}\n"
+            f"  Set them as environment variables or run without --ci.",
+            fg="red",
+        )
+        raise SystemExit(1)
 
     # ---------------------------------------------------------
-    # Save updated .env
+    # Save updated .env.deploy
     # ---------------------------------------------------------
     with open(env_path, "w", encoding="utf-8") as f:
         for k, v in env_vars.items():
             f.write(f"{k}={v}\n")
 
-    click.echo("📝 Updated .env")
+    # ---------------------------------------------------------
+    # Update product .env with SPLENT_ENV=prod
+    # ---------------------------------------------------------
+    product_env_path = os.path.join(docker_dir, ".env")
+    if os.path.isfile(product_env_path):
+        lines = []
+        found = False
+        with open(product_env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("SPLENT_ENV="):
+                    lines.append("SPLENT_ENV=prod\n")
+                    found = True
+                else:
+                    lines.append(line)
+        if not found:
+            lines.append("SPLENT_ENV=prod\n")
+        with open(product_env_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+    # ---------------------------------------------------------
+    # Port conflict check
+    # ---------------------------------------------------------
+    from splent_cli.commands.product.product_derive import (
+        _extract_host_ports,
+        _containers_using_port,
+    )
+
+    port_conflicts = []
+    for host_port, svc_name in _extract_host_ports(compose_path):
+        blocking = _containers_using_port(host_port)
+        if blocking:
+            port_conflicts.append(
+                {"port": host_port, "service": svc_name, "containers": blocking}
+            )
+
+    if port_conflicts:
+        click.secho(f"  {len(port_conflicts)} port conflict(s) found:", fg="yellow")
+        all_containers: dict[str, str] = {}
+        for conflict in port_conflicts:
+            for cid, cname in conflict["containers"]:
+                all_containers[cid] = cname
+            container_list = ", ".join(n for _, n in conflict["containers"])
+            click.secho(
+                f"    port {conflict['port']:>5} <- {conflict['service']}"
+                f"  (blocked by: {container_list})",
+                fg="yellow",
+            )
+        click.echo()
+        if click.confirm(
+            "  Stop and remove the conflicting containers?", default=False
+        ):
+            for cid, cname in all_containers.items():
+                click.echo(f"  stopping {cname}...")
+                subprocess.run(["docker", "stop", cid], capture_output=True)
+                subprocess.run(["docker", "rm", cid], capture_output=True)
+        else:
+            click.secho("  Cannot proceed with conflicts unresolved.", fg="red")
+            raise SystemExit(1)
 
     # ---------------------------------------------------------
     # Deploy using docker compose
     # ---------------------------------------------------------
-    click.echo("\n🐳 Deploying product...\n")
+    click.echo()
+    click.echo(click.style("  deploying ", dim=True) + f"{product} (prod)...")
 
     try:
         subprocess.run(
@@ -94,12 +238,93 @@ def product_deploy():
                 env_path,
                 "up",
                 "-d",
+                "--build",
             ],
             check=True,
+            cwd=docker_dir,
         )
-        click.echo("🎯 Deployment successful!")
+
+        # Show access URL
+        app_port = None
+        with open(compose_path) as cf:
+            compose_data = yaml.safe_load(cf)
+        for svc in compose_data.get("services", {}).values():
+            for p in svc.get("ports", []):
+                parts = str(p).split(":")
+                if len(parts) == 2 and parts[1] == "5000":
+                    app_port = parts[0]
+                    break
+            if app_port:
+                break
+
+        click.echo()
+        if app_port:
+            url = f"http://localhost:{app_port}"
+
+            # Health check — wait for the app to respond
+            click.echo(
+                click.style("  health   ", dim=True) + "waiting for app to respond..."
+            )
+            import time
+
+            healthy = False
+            for attempt in range(15):
+                try:
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "exec",
+                            f"{product}_web",
+                            "bash",
+                            "-c",
+                            "curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    code = result.stdout.strip()
+                    if code in ("200", "302"):
+                        healthy = True
+                        break
+                except (subprocess.TimeoutExpired, Exception):
+                    pass
+                time.sleep(2)
+
+            if healthy:
+                click.echo(
+                    click.style("  health   ", dim=True)
+                    + click.style(f"HTTP {code}", fg="green")
+                )
+                click.echo()
+                click.echo(
+                    click.style("  URL: ", bold=True)
+                    + click.style(url, fg="cyan", bold=True)
+                )
+                click.secho("  done.", fg="green")
+            else:
+                click.echo(
+                    click.style("  health   ", dim=True)
+                    + click.style("app not responding", fg="red")
+                )
+                click.echo()
+                click.echo(
+                    click.style("  URL: ", bold=True)
+                    + click.style(url, fg="cyan", bold=True)
+                )
+                click.secho(
+                    "  deployed but app may not be healthy. Check logs with:",
+                    fg="yellow",
+                )
+                click.echo(f"    docker logs {product}_web")
+        else:
+            click.secho("  done.", fg="green")
     except subprocess.CalledProcessError as e:
-        click.secho("❌ Deployment failed.", fg="red")
+        click.secho("  Deployment failed.", fg="red")
         if e.stderr:
-            click.echo(e.stderr)
+            for line in e.stderr.strip().splitlines():
+                click.echo(f"    {line}")
         raise SystemExit(1)
+
+
+cli_command = product_deploy

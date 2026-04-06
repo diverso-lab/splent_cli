@@ -179,16 +179,13 @@ def get_runtime_ports(container_name: str):
 
 @click.command("product:port", short_help="Show the product URL and PORT.")
 @click.option("--env", "env_flag", help="Environment to inspect (dev/prod).")
+@context.requires_product
 def product_port(env_flag):
     """
     Show the real port where the product web service is running.
     """
-    # 1. Load /workspace/.env
-    global_env = load_global_env()
-
-    app = global_env.get("SPLENT_APP")
-    if not app:
-        raise click.ClickException("SPLENT_APP missing from /workspace/.env")
+    # 1. Get active product
+    app = context.require_app()
 
     # 2. Load /workspace/<app>/docker/.env
     product_env = load_product_env(app)
@@ -209,12 +206,14 @@ def product_port(env_flag):
     # 7. Print result
     host_ip = detect_host_ip()
 
-    click.echo(f"Product: {app}")
-    click.echo(f"Environment: {resolved_env}")
-    click.echo(f"Compose file: {compose_path.name}")
-    click.echo(f"Service: {service_name}")
-    click.echo(f"Container: {service_name}")
-    click.echo(f"Internal port: {internal_port}")
-    click.echo(f"External port: {external_port}")
     click.echo()
-    click.echo(f"URL: http://{host_ip}:{external_port}")
+    click.echo(click.style("  Product:  ", dim=True) + app)
+    click.echo(click.style("  Env:      ", dim=True) + resolved_env)
+    click.echo(
+        click.style("  Port:     ", dim=True) + f"{external_port} -> {internal_port}"
+    )
+    click.echo()
+    click.echo(
+        click.style("  URL: ", bold=True)
+        + click.style(f"http://{host_ip}:{external_port}", fg="cyan", bold=True)
+    )

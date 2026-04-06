@@ -1,0 +1,13 @@
+from splent_framework.blueprints.base_blueprint import create_blueprint
+
+{{ short_name }}_bp = create_blueprint(__name__)
+
+
+def init_feature(app):
+    from {{ feature_import }}.config import inject_config
+
+    inject_config(app)
+
+
+def inject_context_vars(app):
+    return {}

@@ -21,12 +21,12 @@ class TestWorkspace:
         monkeypatch.delenv("WORKING_DIR", raising=False)
         assert context.workspace() == Path("/workspace")
 
-    def test_reads_working_dir_env(self, monkeypatch):
-        monkeypatch.setenv("WORKING_DIR", "/custom/path")
-        assert context.workspace() == Path("/custom/path")
+    def test_reads_working_dir_env(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+        assert context.workspace() == tmp_path
 
-    def test_returns_path_object(self, monkeypatch):
-        monkeypatch.setenv("WORKING_DIR", "/some/dir")
+    def test_returns_path_object(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         assert isinstance(context.workspace(), Path)
 
 

@@ -50,6 +50,9 @@ splent() {
   if [ "$1" = "product:select" ]; then
     shift
     eval "$(SPLENT_SILENT=1 command splent product:select "$@" --shell)"
+  elif [ "$1" = "product:deselect" ]; then
+    shift
+    eval "$(command splent product:deselect --shell "$@")"
   else
     command splent "$@"
   fi
@@ -58,6 +61,23 @@ splent() {
 load_splent_env
 enter_workspace
 PROMPT_COMMAND=set_prompt
+
+# Bash autocompletion for splent CLI
+# We override the generated completion to use `command splent` (the binary)
+# instead of the shell function wrapper.
+_splent_completion() {
+    local IFS=$'\n'
+    local response
+    response=$(COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD=$COMP_CWORD _SPLENT_COMPLETE=bash_complete /usr/local/bin/splent)
+    for completion in $response; do
+        IFS=',' read type value <<< "$completion"
+        if [[ $type == 'plain' ]]; then
+            COMPREPLY+=($value)
+        fi
+    done
+    return 0
+}
+complete -o nosort -F _splent_completion splent
 
 # --- END SPLENT CLI ---
 EOF

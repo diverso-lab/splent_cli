@@ -1,33 +1,56 @@
+import os
 import click
-from flask import current_app
-from splent_cli.utils.decorators import requires_app
-from splent_framework.managers.feature_manager import FeatureManager
+from splent_cli.services import context
+from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
-@requires_app
 @click.command(
-    "feature:list", short_help="Lists all features declared in pyproject.toml."
+    "feature:list",
+    short_help="List feature names declared in pyproject.toml (simple, scriptable output).",
 )
 def feature_list():
-    """Lists all features declared in the active product's pyproject.toml."""
-    app = current_app
-    manager = FeatureManager(app)
+    """List features declared in [tool.splent] of the active product's pyproject.toml,
+    grouped by environment (base, dev, prod)."""
+    product = context.require_app()
+    workspace = str(context.workspace())
+    product_dir = os.path.join(workspace, product)
 
     try:
-        features = manager.get_features()
-    except Exception as e:
-        click.echo(click.style(f"❌ Error reading features: {e}", fg="red"))
+        reader = PyprojectReader.for_product(product_dir)
+    except FileNotFoundError:
+        click.secho("❌ pyproject.toml not found in product.", fg="red")
+        raise SystemExit(1)
+
+    base = reader.features
+    dev = reader.features_dev
+    prod = reader.features_prod
+
+    if not base and not dev and not prod:
+        click.secho("ℹ️  No features declared in pyproject.toml.", fg="yellow")
         return
 
-    if not features:
-        click.echo(
-            click.style("ℹ️ No features declared in pyproject.toml.", fg="yellow")
-        )
-        return
+    click.echo()
 
-    click.echo(click.style(f"Declared features ({len(features)}):", fg="green"))
-    for f in features:
-        click.echo(f"- {f}")
+    groups = [
+        ("features", base, "All environments"),
+        ("features_dev", dev, "Dev only"),
+        ("features_prod", prod, "Prod only"),
+    ]
+
+    for key, entries, label in groups:
+        if entries:
+            click.echo(
+                click.style(
+                    f"  {label} — [tool.splent.{key}] ({len(entries)}):", bold=True
+                )
+            )
+            for entry in entries:
+                click.echo(f"    - {entry}")
+            click.echo()
+
+    total = len(set(base + dev + prod))
+    click.echo(click.style(f"  Total: {total} features", fg="bright_black"))
+    click.echo()
 
 
 cli_command = feature_list

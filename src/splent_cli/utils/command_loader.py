@@ -20,7 +20,9 @@ def load_commands(cli_group):
                     module = importlib.import_module(module_name)
                 except Exception as e:
                     if os.getenv("SPLENT_DEBUG"):
-                        click.secho(f"⚠  Skipping {module_name}: {e}", fg="yellow", err=True)
+                        click.secho(
+                            f"⚠  Skipping {module_name}: {e}", fg="yellow", err=True
+                        )
                     continue
 
                 # Prefer an explicit cli_command attribute when present

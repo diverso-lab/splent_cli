@@ -13,6 +13,7 @@ import click
 from pathlib import Path
 
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -21,6 +22,7 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _resolve_editable(feature_ref: str, workspace: str) -> tuple[Path, str, str]:
     """Resolve an editable (non-versioned) feature from the cache."""
@@ -33,7 +35,7 @@ def _resolve_editable(feature_ref: str, workspace: str) -> tuple[Path, str, str]
 
     if "/" in base:
         ns_raw, name = base.split("/", 1)
-        ns = ns_raw.replace("-", "_")
+        ns = normalize_namespace(ns_raw)
     else:
         ns = DEFAULT_NAMESPACE
         name = base
@@ -123,6 +125,7 @@ def _update_contract(pyproject_path: Path, slot: str) -> None:
 # Command
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @click.command(
     "feature:hook:remove",
     short_help="Remove a template hook from a feature's hooks.py.",
@@ -135,6 +138,7 @@ def _update_contract(pyproject_path: Path, slot: str) -> None:
     help="Also remove the hook callback function definition.",
 )
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompt.")
+@context.requires_product
 def feature_hook_remove(feature_ref, slot, with_function, yes):
     """
     Remove a template hook registration from a feature's hooks.py.

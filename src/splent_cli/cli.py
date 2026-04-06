@@ -1,8 +1,11 @@
+import os
+
 import click
 from dotenv import load_dotenv
 
 from splent_cli.utils.dynamic_imports import get_app
 from splent_cli.utils.command_loader import load_commands
+from splent_cli.utils.db_utils import check_db_connection
 
 load_dotenv()
 
@@ -12,8 +15,69 @@ class SPLENTCLI(click.Group):
     Main SPLENT CLI class.
 
     - Automatically injects the Flask app context for commands marked with `requires_app = True`.
+    - Checks DB connectivity for commands marked with `requires_db = True`.
+    - Discovers CLI commands contributed by features via ``app.extensions["splent_feature_commands"]``.
     - Displays commands grouped by category for a cleaner, more readable help output.
     """
+
+    # ── Feature-contributed commands ──────────────────────────────
+
+    def _load_feature_commands(self) -> dict[str, click.BaseCommand]:
+        """Return ``{"feature:<name>": click.Group, ...}`` from the Flask app.
+
+        Each feature that defines CLI commands gets a Click Group registered
+        as ``feature:<short_name>``.  Individual commands become subcommands::
+
+            splent feature:mail config
+            splent feature:mail check --to user@example.com
+
+        Commands are only available when a product is active and the app can
+        be built.  On any failure the result is an empty dict — built-in CLI
+        commands are never affected.
+        """
+        if hasattr(self, "_feature_cmds_cache"):
+            return self._feature_cmds_cache
+
+        self._feature_cmds_cache: dict[str, click.BaseCommand] = {}
+        try:
+            app = get_app()
+            with app.app_context():
+                registry = app.extensions.get("splent_feature_commands", {})
+                for feature_short, commands in registry.items():
+                    cmd_names = ", ".join(c.name for c in commands if c.name)
+                    group = click.Group(
+                        name=f"feature:{feature_short}",
+                        help=f"Commands contributed by splent_feature_{feature_short}.",
+                        short_help=f"Subcommands: {cmd_names}"
+                        if cmd_names
+                        else f"Commands from splent_feature_{feature_short}.",
+                    )
+                    group.requires_app = True  # type: ignore[attr-defined]
+                    for cmd in commands:
+                        group.add_command(cmd)
+                    self._feature_cmds_cache[group.name] = group
+        except Exception as e:
+            if os.getenv("SPLENT_DEBUG"):
+                click.secho(
+                    f"  ⚠ Feature commands not loaded: {e}", fg="yellow", err=True
+                )
+        return self._feature_cmds_cache
+
+    def get_command(self, ctx, cmd_name):
+        # Built-in commands take priority
+        cmd = super().get_command(ctx, cmd_name)
+        if cmd is not None:
+            return cmd
+        # Fall back to feature-contributed command groups
+        feat_cmds = self._load_feature_commands()
+        return feat_cmds.get(cmd_name)
+
+    def list_commands(self, ctx):
+        builtin = super().list_commands(ctx)
+        feat = sorted(self._load_feature_commands().keys())
+        return builtin + feat
+
+    # ── App context injection ─────────────────────────────────────
 
     def invoke(self, ctx):
         cmd_name = ctx.protected_args[0] if ctx.protected_args else None
@@ -21,6 +85,9 @@ class SPLENTCLI(click.Group):
 
         if command and getattr(command, "requires_app", False):
             app = get_app()
+            if getattr(command, "requires_db", False):
+                if not check_db_connection(app):
+                    raise SystemExit(1)
             with app.app_context():
                 return super().invoke(ctx)
 
@@ -28,37 +95,44 @@ class SPLENTCLI(click.Group):
 
     def format_commands(self, ctx, formatter):
         """Group SPLENT commands by category in the CLI help output."""
+        all_cmds = self.list_commands(ctx)
+        feat_cmds = self._load_feature_commands()
         groups = {
             "🌿 Feature Management": [
-                cmd for cmd in self.commands if cmd.startswith("feature:")
+                cmd
+                for cmd in all_cmds
+                if cmd.startswith("feature:") and cmd not in feat_cmds
             ],
             "🏗️ Product Management": [
-                cmd for cmd in self.commands if cmd.startswith("product:")
+                cmd for cmd in all_cmds if cmd.startswith("product:")
             ],
-            "🧬 UVL & Variability": [
-                cmd for cmd in self.commands if cmd.startswith("uvl:")
+            "🧬 SPL & Variability": [
+                cmd for cmd in all_cmds if cmd.startswith(("spl:", "uvl:"))
             ],
-            "🧱 Database": [cmd for cmd in self.commands if cmd.startswith("db:")],
-            "💾 Cache": [cmd for cmd in self.commands if cmd.startswith("cache:")],
+            "🧱 Database": [cmd for cmd in all_cmds if cmd.startswith("db:")],
+            "💾 Cache": [cmd for cmd in all_cmds if cmd.startswith("cache:")],
+            "🔍 Checks": [cmd for cmd in all_cmds if cmd.startswith("check:")],
+            "📦 Export": [cmd for cmd in all_cmds if cmd.startswith("export:")],
+            "🚀 Release": [cmd for cmd in all_cmds if cmd.startswith("release:")],
             "🧰 Utilities": [
                 cmd
-                for cmd in self.commands
-                if cmd.startswith(
-                    ("clear:", "env", "select", "info", "version", "doctor")
-                )
+                for cmd in all_cmds
+                if cmd.startswith(("clear:", "command:", "env:", "env"))
+                or cmd in ("doctor", "tokens:setup", "version")
             ],
             "🐍 Development & QA": [
                 cmd
-                for cmd in self.commands
-                if cmd.startswith(("linter", "test", "coverage", "locust"))
+                for cmd in all_cmds
+                if cmd in ("lint", "coverage", "selenium", "locust", "locust:stop")
             ],
+            "🔌 Feature Commands": [cmd for cmd in all_cmds if cmd in feat_cmds],
         }
+        total = 0
         for title, cmds in groups.items():
-            cmds = [c for c in cmds if c in self.commands]
             if not cmds:
                 continue
 
-            with formatter.section(title):
+            with formatter.section(f"{title} ({len(cmds)})"):
                 rows = []
                 for cmd_name in sorted(cmds):
                     cmd = self.get_command(ctx, cmd_name)
@@ -67,6 +141,9 @@ class SPLENTCLI(click.Group):
                     rows.append((cmd_name, cmd.get_short_help_str()))
                 if rows:
                     formatter.write_dl(rows)
+            total += len(cmds)
+
+        formatter.write(f"\n  {total} commands available.\n")
 
 
 @click.group(cls=SPLENTCLI)

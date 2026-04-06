@@ -126,7 +126,7 @@ class TestProductBuildCommand:
         (docker_dir / ".env.prod.example").write_text("API_KEY=secret\nDB_HOST=localhost\n")
         (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"])
         assert result.exit_code == 0
         env_file = docker_dir / ".env.deploy.example"
         assert env_file.exists()
@@ -138,7 +138,7 @@ class TestProductBuildCommand:
         compose_content = "services:\n  web:\n    image: nginx\n"
         (docker_dir / "docker-compose.prod.yml").write_text(compose_content)
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"])
         assert result.exit_code == 0
         deploy_file = docker_dir / "docker-compose.deploy.yml"
         assert deploy_file.exists()
@@ -151,7 +151,7 @@ class TestProductBuildCommand:
         (docker_dir / ".env.example").write_text("MY_VAR=hello\n")
         (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"])
         assert result.exit_code == 0
         content = (docker_dir / ".env.deploy.example").read_text()
         assert "MY_VAR=hello" in content
@@ -161,13 +161,20 @@ class TestProductBuildCommand:
         docker_dir = product_workspace / "test_app" / "docker"
         (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
 
-        # Create a feature under features/
-        feat_docker = product_workspace / "test_app" / "features" / "splent_io" / "splent_feature_auth" / "docker"
+        # Declare feature in pyproject.toml
+        (product_workspace / "test_app" / "pyproject.toml").write_text(
+            '[project]\nname = "test_app"\nversion = "1.0.0"\n\n'
+            "[tool.splent]\n"
+            'features = ["splent-io/splent_feature_auth"]\n'
+        )
+
+        # Create editable feature at workspace root
+        feat_docker = product_workspace / "splent_feature_auth" / "docker"
         feat_docker.mkdir(parents=True)
         (feat_docker / ".env.example").write_text("AUTH_SECRET=abc\n")
         (feat_docker / "docker-compose.prod.yml").write_text("services:\n  auth:\n    image: auth\n")
 
-        result = runner.invoke(product_build, [])
+        result = runner.invoke(product_build, ["--skip-preflight"], input="y\n")
         assert result.exit_code == 0
         content = (docker_dir / ".env.deploy.example").read_text()
         assert "AUTH_SECRET=abc" in content

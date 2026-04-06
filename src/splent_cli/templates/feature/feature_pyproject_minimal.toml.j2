@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=80.3.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{ feature_name }}"
+version = "0.0.1"
+readme = "README.md"
+requires-python = ">=3.13"
+
+dependencies = [
+
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["*.tests", "*.tests.*"]
+
+[tool.splent]
+cli_version = "{{ cli_version }}"
+
+[tool.splent.contract]
+description = "{{ short_name }} feature"
+
+[tool.splent.contract.provides]
+routes = []
+blueprints = []
+models = []
+commands = []
+
+[tool.splent.contract.requires]
+features = []
+env_vars = []
+
+[tool.splent.contract.extensible]
+services = []
+templates = []
+models = []
+hooks = []
+routes = false

@@ -3,11 +3,12 @@ import subprocess
 import tomllib
 import click
 from splent_cli.services import context
+from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
 
 
 @click.command(
     "feature:env",
-    short_help="Manage .env files for a feature",
+    short_help="Generate or display .env files for a feature.",
 )
 @click.argument("feature_name", required=True)
 @click.option(
@@ -44,32 +45,7 @@ def feature_env(feature_name, generate, env_name):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    feature_entries = (
-        data.get("project", {}).get("optional-dependencies", {}).get("features", [])
-    )
-    if not feature_entries:
-        click.echo("❌ No features declared in pyproject.toml.")
-        raise SystemExit(1)
-
-    # 2️⃣ Buscar la feature pedida con su versión
-    feature_entry = next(
-        (f for f in feature_entries if f.startswith(feature_name)), None
-    )
-    if not feature_entry:
-        click.echo(
-            f"❌ Feature '{feature_name}' not found in [features] section of {pyproject_path}"
-        )
-        raise SystemExit(1)
-
-    # Derive org_safe from the entry itself (e.g. "splent_io/splent_feature_auth@v1")
-    if "/" in feature_entry:
-        org_safe = feature_entry.split("/", 1)[0].replace("-", "_").replace(".", "_")
-        entry_basename = feature_entry.split("/", 1)[1]
-    else:
-        org_safe = "splent_io"
-        entry_basename = feature_entry
-
-    # 3️⃣ Determinar entorno
+    # 2️⃣ Determinar entorno (antes de leer features, para incluir features_dev/prod)
     env_from_var = os.getenv("SPLENT_ENV")
     if not env_name and env_from_var:
         env_name = env_from_var
@@ -77,6 +53,27 @@ def feature_env(feature_name, generate, env_name):
     elif not env_name:
         click.echo("❌ You must specify --dev, --prod, or define SPLENT_ENV=dev|prod.")
         raise SystemExit(1)
+
+    feature_entries = read_features_from_data(data, env_name)
+    if not feature_entries:
+        click.echo("❌ No features declared in pyproject.toml.")
+        raise SystemExit(1)
+
+    # 3️⃣ Buscar la feature pedida con su versión
+    feature_entry = next(
+        (f for f in feature_entries if f.startswith(feature_name)), None
+    )
+    if not feature_entry:
+        click.echo(f"❌ Feature '{feature_name}' not found in pyproject.toml")
+        raise SystemExit(1)
+
+    # Derive org_safe from the entry itself (e.g. "splent_io/splent_feature_auth@v1")
+    if "/" in feature_entry:
+        org_safe = normalize_namespace(feature_entry.split("/", 1)[0])
+        entry_basename = feature_entry.split("/", 1)[1]
+    else:
+        org_safe = "splent_io"
+        entry_basename = feature_entry
 
     # 4️⃣ Ruta del symlink del producto (con versión incluida)
     symlink_path = os.path.join(
