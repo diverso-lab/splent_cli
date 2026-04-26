@@ -31,17 +31,6 @@ def _contract_items(package: dict, key: str) -> list[str]:
     return []
 
 
-def _package_matches(package: dict, query: str) -> bool:
-    haystack = [
-        package.get("name") or "",
-        package.get("full_name") or "",
-        _contract_description(package),
-        " ".join(_contract_items(package, "provides")),
-        " ".join(_contract_items(package, "requires")),
-    ]
-    return query.lower() in " ".join(haystack).lower()
-
-
 def _terminal_width() -> int:
     return min(shutil.get_terminal_size((100, 20)).columns, 120)
 
@@ -100,18 +89,12 @@ def _load_packages() -> list[dict]:
 @click.command("feature:search", short_help="Search for available features.")
 @click.argument("query", required=False)
 @click.option(
-    "--org",
-    default="splent-io",
-    show_default=True,
-    help="GitHub organisation to search in.",
-)
-@click.option(
     "--all",
     "show_all",
     is_flag=True,
     help="Show all packages, not just splent_feature_* ones.",
 )
-def feature_search(query, org, show_all):
+def feature_search(query, show_all):
     """
     List available features.
 
@@ -125,12 +108,6 @@ def feature_search(query, org, show_all):
         splent feature:search auth
         splent feature:search --all
     """
-    if org != "splent-io":
-        click.secho(
-            "  --org is ignored by the configured package index.",
-            fg="yellow",
-        )
-
     click.echo(click.style("\n  Searching features...\n", fg="cyan"))
 
     try:
@@ -146,7 +123,9 @@ def feature_search(query, org, show_all):
         ]
 
     if query:
-        packages = [p for p in packages if _package_matches(p, query)]
+        packages = [
+            p for p in packages if query.lower() in (p.get("name") or "").lower()
+        ]
 
     if not packages:
         msg = "No packages found"
