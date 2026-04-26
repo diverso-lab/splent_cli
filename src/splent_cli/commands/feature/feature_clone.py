@@ -4,6 +4,7 @@ import subprocess
 import requests
 import click
 from splent_cli.services import context
+from splent_cli.services.api_client import SplentAPIError, get_package_by_name
 from splent_cli.utils.cache_utils import make_feature_readonly
 from splent_cli.utils.feature_utils import normalize_namespace
 
@@ -69,6 +70,41 @@ def _parse_full_name(full_name: str):
     return namespace, repo, version
 
 
+def _feature_api_name(repo: str) -> str:
+    if repo.startswith("splent_feature_"):
+        return repo
+    return f"splent_feature_{repo}"
+
+
+def _resolve_full_name_from_api(full_name: str) -> str:
+    raw = full_name
+    version = None
+    if "@" in raw:
+        raw, version = raw.split("@", 1)
+
+    repo = raw.split("/")[-1]
+    api_name = _feature_api_name(repo)
+
+    try:
+        package = get_package_by_name(api_name)
+    except SplentAPIError as exc:
+        click.secho(f"❌ {exc}", fg="red")
+        click.echo("   Check SPLENT_API_URL or start the package index.")
+        raise SystemExit(1) from exc
+
+    if not isinstance(package, dict):
+        click.secho("❌ Invalid package response from API.", fg="red")
+        raise SystemExit(1)
+
+    resolved = package.get("full_name")
+    if not isinstance(resolved, str) or "/" not in resolved:
+        resolved = f"splent-io/{package.get('name') or api_name}"
+
+    if version:
+        return f"{resolved}@{version}"
+    return resolved
+
+
 def _validate_identifier_part(value: str, label: str):
     if not re.fullmatch(r"[a-zA-Z0-9_\-\.]+", value):
         raise SystemExit(
@@ -84,17 +120,18 @@ def _validate_identifier_part(value: str, label: str):
 @click.command(
     "feature:clone",
     short_help="Clone a feature into the local cache.",
-    help="Clone a feature into the local cache namespace.",
+    help="Clone a marketplace feature into the local cache.",
 )
 @click.argument("full_name", required=True)
 def feature_clone(full_name):
     """
-    Clone <namespace>/<repo> into:
+    Clone <feature>, <repo> or <namespace>/<repo> into:
       .splent_cache/features/<namespace>/<repo>@<version>
 
     - If version is omitted, fetches the latest tag or 'main'.
     """
 
+    full_name = _resolve_full_name_from_api(full_name)
     namespace, repo, version = _parse_full_name(full_name)
 
     _validate_identifier_part(namespace, "namespace")
