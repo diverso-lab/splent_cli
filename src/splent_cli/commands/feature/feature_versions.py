@@ -6,6 +6,7 @@ import urllib.request
 import click
 
 from splent_cli.services import compose
+from splent_cli.services.api_client import SplentAPIError, get_package_by_name
 from splent_cli.utils.feature_utils import load_product_features
 
 
@@ -79,6 +80,36 @@ def _pypi_versions(package: str) -> list[str]:
         raise
     except urllib.error.URLError:
         return []
+
+
+def _feature_api_name(feature_name: str) -> str:
+    if feature_name.startswith("splent_feature_"):
+        return feature_name
+    return f"splent_feature_{feature_name}"
+
+
+def _resolve_feature_from_api(namespace_github: str, feature_name: str) -> tuple[str, str]:
+    api_name = _feature_api_name(feature_name)
+
+    try:
+        package = get_package_by_name(api_name)
+    except SplentAPIError as exc:
+        click.secho(f"❌ {exc}", fg="red")
+        click.echo("   Check SPLENT_API_URL or start the package index.")
+        raise SystemExit(1) from exc
+
+    if not isinstance(package, dict):
+        click.secho("❌ Invalid package response from API.", fg="red")
+        raise SystemExit(1)
+
+    full_name = package.get("full_name")
+    if isinstance(full_name, str) and "/" in full_name:
+        _, namespace_github, _, feature_name = compose.parse_feature_identifier(
+            full_name
+        )
+        return namespace_github, feature_name
+
+    return namespace_github, package.get("name") or api_name
 
 
 # ── Version helpers ───────────────────────────────────────────────────────────
@@ -330,6 +361,9 @@ def feature_versions(
         feature_identifier
     )
     feature_name = feature_name.split("@")[0]
+    namespace_github, feature_name = _resolve_feature_from_api(
+        namespace_github, feature_name
+    )
 
     show_github = not only_pypi
     show_pypi = not only_github
