@@ -1,3 +1,6 @@
+import shutil
+import textwrap
+
 import click
 
 from splent_cli.services.api_client import SplentAPIError, get_packages
@@ -39,10 +42,41 @@ def _package_matches(package: dict, query: str) -> bool:
     return query.lower() in " ".join(haystack).lower()
 
 
-def _format_items(items: list[str]) -> str:
+def _terminal_width() -> int:
+    return min(shutil.get_terminal_size((100, 20)).columns, 120)
+
+
+def _echo_wrapped(label: str, value: str, width: int) -> None:
+    prefix = f"  {label:<12}"
+    wrapped = textwrap.wrap(
+        value or "-",
+        width=max(width - len(prefix), 30),
+        subsequent_indent=" " * len(prefix),
+    )
+    if not wrapped:
+        click.echo(prefix + "-")
+        return
+
+    click.echo(prefix + wrapped[0])
+    for line in wrapped[1:]:
+        click.echo(line)
+
+
+def _echo_contract_section(label: str, items: list[str], width: int) -> None:
+    click.echo(f"  {label}")
     if not items:
-        return "-"
-    return ", ".join(items)
+        click.echo("    -")
+        return
+
+    for item in items:
+        wrapped = textwrap.wrap(
+            item,
+            width=max(width - 6, 30),
+            initial_indent="    - ",
+            subsequent_indent="      ",
+        )
+        for line in wrapped:
+            click.echo(line)
 
 
 def _repo_url(package: dict) -> str | None:
@@ -60,50 +94,50 @@ def _load_packages() -> list[dict]:
     data = get_packages()
     if isinstance(data, list):
         return [item for item in data if isinstance(item, dict)]
-    raise SplentAPIError("The SPLENT API returned an unexpected packages payload.")
+    raise SplentAPIError("Unexpected package response.")
 
 
-@click.command("feature:search", short_help="Search for available SPLENT packages.")
+@click.command("feature:search", short_help="Search for available features.")
 @click.argument("query", required=False)
 @click.option(
     "--org",
     default="splent-io",
     show_default=True,
-    help="Deprecated. The API decides which GitHub organisation to read.",
+    help="GitHub organisation to search in.",
 )
 @click.option(
     "--all",
     "show_all",
     is_flag=True,
-    help="Show all API packages, not just splent_feature_* packages.",
+    help="Show all packages, not just splent_feature_* ones.",
 )
 def feature_search(query, org, show_all):
     """
-    List available packages from the SPLENT API.
+    List available features.
 
     \b
-    By default reads SPLENT_API_URL/api/packages and filters by packages that
-    match the splent_feature_* naming convention.
+    By default filters packages that match the splent_feature_* naming
+    convention.
     Optionally filter by QUERY (partial name match).
 
     Examples:
         splent feature:search
         splent feature:search auth
-        SPLENT_API_URL=http://127.0.0.1:5000 splent feature:search
+        splent feature:search --all
     """
     if org != "splent-io":
         click.secho(
-            "⚠️  --org is ignored when searching via the SPLENT API.",
+            "  --org is ignored by the configured package index.",
             fg="yellow",
         )
 
-    click.echo(click.style("\n🔍 Searching packages in SPLENT API...\n", fg="cyan"))
+    click.echo(click.style("\n  Searching features...\n", fg="cyan"))
 
     try:
         packages = _load_packages()
     except SplentAPIError as exc:
         click.secho(f"❌ {exc}", fg="red")
-        click.echo("   Start splent-api or set SPLENT_API_URL to the API base URL.")
+        click.echo("   Check SPLENT_API_URL or start the package index.")
         raise SystemExit(1)
 
     if not show_all:
@@ -121,28 +155,28 @@ def feature_search(query, org, show_all):
         click.secho(f"ℹ️  {msg}.", fg="yellow")
         return
 
-    click.secho(f"Found {len(packages)} package(s):\n", fg="cyan")
+    click.secho(f"  Found {len(packages)} package(s):\n", fg="cyan")
 
-    col = max(len(p.get("name") or "") for p in packages) + 2
+    width = _terminal_width()
 
     for package in sorted(packages, key=lambda p: p.get("name") or ""):
         name = package.get("name") or "-"
         desc = _contract_description(package)
         updated = _updated_at(package)
-        provides = _format_items(_contract_items(package, "provides"))
-        requires = _format_items(_contract_items(package, "requires"))
+        provides = _contract_items(package, "provides")
+        requires = _contract_items(package, "requires")
 
-        click.echo(f"  {name:<{col}} updated {updated}  {desc}")
-        click.echo(f"  {'':<{col}} provides: {provides}")
-        click.echo(f"  {'':<{col}} requires: {requires}")
+        click.secho(f"  {name}", bold=True)
+        _echo_wrapped("updated", updated, width)
+        _echo_wrapped("summary", desc, width)
+        _echo_contract_section("provides", provides, width)
+        _echo_contract_section("requires", requires, width)
 
         url = _repo_url(package)
         if url:
-            click.echo(f"  {'':<{col}} {url}")
+            _echo_wrapped("repo", url, width)
 
         click.echo()
-
-    click.echo("Use SPLENT_API_URL to point this command at another splent-api server.")
 
 
 cli_command = feature_search
