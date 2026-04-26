@@ -81,6 +81,7 @@ def _resolve_full_name_from_api(full_name: str) -> str:
     version = None
     if "@" in raw:
         raw, version = raw.split("@", 1)
+        
 
     repo = raw.split("/")[-1]
     api_name = _feature_api_name(repo)
