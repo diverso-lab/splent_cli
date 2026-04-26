@@ -5,6 +5,7 @@ import tomllib
 import click
 import requests
 from splent_cli.services import context, compose
+from splent_cli.services.api_client import SplentAPIError, get_package_by_name
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
@@ -166,6 +167,32 @@ def feature_install(feature_identifier, env_scope, mode, version):
     env_name = os.getenv("SPLENT_ENV", "dev")
 
     # ── Parse identifier ──────────────────────────────────────────────
+    namespace, namespace_github, namespace_fs, feature_name = (
+        compose.parse_feature_identifier(feature_identifier)
+    )
+
+    api_feature_name = (
+        feature_name
+        if feature_name.startswith("splent_feature_")
+        else f"splent_feature_{feature_name}"
+    )
+    try:
+        package = get_package_by_name(api_feature_name)
+    except SplentAPIError as exc:
+        click.secho(f"❌ {exc}", fg="red")
+        click.echo("   Check SPLENT_API_URL or start the package index.")
+        raise SystemExit(1)
+
+    if not isinstance(package, dict):
+        click.secho("❌ Invalid package response from API.", fg="red")
+        raise SystemExit(1)
+
+    package_name = package.get("name") or api_feature_name
+    full_name = package.get("full_name")
+    if isinstance(full_name, str) and "/" in full_name:
+        feature_identifier = full_name
+    else:
+        feature_identifier = f"{namespace_github}/{package_name}"
     namespace, namespace_github, namespace_fs, feature_name = (
         compose.parse_feature_identifier(feature_identifier)
     )
