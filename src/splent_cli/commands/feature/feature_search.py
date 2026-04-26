@@ -1,6 +1,3 @@
-import shutil
-import textwrap
-
 import click
 
 from splent_cli.services.api_client import SplentAPIError, get_packages
@@ -9,67 +6,6 @@ from splent_cli.services.api_client import SplentAPIError, get_packages
 def _contract_description(package: dict) -> str:
     contract = package.get("contract") or {}
     return contract.get("description") or ""
-
-
-def _contract_items(package: dict, key: str) -> list[str]:
-    contract = package.get("contract") or {}
-    values = contract.get(key) or {}
-
-    if isinstance(values, dict):
-        items = []
-        for name, value in sorted(values.items()):
-            if isinstance(value, list):
-                if value:
-                    items.append(f"{name}: {', '.join(str(item) for item in value)}")
-            elif value:
-                items.append(f"{name}: {value}")
-        return items
-    if isinstance(values, list):
-        return sorted(str(name) for name in values)
-    if isinstance(values, str):
-        return [values]
-    return []
-
-
-def _terminal_width() -> int:
-    return min(shutil.get_terminal_size((100, 20)).columns, 120)
-
-
-def _echo_wrapped(label: str, value: str, width: int) -> None:
-    prefix = f"  {label:<12}"
-    wrapped = textwrap.wrap(
-        value or "-",
-        width=max(width - len(prefix), 30),
-        subsequent_indent=" " * len(prefix),
-    )
-    if not wrapped:
-        click.echo(prefix + "-")
-        return
-
-    click.echo(prefix + wrapped[0])
-    for line in wrapped[1:]:
-        click.echo(line)
-
-
-def _echo_contract_section(label: str, items: list[str], width: int) -> None:
-    click.echo(f"  {label}")
-    if not items:
-        click.echo("    -")
-        return
-
-    for item in items:
-        wrapped = textwrap.wrap(
-            item,
-            width=max(width - 6, 30),
-            initial_indent="    - ",
-            subsequent_indent="      ",
-        )
-        for line in wrapped:
-            click.echo(line)
-
-
-def _repo_url(package: dict) -> str | None:
-    return package.get("html_url") or None
 
 
 def _updated_at(package: dict) -> str:
@@ -136,26 +72,16 @@ def feature_search(query, show_all):
 
     click.secho(f"  Found {len(packages)} package(s):\n", fg="cyan")
 
-    width = _terminal_width()
+    name_col = max(len(p.get("name") or "-") for p in packages) + 2
+    date_col = 12
 
     for package in sorted(packages, key=lambda p: p.get("name") or ""):
         name = package.get("name") or "-"
         desc = _contract_description(package)
         updated = _updated_at(package)
-        provides = _contract_items(package, "provides")
-        requires = _contract_items(package, "requires")
+        click.echo(f"  {name:<{name_col}} {updated:<{date_col}} {desc}")
 
-        click.secho(f"  {name}", bold=True)
-        _echo_wrapped("updated", updated, width)
-        _echo_wrapped("summary", desc, width)
-        _echo_contract_section("provides", provides, width)
-        _echo_contract_section("requires", requires, width)
-
-        url = _repo_url(package)
-        if url:
-            _echo_wrapped("repo", url, width)
-
-        click.echo()
+    click.echo()
 
 
 cli_command = feature_search
