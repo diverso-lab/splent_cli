@@ -12,13 +12,30 @@ def _base_url() -> str:
     return os.getenv("SPLENT_API_URL", "http://127.0.0.1:5000").rstrip("/")
 
 
-def get(path: str):
+def _headers() -> dict[str, str]:
+    token = os.getenv("SPLENT_API_TOKEN")
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _request(method: str, path: str, json_body: dict | None = None):
     if not path.startswith("/"):
         raise ValueError("API path must start with '/'")
 
     try:
-        response = requests.get(f"{_base_url()}{path}", timeout=10)
+        response = requests.request(
+            method,
+            f"{_base_url()}{path}",
+            timeout=10,
+            headers=_headers(),
+            json=json_body,
+        )
         response.raise_for_status()
+
+        if not response.content:
+            return {}
+
         return response.json()
 
     except requests.exceptions.JSONDecodeError as exc:
@@ -28,6 +45,14 @@ def get(path: str):
         raise SplentAPIError(f"SPLENT API returned HTTP {status}.") from exc
     except requests.exceptions.RequestException as exc:
         raise SplentAPIError(f"Could not connect to the SPLENT API: {exc}") from exc
+
+
+def get(path: str):
+    return _request("GET", path)
+
+
+def post(path: str, json: dict | None = None):
+    return _request("POST", path, json_body=json)
 
 
 def get_packages():
