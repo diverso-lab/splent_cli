@@ -9,7 +9,8 @@ def _contract_description(package: dict) -> str:
 
 
 def _updated_at(package: dict) -> str:
-    value = package.get("updated_at") or ""
+    metadata = package.get("metadata") or {}
+    value = metadata.get("updated_at") or package.get("updated_at") or ""
     if "T" in value:
         return value.split("T", 1)[0]
     return value or "-"

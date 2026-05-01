@@ -39,13 +39,13 @@ def _git_remote_url(feature_path: Path) -> str | None:
         return None
 
 
-def _parse_feature_ref(feature_ref: str) -> tuple[str, str, str | None]:
+def _parse_full_name(full_name: str) -> tuple[str, str, str | None]:
     # Separa owner, nombre y versión; sin owner usa splent-io.
-    if "/" in feature_ref:
-        owner, rest = feature_ref.split("/", 1)
+    if "/" in full_name:
+        owner, rest = full_name.split("/", 1)
     else:
         owner = DEFAULT_OWNER
-        rest = feature_ref
+        rest = full_name
 
     name, _, version = rest.partition("@")
     return owner.replace("_", "-"), name, version or None
@@ -82,7 +82,7 @@ def _repo_from_remote(remote_url: str | None) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _canonical_feature_ref(owner: str, name: str, version: str | None) -> str:
+def _canonical_full_name(owner: str, name: str, version: str | None) -> str:
     ref = f"{owner}/{name}"
     if version:
         return f"{ref}@{version}"
@@ -138,10 +138,10 @@ def _build_payload(
     feature_path: Path,
     namespace: str,
     name: str,
-    feature_ref: str,
+    full_name: str,
     owner: str | None = None,
 ) -> dict:
-    ref_owner, _, ref_version = _parse_feature_ref(feature_ref)
+    ref_owner, _, ref_version = _parse_full_name(full_name)
     github_owner = (owner or ref_owner).replace("_", "-")
 
     # Construye un payload compatible con la API actual y con metadatos extendidos.
@@ -155,11 +155,10 @@ def _build_payload(
     repo_owner = repo_owner or github_owner
     repo_name = repo_name or name
     repo_url = _safe_remote_url(remote_url) or f"https://github.com/{repo_owner}/{repo_name}.git"
-    canonical_ref = _canonical_feature_ref(github_owner, name, ref_version)
+    canonical_name = _canonical_full_name(github_owner, name, ref_version)
 
     return {
-        "feature_ref": canonical_ref,
-        "full_name": canonical_ref,
+        "full_name": canonical_name,
         "name": name,
         "description": marketplace_contract["description"],
         "provides": marketplace_contract["provides"],
@@ -208,7 +207,7 @@ def _login_to_marketplace(token: str | None) -> None:
 
 
 @click.command("feature:publish", short_help="Publish feature metadata to the marketplace.")
-@click.argument("feature_ref", required=True)
+@click.argument("full_name", required=True)
 @click.option(
     "--token",
     default=None,
@@ -219,17 +218,17 @@ def _login_to_marketplace(token: str | None) -> None:
     default=None,
     help="GitHub user or organization that owns the feature repository.",
 )
-def feature_publish(feature_ref, token, owner):
+def feature_publish(full_name, token, owner):
     workspace = str(context.workspace())
 
     try:
         _login_to_marketplace(token)
-        feature_path, namespace, name = _resolve_feature(feature_ref, workspace)
+        feature_path, namespace, name = _resolve_feature(full_name, workspace)
         namespace = normalize_namespace(namespace)
-        payload = _build_payload(feature_path, namespace, name, feature_ref, owner)
+        payload = _build_payload(feature_path, namespace, name, full_name, owner)
 
         click.echo()
-        click.secho(f"Publishing {payload['feature_ref']}...", bold=True)
+        click.secho(f"Publishing {payload['full_name']}...", bold=True)
         click.echo(f"  repository: {payload['repository']}")
         click.echo(f"  owner:      {payload['owner']}")
 
