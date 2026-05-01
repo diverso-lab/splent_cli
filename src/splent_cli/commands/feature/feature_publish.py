@@ -219,7 +219,6 @@ def _login_to_marketplace(token: str | None) -> None:
     default=None,
     help="GitHub user or organization that owns the feature repository.",
 )
-@context.requires_product
 def feature_publish(feature_ref, token, owner):
     workspace = str(context.workspace())
 
