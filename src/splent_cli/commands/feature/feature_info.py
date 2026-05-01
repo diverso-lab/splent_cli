@@ -69,11 +69,12 @@ def _echo_contract_section(label: str, items: list[str], width: int) -> None:
 
 
 def _repo_url(package: dict) -> str | None:
-    return package.get("html_url") or None
+    return package.get("repo_url") or None
 
 
 def _updated_at(package: dict) -> str:
-    value = package.get("updated_at") or ""
+    metadata = package.get("metadata") or {}
+    value = metadata.get("updated_at") or package.get("updated_at") or ""
     if "T" in value:
         return value.split("T", 1)[0]
     return value or "-"

@@ -190,9 +190,16 @@ def feature_install(feature_identifier, env_scope, mode, version):
     package_name = package.get("name") or api_feature_name
     full_name = package.get("full_name")
     if isinstance(full_name, str) and "/" in full_name:
-        feature_identifier = full_name
+        feature_identifier, _, package_version = full_name.partition("@")
+        if package_version and not version:
+            version = package_version
     else:
-        feature_identifier = f"{namespace_github}/{package_name}"
+        repository = package.get("repository")
+        if isinstance(repository, str) and "/" in repository:
+            feature_identifier = repository
+        else:
+            owner = package.get("owner") or namespace_github
+            feature_identifier = f"{owner}/{package_name}"
     namespace, namespace_github, namespace_fs, feature_name = (
         compose.parse_feature_identifier(feature_identifier)
     )
