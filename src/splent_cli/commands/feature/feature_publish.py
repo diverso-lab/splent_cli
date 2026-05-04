@@ -51,12 +51,29 @@ def _parse_full_name(full_name: str) -> tuple[str, str, str | None]:
     return owner.replace("_", "-"), name, version or None
 
 
-def _safe_remote_url(remote_url: str | None) -> str | None:
+def _browser_repo_url(remote_url: str | None) -> str | None:
     if not remote_url:
         return None
 
-    # Evita publicar tokens si el remote HTTPS los incluye.
-    return re.sub(r"https://[^/@]+@", "https://", remote_url)
+    repo_owner, repo_name = _repo_from_remote(remote_url)
+    if repo_owner and repo_name:
+        return f"https://github.com/{repo_owner}/{repo_name.removesuffix('.git')}"
+
+    parsed = urlparse(remote_url)
+    if parsed.scheme in {"http", "https"} and parsed.hostname:
+        netloc = parsed.hostname
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        path = parsed.path.removesuffix(".git")
+        return parsed._replace(
+            netloc=netloc,
+            path=path,
+            params="",
+            query="",
+            fragment="",
+        ).geturl()
+
+    return None
 
 
 def _repo_from_remote(remote_url: str | None) -> tuple[str | None, str | None]:
@@ -154,7 +171,10 @@ def _build_payload(
     repo_owner, repo_name = _repo_from_remote(remote_url)
     repo_owner = repo_owner or github_owner
     repo_name = repo_name or name
-    repo_url = _safe_remote_url(remote_url) or f"https://github.com/{repo_owner}/{repo_name}.git"
+    repo_url = (
+        _browser_repo_url(remote_url)
+        or f"https://github.com/{repo_owner}/{repo_name.removesuffix('.git')}"
+    )
     canonical_name = _canonical_full_name(github_owner, name, ref_version)
 
     return {

@@ -81,6 +81,12 @@ def _updated_at(package: dict) -> str:
 
 
 def _feature_api_name(feature_name: str) -> str:
+    if "/" in feature_name:
+        owner, name = feature_name.split("/", 1)
+        if name.startswith("splent_feature_"):
+            return f"{owner}/{name}"
+        return f"{owner}/splent_feature_{name}"
+
     if feature_name.startswith("splent_feature_"):
         return feature_name
     return f"splent_feature_{feature_name}"

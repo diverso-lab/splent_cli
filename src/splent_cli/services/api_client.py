@@ -60,4 +60,4 @@ def get_packages():
 
 
 def get_package_by_name(name: str):
-    return get(f"/api/packages/{quote(name, safe='')}")
+    return get(f"/api/packages/{quote(name, safe='/')}")
