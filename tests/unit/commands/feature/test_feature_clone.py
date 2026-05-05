@@ -1,4 +1,5 @@
 """Tests for feature:clone — path traversal validation and error handling."""
+
 import subprocess
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -8,19 +9,25 @@ from splent_cli.commands.feature.feature_clone import (
     _build_repo_url,
 )
 
+_RESOLVE = (
+    "splent_cli.commands.feature.feature_clone._resolve_full_name_from_api"
+)
+
 
 class TestPathTraversalValidation:
     def test_rejects_path_traversal_in_namespace(self, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         runner = CliRunner(mix_stderr=False)
-        result = runner.invoke(feature_clone, ["../../evil/repo@v1.0.0"])
+        with patch(_RESOLVE, return_value="../../evil/repo@v1.0.0"):
+            result = runner.invoke(feature_clone, ["../../evil/repo@v1.0.0"])
         assert result.exit_code == 1
         assert "Invalid" in result.output
 
     def test_rejects_slash_in_repo_name(self, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         runner = CliRunner(mix_stderr=False)
-        result = runner.invoke(feature_clone, ["org/re/po@v1.0.0"])
+        with patch(_RESOLVE, return_value="org/re/po@v1.0.0"):
+            result = runner.invoke(feature_clone, ["org/re/po@v1.0.0"])
         # re/po as repo name after split — "re" is valid, "po@v1.0.0" is
         # valid, depends on split. Actually the split is on "/" so
         # "org/re/po@v1.0.0" → namespace="org", rest="re/po@v1.0.0"
@@ -35,11 +42,13 @@ class TestPathTraversalValidation:
 
     def test_rejects_special_chars(self):
         import pytest
+
         with pytest.raises(SystemExit):
             _validate_identifier_part("../../evil", "namespace")
 
     def test_rejects_empty_string(self):
         import pytest
+
         with pytest.raises(SystemExit):
             _validate_identifier_part("", "namespace")
 
@@ -47,19 +56,25 @@ class TestPathTraversalValidation:
 class TestTokenNotExposedInURL:
     def test_display_url_has_no_token_https(self, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "secret_token_abc")
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=False):
+        with patch(
+            "splent_cli.utils.git_url._ssh_available", return_value=False
+        ):
             _, display_url = _build_repo_url("myorg", "myrepo")
         assert "secret_token_abc" not in display_url
         assert "github.com/myorg/myrepo" in display_url
 
     def test_real_url_contains_token_https(self, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "secret_token_abc")
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=False):
+        with patch(
+            "splent_cli.utils.git_url._ssh_available", return_value=False
+        ):
             real_url, _ = _build_repo_url("myorg", "myrepo")
         assert "secret_token_abc" in real_url
 
     def test_ssh_both_urls_equal(self, monkeypatch):
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=True):
+        with patch(
+            "splent_cli.utils.git_url._ssh_available", return_value=True
+        ):
             real_url, display_url = _build_repo_url("myorg", "myrepo")
         assert real_url == display_url
         assert "@github.com" in real_url
@@ -73,13 +88,17 @@ class TestRepoNotFound:
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         runner = CliRunner(mix_stderr=False)
 
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=False), \
-             patch(
+        with (
+            patch(
+                "splent_cli.utils.git_url._ssh_available", return_value=False
+            ),
+            patch(
                 "splent_cli.commands.feature.feature_clone.subprocess.run"
-             ) as mock_run, \
-             patch(
+            ) as mock_run,
+            patch(
                 "splent_cli.commands.feature.feature_clone.requests.get"
-             ) as mock_get:
+            ) as mock_get,
+        ):
             mock_run.side_effect = subprocess.CalledProcessError(
                 128, "git clone"
             )
@@ -93,10 +112,7 @@ class TestRepoNotFound:
             )
 
         assert result.exit_code == 1
-        assert (
-            "not found" in result.output.lower()
-            or "❌" in result.output
-        )
+        assert "not found" in result.output.lower() or "❌" in result.output
         # Crucially: no traceback
         assert "Traceback" not in result.output
         assert "CalledProcessError" not in result.output
