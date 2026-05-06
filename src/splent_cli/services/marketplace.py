@@ -1,12 +1,18 @@
-
 import os
 from pathlib import Path
+
+import requests
 
 from splent_cli.services import context
 
 
 MARKETPLACE_TOKEN_VAR = "SPLENT_API_TOKEN"
 MARKETPLACE_API_URL_VAR = "SPLENT_API_URL"
+DEFAULT_API_URL = "https://api.splent.io"
+
+
+class MarketplaceLoginError(RuntimeError):
+    pass
 
 
 def _workspace_env_path() -> Path:
@@ -55,3 +61,28 @@ def unset_env_var(key: str) -> None:
     updated = [line for line in lines if not line.startswith(prefix)]
     _write_env_lines(updated)
     os.environ.pop(key, None)
+
+
+def validate_api_token(api_url: str, token: str) -> bool:
+    url = api_url.rstrip("/")
+
+    try:
+        response = requests.get(
+            f"{url}/api/auth/check",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise MarketplaceLoginError(
+            f"Could not connect to the SPLENT API: {exc}"
+        ) from exc
+
+    if response.status_code == 200:
+        return True
+
+    if response.status_code in {401, 403}:
+        return False
+
+    raise MarketplaceLoginError(
+        f"SPLENT API returned HTTP {response.status_code}."
+    )
