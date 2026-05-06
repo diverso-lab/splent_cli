@@ -23,28 +23,7 @@ def _load_packages() -> list[dict]:
     raise SplentAPIError("Unexpected package response.")
 
 
-@click.command("feature:search", short_help="Search for available features.")
-@click.argument("query", required=False)
-@click.option(
-    "--all",
-    "show_all",
-    is_flag=True,
-    help="Show all packages, not just splent_feature_* ones.",
-)
-def feature_search(query, show_all):
-    """
-    List available features.
-
-    \b
-    By default filters packages that match the splent_feature_* naming
-    convention.
-    Optionally filter by QUERY (partial name match).
-
-    Examples:
-        splent feature:search
-        splent feature:search auth
-        splent feature:search --all
-    """
+def _run_search(query, show_all):
     click.echo(click.style("\n  Searching features...\n", fg="cyan"))
 
     try:
@@ -56,12 +35,16 @@ def feature_search(query, show_all):
 
     if not show_all:
         packages = [
-            p for p in packages if (p.get("name") or "").startswith("splent_feature_")
+            p
+            for p in packages
+            if (p.get("name") or "").startswith("splent_feature_")
         ]
 
     if query:
         packages = [
-            p for p in packages if query.lower() in (p.get("name") or "").lower()
+            p
+            for p in packages
+            if query.lower() in (p.get("name") or "").lower()
         ]
 
     if not packages:
@@ -85,4 +68,21 @@ def feature_search(query, show_all):
     click.echo()
 
 
-cli_command = feature_search
+def _search_options(func):
+    func = click.argument("query", required=False)(func)
+    func = click.option(
+        "--all",
+        "show_all",
+        is_flag=True,
+        help="Show all packages, not just splent_feature_* ones.",
+    )(func)
+    return func
+
+
+@click.command("feature:search", short_help="Search for available features.")
+@_search_options
+def feature_search(query, show_all):
+    """
+    List available marketplace features.
+    """
+    _run_search(query, show_all)

@@ -48,9 +48,11 @@ class SPLENTCLI(click.Group):
                     group = click.Group(
                         name=f"feature:{feature_short}",
                         help=f"Commands contributed by splent_feature_{feature_short}.",
-                        short_help=f"Subcommands: {cmd_names}"
-                        if cmd_names
-                        else f"Commands from splent_feature_{feature_short}.",
+                        short_help=(
+                            f"Subcommands: {cmd_names}"
+                            if cmd_names
+                            else f"Commands from splent_feature_{feature_short}."
+                        ),
                     )
                     group.requires_app = True  # type: ignore[attr-defined]
                     for cmd in commands:
@@ -59,7 +61,9 @@ class SPLENTCLI(click.Group):
         except Exception as e:
             if os.getenv("SPLENT_DEBUG"):
                 click.secho(
-                    f"  ⚠ Feature commands not loaded: {e}", fg="yellow", err=True
+                    f"  ⚠ Feature commands not loaded: {e}",
+                    fg="yellow",
+                    err=True,
                 )
         return self._feature_cmds_cache
 
@@ -98,10 +102,17 @@ class SPLENTCLI(click.Group):
         all_cmds = self.list_commands(ctx)
         feat_cmds = self._load_feature_commands()
         groups = {
+            "🛒 Marketplace": [
+                cmd
+                for cmd in all_cmds
+                if cmd.startswith("marketplace:") or cmd == "feature:search"
+            ],
             "🌿 Feature Management": [
                 cmd
                 for cmd in all_cmds
-                if cmd.startswith("feature:") and cmd not in feat_cmds
+                if cmd.startswith("feature:")
+                and cmd not in feat_cmds
+                and cmd != "feature:search"
             ],
             "🏗️ Product Management": [
                 cmd for cmd in all_cmds if cmd.startswith("product:")
@@ -112,8 +123,12 @@ class SPLENTCLI(click.Group):
             "🧱 Database": [cmd for cmd in all_cmds if cmd.startswith("db:")],
             "💾 Cache": [cmd for cmd in all_cmds if cmd.startswith("cache:")],
             "🔍 Checks": [cmd for cmd in all_cmds if cmd.startswith("check:")],
-            "📦 Export": [cmd for cmd in all_cmds if cmd.startswith("export:")],
-            "🚀 Release": [cmd for cmd in all_cmds if cmd.startswith("release:")],
+            "📦 Export": [
+                cmd for cmd in all_cmds if cmd.startswith("export:")
+            ],
+            "🚀 Release": [
+                cmd for cmd in all_cmds if cmd.startswith("release:")
+            ],
             "🧰 Utilities": [
                 cmd
                 for cmd in all_cmds
@@ -123,9 +138,12 @@ class SPLENTCLI(click.Group):
             "🐍 Development & QA": [
                 cmd
                 for cmd in all_cmds
-                if cmd in ("lint", "coverage", "selenium", "locust", "locust:stop")
+                if cmd
+                in ("lint", "coverage", "selenium", "locust", "locust:stop")
             ],
-            "🔌 Feature Commands": [cmd for cmd in all_cmds if cmd in feat_cmds],
+            "🔌 Feature Commands": [
+                cmd for cmd in all_cmds if cmd in feat_cmds
+            ],
         }
         total = 0
         for title, cmds in groups.items():
