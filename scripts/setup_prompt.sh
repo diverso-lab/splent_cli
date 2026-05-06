@@ -53,6 +53,12 @@ splent() {
   elif [ "$1" = "product:deselect" ]; then
     shift
     eval "$(command splent product:deselect --shell "$@")"
+  elif [ "$1" = "marketplace:login" ]; then
+    shift
+    eval "$(command splent marketplace:login --shell "$@")"
+  elif [ "$1" = "marketplace:logout" ]; then
+    shift
+    eval "$(command splent marketplace:logout --shell "$@")"
   else
     command splent "$@"
   fi
