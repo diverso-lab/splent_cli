@@ -13,12 +13,24 @@ from splent_cli.commands.feature.feature_search import (
     _updated_at,
     feature_search,
 )
-from splent_cli.services.api_client import SplentAPIError
+from splent_cli.services.api_client import SplentAPIAuthError, SplentAPIError
 
 
 @pytest.fixture
 def runner():
     return CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def logged_in(monkeypatch):
+    monkeypatch.setattr(
+        "splent_cli.commands.feature.feature_search.load_cli_env",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "splent_cli.commands.feature.feature_search.marketplace.is_logged_in",
+        lambda: True,
+    )
 
 
 def _package(name, description="", updated_at="2026-05-04T10:00:00Z"):
@@ -157,3 +169,34 @@ class TestFeatureSearchCommand:
         assert result.exit_code == 1
         assert "Could not connect" in result.output
         assert "Check SPLENT_API_URL" in result.output
+
+    def test_exits_with_login_message_when_auth_fails(self, runner):
+        with patch(
+            "splent_cli.commands.feature.feature_search.get_packages",
+            side_effect=SplentAPIAuthError(
+                "Marketplace login required. Run: splent marketplace:login"
+            ),
+        ):
+            result = runner.invoke(feature_search, ["--all"])
+
+        assert result.exit_code == 1
+        assert "Marketplace login required" in result.output
+        assert "splent marketplace:login" in result.output
+        assert "Check SPLENT_API_URL" not in result.output
+
+    def test_requires_marketplace_login_before_loading_packages(
+        self, runner, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "splent_cli.commands.feature.feature_search.marketplace.is_logged_in",
+            lambda: False,
+        )
+
+        with patch(
+            "splent_cli.commands.feature.feature_search.get_packages"
+        ) as get_packages:
+            result = runner.invoke(feature_search, ["--all"])
+
+        assert result.exit_code == 1
+        assert "Marketplace login required" in result.output
+        get_packages.assert_not_called()

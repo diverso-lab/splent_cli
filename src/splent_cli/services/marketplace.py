@@ -4,10 +4,12 @@ from pathlib import Path
 import requests
 
 from splent_cli.services import context
+from splent_cli.services.env import cli_env_path
 
 
 MARKETPLACE_TOKEN_VAR = "SPLENT_API_TOKEN"
 MARKETPLACE_API_URL_VAR = "SPLENT_API_URL"
+MARKETPLACE_AUTH_VAR = "SPLENT_MARKETPLACE_AUTH"
 DEFAULT_API_URL = "https://api.splent.io"
 
 
@@ -16,6 +18,10 @@ class MarketplaceLoginError(RuntimeError):
 
 
 def _workspace_env_path() -> Path:
+    env_path = cli_env_path()
+    if env_path.exists():
+        return env_path
+
     try:
         return context.workspace() / ".env"
     except SystemExit:
@@ -63,13 +69,29 @@ def unset_env_var(key: str) -> None:
     os.environ.pop(key, None)
 
 
-def validate_api_token(api_url: str, token: str) -> bool:
+def clear_env_var(key: str) -> None:
+    set_env_var(key, '""')
+    os.environ.pop(key, None)
+
+
+def token_value() -> str:
+    return (os.getenv(MARKETPLACE_TOKEN_VAR) or "").strip().strip("\"'")
+
+
+def is_logged_in() -> bool:
+    return os.getenv(MARKETPLACE_AUTH_VAR) == "true" and bool(token_value())
+
+
+def validate_api_token(api_url: str, token: str | None = None) -> bool:
     url = api_url.rstrip("/")
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
     try:
         response = requests.get(
             f"{url}/api/auth/check",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             timeout=10,
         )
     except requests.exceptions.RequestException as exc:

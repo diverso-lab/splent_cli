@@ -125,6 +125,102 @@ class TestBrowserUrl:
 
 
 # ---------------------------------------------------------------------------
+# Marketplace authentication
+# ---------------------------------------------------------------------------
+
+
+class TestMarketplaceLogin:
+    def test_token_argument_is_saved_for_current_publish(
+        self, monkeypatch, feature_publish_module
+    ):
+        monkeypatch.delenv("SPLENT_API_TOKEN", raising=False)
+
+        feature_publish_module._login_to_marketplace("abc123")
+
+        assert feature_publish_module.os.getenv("SPLENT_API_TOKEN") == "abc123"
+
+    def test_logged_in_token_is_reused(
+        self, monkeypatch, feature_publish_module
+    ):
+        monkeypatch.setenv("SPLENT_API_TOKEN", "existing")
+        monkeypatch.setenv("SPLENT_MARKETPLACE_AUTH", "true")
+        monkeypatch.setattr(
+            feature_publish_module,
+            "load_cli_env",
+            lambda: None,
+        )
+
+        feature_publish_module._login_to_marketplace(None)
+
+        assert feature_publish_module.os.getenv("SPLENT_API_TOKEN") == "existing"
+
+    def test_existing_token_without_login_is_rejected(
+        self, monkeypatch, feature_publish_module
+    ):
+        monkeypatch.setenv("SPLENT_API_TOKEN", "existing")
+        monkeypatch.delenv("SPLENT_MARKETPLACE_AUTH", raising=False)
+        monkeypatch.setattr(
+            feature_publish_module,
+            "load_cli_env",
+            lambda: None,
+        )
+
+        with pytest.raises(
+            feature_publish_module.SplentAPIError,
+            match="login is required",
+        ):
+            feature_publish_module._login_to_marketplace(None)
+
+    def test_token_can_be_loaded_from_cli_env_file(
+        self, tmp_path, monkeypatch, feature_publish_module
+    ):
+        env_path = tmp_path / ".env"
+        env_path.write_text(
+            "SPLENT_API_TOKEN=from-file\n"
+            "SPLENT_MARKETPLACE_AUTH=true\n"
+        )
+        monkeypatch.setenv("SPLENT_CLI_ENV_FILE", str(env_path))
+        monkeypatch.delenv("SPLENT_API_TOKEN", raising=False)
+        monkeypatch.delenv("SPLENT_MARKETPLACE_AUTH", raising=False)
+
+        feature_publish_module._login_to_marketplace(None)
+
+        assert feature_publish_module.os.getenv("SPLENT_API_TOKEN") == "from-file"
+
+    def test_missing_token_is_rejected(
+        self, monkeypatch, feature_publish_module
+    ):
+        monkeypatch.delenv("SPLENT_API_TOKEN", raising=False)
+        monkeypatch.setattr(
+            feature_publish_module,
+            "load_cli_env",
+            lambda: None,
+        )
+
+        with pytest.raises(
+            feature_publish_module.SplentAPIError,
+            match="login is required",
+        ):
+            feature_publish_module._login_to_marketplace(None)
+
+    def test_empty_quoted_token_is_rejected(
+        self, monkeypatch, feature_publish_module
+    ):
+        monkeypatch.setenv("SPLENT_API_TOKEN", '""')
+        monkeypatch.setattr(
+            feature_publish_module,
+            "load_cli_env",
+            lambda: None,
+        )
+
+        with pytest.raises(
+            feature_publish_module.SplentAPIError,
+            match="login is required",
+        ):
+            feature_publish_module._login_to_marketplace(None)
+
+
+# ---------------------------------------------------------------------------
 # Payload
 # ---------------------------------------------------------------------------
 

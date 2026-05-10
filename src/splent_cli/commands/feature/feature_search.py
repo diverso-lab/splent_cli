@@ -1,6 +1,12 @@
 import click
 
-from splent_cli.services.api_client import SplentAPIError, get_packages
+from splent_cli.services import marketplace
+from splent_cli.services.api_client import (
+    SplentAPIAuthError,
+    SplentAPIError,
+    get_packages,
+)
+from splent_cli.services.env import load_cli_env
 
 
 def _contract_description(package: dict) -> str:
@@ -27,7 +33,15 @@ def _run_search(query, show_all):
     click.echo(click.style("\n  Searching features...\n", fg="cyan"))
 
     try:
+        load_cli_env()
+        if not marketplace.is_logged_in():
+            raise SplentAPIAuthError(
+                "Marketplace login required. Run: splent marketplace:login"
+            )
         packages = _load_packages()
+    except SplentAPIAuthError as exc:
+        click.secho(f"❌ {exc}", fg="red")
+        raise SystemExit(1)
     except SplentAPIError as exc:
         click.secho(f"❌ {exc}", fg="red")
         click.echo("   Check SPLENT_API_URL or start the package index.")

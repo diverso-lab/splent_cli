@@ -9,12 +9,10 @@ from splent_cli.services import marketplace
 )
 @click.option("--shell", is_flag=True, help="Output shell commands for eval.")
 def marketplace_logout(shell):
-    marketplace.unset_env_var(marketplace.MARKETPLACE_TOKEN_VAR)
-    marketplace.unset_env_var(marketplace.MARKETPLACE_API_URL_VAR)
+    marketplace.set_env_var(marketplace.MARKETPLACE_AUTH_VAR, "false")
 
     if shell:
-        print(f"unset {marketplace.MARKETPLACE_TOKEN_VAR}")
-        print(f"unset {marketplace.MARKETPLACE_API_URL_VAR}")
+        print(f"export {marketplace.MARKETPLACE_AUTH_VAR}=false")
     else:
         click.secho("  Marketplace logout done.", fg="green")
 

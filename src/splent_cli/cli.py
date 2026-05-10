@@ -1,13 +1,13 @@
 import os
 
 import click
-from dotenv import load_dotenv
 
+from splent_cli.services.env import load_cli_env
 from splent_cli.utils.dynamic_imports import get_app
 from splent_cli.utils.command_loader import load_commands
 from splent_cli.utils.db_utils import check_db_connection
 
-load_dotenv()
+load_cli_env()
 
 
 class SPLENTCLI(click.Group):

@@ -8,12 +8,19 @@ class SplentAPIError(RuntimeError):
     pass
 
 
+class SplentAPIAuthError(SplentAPIError):
+    pass
+
+
 def _base_url() -> str:
     return os.getenv("SPLENT_API_URL", "http://127.0.0.1:5000").rstrip("/")
 
 
 def _headers() -> dict[str, str]:
-    token = os.getenv("SPLENT_API_TOKEN")
+    if os.getenv("SPLENT_MARKETPLACE_AUTH") != "true":
+        return {}
+
+    token = (os.getenv("SPLENT_API_TOKEN") or "").strip().strip("\"'")
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}"}
@@ -42,6 +49,10 @@ def _request(method: str, path: str, json_body: dict | None = None):
         raise SplentAPIError("The SPLENT API returned an invalid JSON response.") from exc
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
+        if status in {401, 403}:
+            raise SplentAPIAuthError(
+                "Marketplace login required. Run: splent marketplace:login"
+            ) from exc
         raise SplentAPIError(f"SPLENT API returned HTTP {status}.") from exc
     except requests.exceptions.RequestException as exc:
         raise SplentAPIError(f"Could not connect to the SPLENT API: {exc}") from exc

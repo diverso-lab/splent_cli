@@ -9,7 +9,9 @@ import tomllib
 
 from splent_cli.commands.feature.feature_contract import _resolve_feature, infer_contract
 from splent_cli.services import context
+from splent_cli.services import marketplace
 from splent_cli.services.api_client import SplentAPIError, post
+from splent_cli.services.env import load_cli_env
 from splent_cli.utils.feature_utils import normalize_namespace
 
 DEFAULT_OWNER = "splent-io"
@@ -207,23 +209,18 @@ def _build_payload(
 
 
 def _login_to_marketplace(token: str | None) -> None:
-    # Login simple por consola: guarda el token solo para esta ejecución.
     if token:
         os.environ["SPLENT_API_TOKEN"] = token
         return
 
-    if os.getenv("SPLENT_API_TOKEN"):
+    load_cli_env()
+    if marketplace.is_logged_in():
         return
 
-    click.echo("Marketplace login")
-    token = click.prompt(
-        "  API token (leave empty for local/dev API)",
-        default="",
-        hide_input=True,
-        show_default=False,
-    ).strip()
-    if token:
-        os.environ["SPLENT_API_TOKEN"] = token
+    raise SplentAPIError(
+        "Marketplace login is required. "
+        "Run 'splent marketplace:login' or pass --token."
+    )
 
 
 @click.command("feature:publish", short_help="Publish feature metadata to the marketplace.")
