@@ -31,8 +31,12 @@ def marketplace_login(token, url, shell):
         or marketplace.DEFAULT_API_URL
     ).rstrip("/")
 
+    if not token:
+        click.secho("❌ Marketplace/API token is required.", fg="red")
+        raise SystemExit(1)
+
     try:
-        valid_token = marketplace.validate_api_token(api_url, token or None)
+        valid_token = marketplace.validate_api_token(api_url, token)
     except marketplace.MarketplaceLoginError as exc:
         click.secho(f"❌ {exc}", fg="red")
         raise SystemExit(1)
@@ -42,18 +46,13 @@ def marketplace_login(token, url, shell):
         raise SystemExit(1)
 
     marketplace.set_env_var(marketplace.MARKETPLACE_API_URL_VAR, api_url)
-    if token:
-        marketplace.set_env_var(marketplace.MARKETPLACE_TOKEN_VAR, token)
-    else:
-        marketplace.unset_env_var(marketplace.MARKETPLACE_TOKEN_VAR)
+    marketplace.set_env_var(marketplace.MARKETPLACE_TOKEN_VAR, token)
     marketplace.set_env_var(marketplace.MARKETPLACE_AUTH_VAR, "true")
 
     if shell:
         print(f"export {marketplace.MARKETPLACE_API_URL_VAR}={api_url}")
         if token:
             print(f"export {marketplace.MARKETPLACE_TOKEN_VAR}={token}")
-        else:
-            print(f"unset {marketplace.MARKETPLACE_TOKEN_VAR}")
         print(f"export {marketplace.MARKETPLACE_AUTH_VAR}=true")
     else:
         click.secho("  Marketplace login saved.", fg="green")

@@ -35,13 +35,20 @@ Then, from the app workspace/container, log in:
 splent marketplace:login --url http://host.docker.internal:5000 --token mi-token-secreto-local
 ```
 
-For a local API without token authentication, omit `--token`:
+`marketplace:login` requires a token. You can also put the token in `.env`
+first and then run login without flags:
 
-```bash
-splent marketplace:login --url http://host.docker.internal:5000
+```env
+SPLENT_API_URL=http://host.docker.internal:5000
+SPLENT_API_TOKEN=mi-token-secreto-local
 ```
 
-This saves the marketplace configuration in the workspace `.env`:
+```bash
+splent marketplace:login
+```
+
+This validates the token and saves the marketplace configuration in the
+workspace `.env`:
 
 ```env
 SPLENT_API_URL=http://host.docker.internal:5000
@@ -51,7 +58,7 @@ SPLENT_MARKETPLACE_AUTH=true
 
 `SPLENT_MARKETPLACE_AUTH=true` means the token has been validated with
 `GET /api/auth/check`. `feature:search` and `feature:publish` require this
-validated login state.
+validated login state and a configured `SPLENT_API_TOKEN`.
 
 To log out:
 
@@ -59,8 +66,8 @@ To log out:
 splent marketplace:logout
 ```
 
-Logout keeps `SPLENT_API_URL` and `SPLENT_API_TOKEN` in `.env`, but marks the
-marketplace session as inactive:
+Logout keeps `SPLENT_API_URL` and `SPLENT_API_TOKEN`, but marks the marketplace
+session as inactive:
 
 ```env
 SPLENT_API_URL=http://host.docker.internal:5000

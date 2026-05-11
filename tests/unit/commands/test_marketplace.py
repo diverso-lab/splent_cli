@@ -39,7 +39,7 @@ class TestMarketplaceLogin:
         assert "SPLENT_MARKETPLACE_AUTH=true" in content
         assert "login" in result.output.lower()
 
-    def test_login_without_token_saves_only_api_url(self, runner, workspace):
+    def test_login_without_token_is_rejected(self, runner, workspace):
         with patch(
             "splent_cli.commands.marketplace_login.marketplace.validate_api_token",
             return_value=True,
@@ -48,12 +48,10 @@ class TestMarketplaceLogin:
                 marketplace_login, ["--url", "http://localhost:5000"]
             )
 
-        content = (workspace / ".env").read_text()
-        assert result.exit_code == 0
-        assert "SPLENT_API_URL=http://localhost:5000" in content
-        assert "SPLENT_API_TOKEN" not in content
-        assert "SPLENT_MARKETPLACE_AUTH=true" in content
-        validate.assert_called_once_with("http://localhost:5000", None)
+        assert result.exit_code == 1
+        assert "token is required" in result.output
+        assert not (workspace / ".env").exists()
+        validate.assert_not_called()
 
     def test_login_uses_env_api_url_and_token(self, runner, workspace, monkeypatch):
         monkeypatch.setenv("SPLENT_API_URL", "http://env-api.local/")
@@ -106,17 +104,16 @@ class TestMarketplaceLogin:
         assert "export SPLENT_API_TOKEN=abc123" in result.output
         assert "export SPLENT_MARKETPLACE_AUTH=true" in result.output
 
-    def test_login_without_token_can_output_shell_unset(self, runner, workspace):
+    def test_login_without_token_shell_is_rejected(self, runner, workspace):
         with patch(
             "splent_cli.commands.marketplace_login.marketplace.validate_api_token",
             return_value=True,
-        ):
+        ) as validate:
             result = runner.invoke(marketplace_login, ["--shell"])
 
-        assert result.exit_code == 0
-        assert "export SPLENT_API_URL=https://api.splent.io" in result.output
-        assert "unset SPLENT_API_TOKEN" in result.output
-        assert "export SPLENT_MARKETPLACE_AUTH=true" in result.output
+        assert result.exit_code == 1
+        assert "token is required" in result.output
+        validate.assert_not_called()
 
     def test_login_with_url_saves_api_url(self, runner, workspace):
         with patch(
