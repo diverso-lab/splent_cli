@@ -11,7 +11,6 @@ from splent_cli.commands.feature.feature_contract import _resolve_feature, infer
 from splent_cli.services import context
 from splent_cli.services import marketplace
 from splent_cli.services.api_client import SplentAPIError, post
-from splent_cli.services.env import load_cli_env
 from splent_cli.utils.feature_utils import normalize_namespace
 
 DEFAULT_OWNER = "splent-io"
@@ -213,9 +212,11 @@ def _login_to_marketplace(token: str | None) -> None:
         os.environ["SPLENT_API_TOKEN"] = token
         return
 
-    load_cli_env()
-    if marketplace.is_logged_in():
+    try:
+        marketplace.require_marketplace_login()
         return
+    except SplentAPIError:
+        pass
 
     raise SplentAPIError(
         "Marketplace login is required. "

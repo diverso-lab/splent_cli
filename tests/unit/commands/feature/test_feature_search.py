@@ -24,11 +24,7 @@ def runner():
 @pytest.fixture(autouse=True)
 def logged_in(monkeypatch):
     monkeypatch.setattr(
-        "splent_cli.commands.feature.feature_search.load_cli_env",
-        lambda: None,
-    )
-    monkeypatch.setattr(
-        "splent_cli.commands.feature.feature_search.marketplace.is_logged_in",
+        "splent_cli.commands.feature.feature_search.marketplace.require_marketplace_login",
         lambda: True,
     )
 
@@ -188,8 +184,12 @@ class TestFeatureSearchCommand:
         self, runner, monkeypatch
     ):
         monkeypatch.setattr(
-            "splent_cli.commands.feature.feature_search.marketplace.is_logged_in",
-            lambda: False,
+            "splent_cli.commands.feature.feature_search.marketplace.require_marketplace_login",
+            lambda: (_ for _ in ()).throw(
+                SplentAPIAuthError(
+                    "Marketplace login required. Run: splent marketplace:login"
+                )
+            ),
         )
 
         with patch(

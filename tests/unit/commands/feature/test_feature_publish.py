@@ -145,8 +145,8 @@ class TestMarketplaceLogin:
         monkeypatch.setenv("SPLENT_API_TOKEN", "existing")
         monkeypatch.setenv("SPLENT_MARKETPLACE_AUTH", "true")
         monkeypatch.setattr(
-            feature_publish_module,
-            "load_cli_env",
+            feature_publish_module.marketplace,
+            "require_marketplace_login",
             lambda: None,
         )
 
@@ -160,9 +160,9 @@ class TestMarketplaceLogin:
         monkeypatch.setenv("SPLENT_API_TOKEN", "existing")
         monkeypatch.delenv("SPLENT_MARKETPLACE_AUTH", raising=False)
         monkeypatch.setattr(
-            feature_publish_module,
-            "load_cli_env",
-            lambda: None,
+            feature_publish_module.marketplace,
+            "require_marketplace_login",
+            lambda: (_ for _ in ()).throw(feature_publish_module.SplentAPIError()),
         )
 
         with pytest.raises(
@@ -192,9 +192,9 @@ class TestMarketplaceLogin:
     ):
         monkeypatch.delenv("SPLENT_API_TOKEN", raising=False)
         monkeypatch.setattr(
-            feature_publish_module,
-            "load_cli_env",
-            lambda: None,
+            feature_publish_module.marketplace,
+            "require_marketplace_login",
+            lambda: (_ for _ in ()).throw(feature_publish_module.SplentAPIError()),
         )
 
         with pytest.raises(
@@ -208,9 +208,9 @@ class TestMarketplaceLogin:
     ):
         monkeypatch.setenv("SPLENT_API_TOKEN", '""')
         monkeypatch.setattr(
-            feature_publish_module,
-            "load_cli_env",
-            lambda: None,
+            feature_publish_module.marketplace,
+            "require_marketplace_login",
+            lambda: (_ for _ in ()).throw(feature_publish_module.SplentAPIError()),
         )
 
         with pytest.raises(

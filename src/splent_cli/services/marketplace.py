@@ -4,7 +4,9 @@ from pathlib import Path
 import requests
 
 from splent_cli.services import context
+from splent_cli.services.api_client import SplentAPIAuthError
 from splent_cli.services.env import cli_env_path
+from splent_cli.services.env import load_cli_env
 
 
 MARKETPLACE_TOKEN_VAR = "SPLENT_API_TOKEN"
@@ -80,6 +82,14 @@ def token_value() -> str:
 
 def is_logged_in() -> bool:
     return os.getenv(MARKETPLACE_AUTH_VAR) == "true" and bool(token_value())
+
+
+def require_marketplace_login() -> None:
+    load_cli_env()
+    if not is_logged_in():
+        raise SplentAPIAuthError(
+            "Marketplace login required. Run: splent marketplace:login"
+        )
 
 
 def validate_api_token(api_url: str, token: str | None = None) -> bool:

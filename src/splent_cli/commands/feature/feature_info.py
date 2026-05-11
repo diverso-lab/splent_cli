@@ -3,6 +3,8 @@ import textwrap
 
 import click
 
+from splent_cli.services import marketplace
+from splent_cli.services.api_client import SplentAPIAuthError
 from splent_cli.services.api_client import SplentAPIError, get_package_by_name
 
 
@@ -123,6 +125,7 @@ def feature_info(feature_name):
 
     package = None
     try:
+        marketplace.require_marketplace_login()
         for candidate in candidates:
             try:
                 package = get_package_by_name(candidate)
@@ -136,6 +139,9 @@ def feature_info(feature_name):
             if isinstance(package, dict):
                 api_name = candidate
                 break
+    except SplentAPIAuthError as exc:
+        click.secho(f"❌ {exc}", fg="red")
+        raise SystemExit(1)
     except SplentAPIError as exc:
         click.secho(f"❌ {exc}", fg="red")
         click.echo("   Check SPLENT_API_URL or start the package index.")

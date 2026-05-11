@@ -20,6 +20,14 @@ def runner():
     return CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def logged_in(monkeypatch):
+    monkeypatch.setattr(
+        "splent_cli.commands.feature.feature_info.marketplace.require_marketplace_login",
+        lambda: None,
+    )
+
+
 # ---------------------------------------------------------------------------
 # _feature_api_name
 # ---------------------------------------------------------------------------

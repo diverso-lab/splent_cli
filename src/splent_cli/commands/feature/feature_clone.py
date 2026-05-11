@@ -3,8 +3,12 @@ import re
 import subprocess
 import requests
 import click
-from splent_cli.services import context
-from splent_cli.services.api_client import SplentAPIError, get_package_by_name
+from splent_cli.services import context, marketplace
+from splent_cli.services.api_client import (
+    SplentAPIAuthError,
+    SplentAPIError,
+    get_package_by_name,
+)
 from splent_cli.utils.cache_utils import make_feature_readonly
 from splent_cli.utils.feature_utils import normalize_namespace
 
@@ -87,7 +91,11 @@ def _resolve_full_name_from_api(full_name: str) -> str:
     api_name = _feature_api_name(repo)
 
     try:
+        marketplace.require_marketplace_login()
         package = get_package_by_name(api_name)
+    except SplentAPIAuthError as exc:
+        click.secho(f"❌ {exc}", fg="red")
+        raise SystemExit(1) from exc
     except SplentAPIError as exc:
         click.secho(f"❌ {exc}", fg="red")
         click.echo("   Check SPLENT_API_URL or start the package index.")

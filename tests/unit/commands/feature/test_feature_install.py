@@ -104,6 +104,10 @@ class TestFeatureInstallCommand:
 
         with (
             patch(
+                "splent_cli.commands.feature.feature_install.marketplace.require_marketplace_login",
+                return_value=None,
+            ),
+            patch(
                 "splent_cli.commands.feature.feature_install.get_package_by_name",
                 return_value={
                     "name": "splent_feature_auth",

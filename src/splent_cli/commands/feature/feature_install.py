@@ -4,8 +4,12 @@ import subprocess
 import tomllib
 import click
 import requests
-from splent_cli.services import context, compose
-from splent_cli.services.api_client import SplentAPIError, get_package_by_name
+from splent_cli.services import context, compose, marketplace
+from splent_cli.services.api_client import (
+    SplentAPIAuthError,
+    SplentAPIError,
+    get_package_by_name,
+)
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
@@ -177,7 +181,11 @@ def feature_install(feature_identifier, env_scope, mode, version):
         else f"splent_feature_{feature_name}"
     )
     try:
+        marketplace.require_marketplace_login()
         package = get_package_by_name(api_feature_name)
+    except SplentAPIAuthError as exc:
+        click.secho(f"❌ {exc}", fg="red")
+        raise SystemExit(1)
     except SplentAPIError as exc:
         click.secho(f"❌ {exc}", fg="red")
         click.echo("   Check SPLENT_API_URL or start the package index.")
