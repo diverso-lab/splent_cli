@@ -57,8 +57,17 @@ SPLENT_MARKETPLACE_AUTH=true
 ```
 
 `SPLENT_MARKETPLACE_AUTH=true` means the token has been validated with
-`GET /api/auth/check`. `feature:search` and `feature:publish` require this
-validated login state and a configured `SPLENT_API_TOKEN`.
+`GET /api/auth/check`. Marketplace feature commands that read or write package
+metadata require this validated login state and a configured `SPLENT_API_TOKEN`:
+
+```text
+feature:search
+feature:info
+feature:install
+feature:clone
+feature:versions
+feature:publish
+```
 
 To log out:
 

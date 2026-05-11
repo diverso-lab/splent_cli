@@ -92,6 +92,20 @@ def _feature_api_name(feature_name: str) -> str:
     return f"splent_feature_{feature_name}"
 
 
+def _feature_api_candidates(feature_name: str) -> list[str]:
+    if "/" in feature_name:
+        candidates = [feature_name]
+        normalized = _feature_api_name(feature_name)
+        if normalized not in candidates:
+            candidates.append(normalized)
+        return candidates
+
+    candidates = [_feature_api_name(feature_name)]
+    if feature_name not in candidates:
+        candidates.append(feature_name)
+    return candidates
+
+
 @click.command("feature:info", short_help="Show marketplace feature details.")
 @click.argument("feature_name", required=True)
 def feature_info(feature_name):
@@ -103,11 +117,25 @@ def feature_info(feature_name):
         splent feature:info auth
         splent feature:info splent_feature_auth
     """
-    api_name = _feature_api_name(feature_name)
+    candidates = _feature_api_candidates(feature_name)
+    api_name = candidates[0]
     click.echo(click.style(f"\n  Loading feature {api_name}...\n", fg="cyan"))
 
+    package = None
     try:
-        package = get_package_by_name(api_name)
+        for candidate in candidates:
+            try:
+                package = get_package_by_name(candidate)
+            except SplentAPIError as exc:
+                if (
+                    ("HTTP 404" in str(exc) or "HTTP 500" in str(exc))
+                    and candidate != candidates[-1]
+                ):
+                    continue
+                raise
+            if isinstance(package, dict):
+                api_name = candidate
+                break
     except SplentAPIError as exc:
         click.secho(f"❌ {exc}", fg="red")
         click.echo("   Check SPLENT_API_URL or start the package index.")
