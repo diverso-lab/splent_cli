@@ -17,6 +17,30 @@ from splent_cli.utils.manifest import (
 )
 
 
+def _feature_short_name(feature_ref: str) -> str:
+    name = str(feature_ref).strip()
+    if "/" in name:
+        name = name.split("/", 1)[1]
+    name = name.split("@", 1)[0]
+    return name.replace("splent_feature_", "")
+
+
+def _feature_entry_matches(entry: str, requested_name: str, requested_org: str) -> bool:
+    if _feature_short_name(entry) != _feature_short_name(requested_name):
+        return False
+
+    if "/" not in requested_name:
+        return True
+
+    entry_base = entry.split("@", 1)[0]
+    if "/" not in entry_base:
+        return False
+
+    entry_org, _ = entry_base.split("/", 1)
+    requested_org = requested_name.split("/", 1)[0] or requested_org
+    return normalize_namespace(entry_org) == normalize_namespace(requested_org)
+
+
 @click.command(
     "feature:remove",
     short_help="Unregister an editable feature from the active product (keeps files).",
@@ -85,20 +109,12 @@ def feature_remove(feature_name, namespace, force):
 
     features = read_features_from_data(data)
 
-    # Try multiple formats to match pyproject entry
-    candidates = [
-        feature_name,
-        f"{org}/{feature_name}",
-        f"{org_safe}/{feature_name}",
+    entries_to_remove = [
+        entry for entry in features if _feature_entry_matches(entry, feature_name, org)
     ]
-    entry_name = feature_name
-    for candidate in candidates:
-        if candidate in features:
-            entry_name = candidate
-            break
 
-    if entry_name in features:
-        features.remove(entry_name)
+    if entries_to_remove:
+        features = [entry for entry in features if entry not in entries_to_remove]
         write_features_to_data(data, features)
         with open(pyproject_path, "wb") as f:
             tomli_w.dump(data, f)
@@ -107,9 +123,13 @@ def feature_remove(feature_name, namespace, force):
         click.echo(click.style(f"  {short} not found in pyproject.toml", dim=True))
 
     # ── Remove symlink ────────────────────────────────────────────────
-    link_path = os.path.join(product_path, "features", org_safe, feature_name)
-    if os.path.islink(link_path) or os.path.exists(link_path):
-        os.unlink(link_path)
+    link_names = {feature_name}
+    if not feature_name.startswith("splent_feature_"):
+        link_names.add(f"splent_feature_{feature_name}")
+    for link_name in link_names:
+        link_path = os.path.join(product_path, "features", org_safe, link_name)
+        if os.path.islink(link_path) or os.path.exists(link_path):
+            os.unlink(link_path)
 
     # ── Update manifest ───────────────────────────────────────────────
     key = feature_key(org_safe, feature_name)

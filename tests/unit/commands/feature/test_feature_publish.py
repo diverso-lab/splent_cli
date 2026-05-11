@@ -291,3 +291,55 @@ class TestBuildPayload:
             )
             == "splent-io/splent_feature_auth@v1"
         )
+
+    def test_contract_requires_features_fall_back_to_pyproject(
+        self, feature_publish_module
+    ):
+        pyproject = {
+            "tool": {
+                "splent": {
+                    "contract": {
+                        "requires": {
+                            "features": ["auth"],
+                            "env_vars": ["SMTP_HOST"],
+                            "signals": ["user-registered"],
+                        }
+                    }
+                }
+            }
+        }
+
+        contract = feature_publish_module._contract_for_marketplace(
+            {},
+            pyproject,
+            "splent_feature_profile",
+        )
+
+        assert contract["requires"] == {
+            "features": ["auth"],
+            "env_vars": ["SMTP_HOST"],
+            "signals": ["user-registered"],
+        }
+
+    def test_inferred_contract_requires_take_precedence(
+        self, feature_publish_module
+    ):
+        pyproject = {
+            "tool": {
+                "splent": {
+                    "contract": {
+                        "requires": {
+                            "features": ["auth"],
+                        }
+                    }
+                }
+            }
+        }
+
+        contract = feature_publish_module._contract_for_marketplace(
+            {"requires_features": ["mail"]},
+            pyproject,
+            "splent_feature_profile",
+        )
+
+        assert contract["requires"]["features"] == ["mail"]

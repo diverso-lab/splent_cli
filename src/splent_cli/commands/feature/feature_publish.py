@@ -107,6 +107,14 @@ def _canonical_full_name(owner: str, name: str, version: str | None) -> str:
     return ref
 
 
+def _list_value(value) -> list:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str) and value:
+        return [value]
+    return []
+
+
 def _contract_for_marketplace(contract: dict, pyproject: dict, name: str) -> dict:
     # Convierte el contrato inferido al formato que consume el marketplace/API.
     current_contract = (
@@ -114,6 +122,9 @@ def _contract_for_marketplace(contract: dict, pyproject: dict, name: str) -> dic
         if isinstance(pyproject, dict)
         else {}
     )
+    current_requires = current_contract.get("requires", {})
+    if not isinstance(current_requires, dict):
+        current_requires = {}
     project = pyproject.get("project", {}) if isinstance(pyproject, dict) else {}
 
     provides = {
@@ -128,9 +139,18 @@ def _contract_for_marketplace(contract: dict, pyproject: dict, name: str) -> dic
         "docker": contract.get("docker", []),
     }
     requires = {
-        "features": contract.get("requires_features", []),
-        "env_vars": contract.get("env_vars", []),
-        "signals": contract.get("requires_signals", []),
+        "features": (
+            _list_value(contract.get("requires_features"))
+            or _list_value(current_requires.get("features"))
+        ),
+        "env_vars": (
+            _list_value(contract.get("env_vars"))
+            or _list_value(current_requires.get("env_vars"))
+        ),
+        "signals": (
+            _list_value(contract.get("requires_signals"))
+            or _list_value(current_requires.get("signals"))
+        ),
     }
 
     return {

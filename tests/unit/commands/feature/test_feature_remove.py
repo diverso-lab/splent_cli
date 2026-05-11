@@ -83,6 +83,42 @@ class TestPyprojectUpdate:
         assert result.exit_code == 0
         assert "removed" in result.output.lower()
 
+    def test_removes_versioned_namespaced_splent_feature_by_short_name(
+        self, runner, product_workspace
+    ):
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject,
+            [
+                "splent-io/splent_feature_auth@v1.5.8",
+                "splent-io/splent_feature_profile@v1.5.7",
+            ],
+        )
+
+        result = runner.invoke(feature_remove, ["auth"])
+        assert result.exit_code == 0
+        assert "removed" in result.output.lower()
+
+        with open(pyproject, "rb") as f:
+            data = tomllib.load(f)
+        features = data["tool"]["splent"]["features"]
+        assert "splent-io/splent_feature_auth@v1.5.8" not in features
+        assert "splent-io/splent_feature_profile@v1.5.7" in features
+
+    def test_removes_unversioned_splent_feature_by_short_name(
+        self, runner, product_workspace
+    ):
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(pyproject, ["splent-io/splent_feature_profile"])
+
+        result = runner.invoke(feature_remove, ["profile"])
+        assert result.exit_code == 0
+        assert "removed" in result.output.lower()
+
+        with open(pyproject, "rb") as f:
+            data = tomllib.load(f)
+        assert data["tool"]["splent"]["features"] == []
+
 
 # ---------------------------------------------------------------------------
 # Symlink removal

@@ -8,6 +8,7 @@ from splent_cli.services import context, compose, marketplace
 from splent_cli.services.api_client import (
     SplentAPIAuthError,
     SplentAPIError,
+    get_packages,
     get_package_by_name,
 )
 from splent_cli.utils.feature_utils import read_features_from_data
@@ -45,6 +46,141 @@ def _get_product_feature_shorts(
         name = name.replace("splent_feature_", "")
         shorts.add(name)
     return shorts
+
+
+def _feature_short_name(feature_ref: str) -> str:
+    name = str(feature_ref).strip()
+    if not name:
+        return ""
+    name = name.split("/")[-1]
+    name = name.split("@", 1)[0]
+    return name.replace("splent_feature_", "")
+
+
+def _feature_api_name(feature_name: str) -> str:
+    if "/" in feature_name:
+        owner, name = feature_name.split("/", 1)
+        if name.startswith("splent_feature_"):
+            return f"{owner}/{name}"
+        return f"{owner}/splent_feature_{name}"
+
+    if feature_name.startswith("splent_feature_"):
+        return feature_name
+    return f"splent_feature_{feature_name}"
+
+
+def _feature_api_candidates(feature_name: str) -> list[str]:
+    if "/" in feature_name:
+        candidates = [feature_name]
+        normalized = _feature_api_name(feature_name)
+        if normalized not in candidates:
+            candidates.append(normalized)
+        short = normalized.split("/", 1)[1]
+        if short not in candidates:
+            candidates.append(short)
+        return candidates
+
+    candidates = [_feature_api_name(feature_name)]
+    if feature_name not in candidates:
+        candidates.append(feature_name)
+    return candidates
+
+
+def _package_matches_candidate(package: dict, candidate: str) -> bool:
+    values = {
+        str(package.get("name") or ""),
+        str(package.get("full_name") or ""),
+        str(package.get("repository") or ""),
+    }
+    return candidate in values
+
+
+def _get_marketplace_package(feature_identifier: str) -> dict:
+    candidates = _feature_api_candidates(feature_identifier)
+    last_lookup_error = None
+    for candidate in candidates:
+        try:
+            package = get_package_by_name(candidate)
+        except SplentAPIError as exc:
+            last_lookup_error = exc
+            if "HTTP 404" in str(exc) or "HTTP 500" in str(exc):
+                continue
+            raise
+        if isinstance(package, dict):
+            return package
+
+    try:
+        packages = get_packages()
+    except SplentAPIError:
+        if last_lookup_error:
+            raise last_lookup_error
+        raise
+
+    if isinstance(packages, list):
+        for package in packages:
+            if isinstance(package, dict) and any(
+                _package_matches_candidate(package, candidate)
+                for candidate in candidates
+            ):
+                return package
+
+    raise SplentAPIError(
+        f"Feature '{feature_identifier}' is not published in the Marketplace."
+    )
+
+
+def _get_marketplace_required_features(package: dict) -> list[str]:
+    contract = package.get("contract") or {}
+    requires = contract.get("requires") or {}
+    raw_features = requires.get("features") or []
+
+    if isinstance(raw_features, str):
+        raw_features = [raw_features]
+    if not isinstance(raw_features, list):
+        return []
+
+    return [
+        short
+        for short in (_feature_short_name(feature) for feature in raw_features)
+        if short
+    ]
+
+
+def _check_marketplace_dependencies(
+    workspace: str,
+    product: str,
+    env_name: str,
+    package: dict,
+) -> list[str]:
+    required = _get_marketplace_required_features(package)
+    if not required:
+        return []
+
+    installed = _get_product_feature_shorts(workspace, product, env_name)
+    return [feature for feature in required if feature not in installed]
+
+
+def _abort_missing_marketplace_dependencies(
+    short: str,
+    product: str,
+    namespace_github: str,
+    missing: list[str],
+) -> None:
+    if not missing:
+        return
+
+    click.echo()
+    click.secho(
+        f"  Cannot install {short}: missing required feature(s) in {product}.",
+        fg="red",
+    )
+    for feature in missing:
+        click.echo(f"    - {feature}")
+    click.echo()
+    click.echo("  Install them first:")
+    for feature in missing:
+        click.echo(f"    splent feature:install {namespace_github}/splent_feature_{feature}")
+    raise SystemExit(1)
 
 
 def _find_feature_pyproject(
@@ -175,14 +311,9 @@ def feature_install(feature_identifier, env_scope, mode, version):
         compose.parse_feature_identifier(feature_identifier)
     )
 
-    api_feature_name = (
-        feature_name
-        if feature_name.startswith("splent_feature_")
-        else f"splent_feature_{feature_name}"
-    )
     try:
         marketplace.require_marketplace_login()
-        package = get_package_by_name(api_feature_name)
+        package = _get_marketplace_package(feature_identifier)
     except SplentAPIAuthError as exc:
         click.secho(f"❌ {exc}", fg="red")
         raise SystemExit(1)
@@ -195,7 +326,7 @@ def feature_install(feature_identifier, env_scope, mode, version):
         click.secho("❌ Invalid package response from API.", fg="red")
         raise SystemExit(1)
 
-    package_name = package.get("name") or api_feature_name
+    package_name = package.get("name") or _feature_api_name(feature_identifier)
     full_name = package.get("full_name")
     if isinstance(full_name, str) and "/" in full_name:
         feature_identifier, _, package_version = full_name.partition("@")
@@ -212,6 +343,12 @@ def feature_install(feature_identifier, env_scope, mode, version):
         compose.parse_feature_identifier(feature_identifier)
     )
     short = feature_name.replace("splent_feature_", "")
+    missing_marketplace_deps = _check_marketplace_dependencies(
+        workspace, product, env_name, package
+    )
+    _abort_missing_marketplace_dependencies(
+        short, product, namespace_github, missing_marketplace_deps
+    )
 
     # ── Ask mode if not specified ─────────────────────────────────────
     if not mode:
