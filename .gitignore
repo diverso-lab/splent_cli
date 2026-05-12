@@ -1,4 +1,5 @@
 .venv
+.env
 splent_cli.egg-info
 venv
 dist
