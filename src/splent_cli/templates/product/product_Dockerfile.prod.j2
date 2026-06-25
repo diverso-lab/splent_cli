@@ -27,8 +27,10 @@ COPY splent_framework/ splent_framework/
 
 ENV PIP_ROOT_USER_ACTION=ignore
 
-# Install SPLENT CLI first (needed for feature:pip-install)
-RUN pip install --no-cache-dir splent_cli=={{ cli_version }}
+# Install SPLENT CLI first (needed for feature:pip-install).
+# Always install the latest published CLI so the product is not pinned to the
+# (possibly older) version that scaffolded it.
+RUN pip install --no-cache-dir --upgrade splent_cli
 
 # Install framework from local source (has latest changes), then product
 RUN pip install --no-cache-dir ./splent_framework
