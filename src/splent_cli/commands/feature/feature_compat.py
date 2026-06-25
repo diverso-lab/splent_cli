@@ -7,12 +7,12 @@ Usage:
 
 import json
 import os
-import tomllib
 import click
 from pathlib import Path
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import normalize_namespace
+from splent_cli.utils.io_utils import load_toml
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -77,8 +77,7 @@ def _read_contract(cache_path: Path) -> dict:
     if not pyproject.exists():
         return {"description": "", "provides": {}, "requires": {}}
 
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject, what=f"pyproject.toml for {cache_path.name}")
 
     raw = data.get("tool", {}).get("splent", {}).get("contract", {})
     return {

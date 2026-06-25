@@ -1,19 +1,18 @@
 import os
 import re
-import subprocess
-import tomllib
 import click
 import requests
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.proc import run, require_docker
+from splent_cli.utils.io_utils import load_toml
 
 
 def _get_required_features(feature_pyproject: str) -> list[str]:
     """Read [tool.splent.contract.requires].features from a feature's pyproject.toml."""
     if not os.path.isfile(feature_pyproject):
         return []
-    with open(feature_pyproject, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(feature_pyproject, what="feature pyproject.toml")
     return (
         data.get("tool", {})
         .get("splent", {})
@@ -30,8 +29,7 @@ def _get_product_feature_shorts(
     py_path = os.path.join(workspace, product, "pyproject.toml")
     if not os.path.isfile(py_path):
         return set()
-    with open(py_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(py_path, what=f"{product} pyproject.toml")
     entries = read_features_from_data(data, env_name)
     shorts = set()
     for entry in entries:
@@ -72,8 +70,7 @@ def _get_contract_env(feature_pyproject: str) -> str | None:
     """
     if not os.path.isfile(feature_pyproject):
         return None
-    with open(feature_pyproject, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(feature_pyproject, what="feature pyproject.toml")
     return data.get("tool", {}).get("splent", {}).get("contract", {}).get("env")
 
 
@@ -233,17 +230,19 @@ def feature_install(feature_identifier, env_scope, mode, version):
         )
         if not os.path.isdir(cache_dir):
             click.echo(click.style("  clone    ", dim=True) + f"{short}@{version}")
-            result = subprocess.run(
+            result = run(
                 [
                     "splent",
                     "feature:clone",
                     f"{namespace_github}/{feature_name}@{version}",
                 ],
-                capture_output=True,
-                text=True,
+                check=False,
+                capture=True,
             )
             if result.returncode != 0:
-                click.secho(f"  Clone failed: {result.stderr.strip()}", fg="red")
+                click.secho(
+                    f"  Clone failed: {(result.stderr or '').strip()}", fg="red"
+                )
                 raise SystemExit(1)
         else:
             click.echo(
@@ -283,21 +282,32 @@ def feature_install(feature_identifier, env_scope, mode, version):
                     raise SystemExit(1)
                 for m in missing:
                     click.echo()
-                    subprocess.run(
+                    dep = run(
                         [
                             "splent",
                             "feature:install",
                             f"{namespace_github}/splent_feature_{m}",
                         ],
-                        text=True,
+                        check=False,
                     )
+                    if dep.returncode != 0:
+                        click.secho(
+                            f"  Installing dependency {m} failed.", fg="red"
+                        )
+                        raise SystemExit(1)
 
         # Attach to product
         click.echo(click.style("  attach   ", dim=True) + f"{short}@{version}")
         cmd = ["splent", "feature:attach", feature_identifier, version]
         if env_scope:
             cmd.append(f"--{env_scope}")
-        subprocess.run(cmd, capture_output=True, text=True)
+        attach = run(cmd, check=False, capture=True)
+        if attach.returncode != 0:
+            click.secho(
+                f"  Attach failed: {(attach.stderr or attach.stdout or '').strip()}",
+                fg="red",
+            )
+            raise SystemExit(1)
 
     elif mode == "editable":
         feature_dir = os.path.join(workspace, feature_name)
@@ -312,26 +322,26 @@ def feature_install(feature_identifier, env_scope, mode, version):
             tag = _get_latest_tag(namespace_github, feature_name)
             repo_url, _ = _build_repo_url(namespace_github, feature_name)
             branch = tag or "main"
-            try:
-                subprocess.run(
-                    [
-                        "git",
-                        "clone",
-                        "--depth",
-                        "1",
-                        "--branch",
-                        branch,
-                        "--quiet",
-                        repo_url,
-                        feature_dir,
-                    ],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-            except subprocess.CalledProcessError:
+            clone = run(
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--branch",
+                    branch,
+                    "--quiet",
+                    repo_url,
+                    feature_dir,
+                ],
+                check=False,
+                capture=True,
+            )
+            if clone.returncode != 0:
                 click.secho(
-                    f"  Could not clone {namespace_github}/{feature_name}.", fg="red"
+                    f"  Could not clone {namespace_github}/{feature_name}: "
+                    f"{(clone.stderr or '').strip()}",
+                    fg="red",
                 )
                 raise SystemExit(1)
 
@@ -367,14 +377,19 @@ def feature_install(feature_identifier, env_scope, mode, version):
                     raise SystemExit(1)
                 for m in missing:
                     click.echo()
-                    subprocess.run(
+                    dep = run(
                         [
                             "splent",
                             "feature:install",
                             f"{namespace_github}/splent_feature_{m}",
                         ],
-                        text=True,
+                        check=False,
                     )
+                    if dep.returncode != 0:
+                        click.secho(
+                            f"  Installing dependency {m} failed.", fg="red"
+                        )
+                        raise SystemExit(1)
 
         # Add to product
         click.echo(click.style("  add      ", dim=True) + f"{short}")
@@ -382,22 +397,40 @@ def feature_install(feature_identifier, env_scope, mode, version):
         cmd = ["splent", "feature:add", full_name]
         if env_scope:
             cmd.append(f"--{env_scope}")
-        subprocess.run(cmd, capture_output=True, text=True)
+        add = run(cmd, check=False, capture=True)
+        if add.returncode != 0:
+            click.secho(
+                f"  Add failed: {(add.stderr or add.stdout or '').strip()}",
+                fg="red",
+            )
+            raise SystemExit(1)
 
     # ── Step 2: Env generate + merge ──────────────────────────────────
     # feature:add/attach already handled pyproject, symlink, and hot_reinstall.
     # We still need env merge for new variables (e.g. NGINX_UPSTREAM_HOST).
     click.echo(click.style("  env      ", dim=True) + "generate + merge")
-    subprocess.run(
+    gen = run(
         ["splent", "product:env", "--generate", "--all", f"--{env_name}"],
-        capture_output=True,
-        text=True,
+        check=False,
+        capture=True,
     )
-    subprocess.run(
+    if gen.returncode != 0:
+        click.secho(
+            f"  Env generate failed: {(gen.stderr or gen.stdout or '').strip()}",
+            fg="red",
+        )
+        raise SystemExit(1)
+    merge = run(
         ["splent", "product:env", "--merge", f"--{env_name}"],
-        capture_output=True,
-        text=True,
+        check=False,
+        capture=True,
     )
+    if merge.returncode != 0:
+        click.secho(
+            f"  Env merge failed: {(merge.stderr or merge.stdout or '').strip()}",
+            fg="red",
+        )
+        raise SystemExit(1)
 
     # ── Step 3: Start feature Docker services (if any) ────────────────
     # hot_reinstall already reloaded Flask in the web container.
@@ -410,16 +443,19 @@ def feature_install(feature_identifier, env_scope, mode, version):
     compose_file = compose.resolve_file(base_path, env_name)
 
     if compose_file:
+        require_docker()
         proj = compose.project_name(f"{namespace_fs}/{feature_name}", env_name)
         click.echo(click.style("  docker   ", dim=True) + f"starting {short} services")
-        result = subprocess.run(
+        result = run(
             ["docker", "compose", "-p", proj, "-f", compose_file, "up", "-d"],
             cwd=docker_dir_f,
-            capture_output=True,
-            text=True,
+            check=False,
+            capture=True,
         )
         if result.returncode != 0:
-            click.secho(f"  Docker failed: {result.stderr.strip()}", fg="yellow")
+            click.secho(
+                f"  Docker failed: {(result.stderr or '').strip()}", fg="yellow"
+            )
 
     click.echo()
     click.secho(f"  {short} installed.", fg="green")

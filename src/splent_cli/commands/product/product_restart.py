@@ -14,6 +14,7 @@ import click
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import parse_feature_entry, read_features_from_data
 from splent_cli.commands.product.product_up import _get_feature_order
+from splent_cli.utils.proc import run
 
 
 # ── Feature change detection ─────────────────────────────────────────
@@ -99,7 +100,12 @@ def _detect_changes(container_id, workspace, product):
 
 
 def _install_features(container_id, to_install, workspace, product):
-    """Install changed features in the container."""
+    """Install changed features in the container.
+
+    Returns the number of features that failed to install so the caller can
+    decide whether to abort instead of silently restarting on a bad state.
+    """
+    failed = 0
     for name, path_or_entry, editable in to_install:
         short = name.replace("splent_feature_", "")
         if editable:
@@ -110,19 +116,7 @@ def _install_features(container_id, to_install, workspace, product):
                 + f"{short}"
                 + click.style(" (editable)", fg="cyan")
             )
-            subprocess.run(
-                [
-                    "docker",
-                    "exec",
-                    container_id,
-                    "pip",
-                    "install",
-                    "-e",
-                    feature_path,
-                    "-q",
-                ],
-                capture_output=True,
-            )
+            install_target = feature_path
         else:
             # pip install from symlink (pinned)
             ns, name, version = parse_feature_entry(path_or_entry)
@@ -133,19 +127,30 @@ def _install_features(container_id, to_install, workspace, product):
                 + f"{short}"
                 + click.style(f" @{version}", dim=True)
             )
-            subprocess.run(
-                [
-                    "docker",
-                    "exec",
-                    container_id,
-                    "pip",
-                    "install",
-                    "-e",
-                    link_path,
-                    "-q",
-                ],
-                capture_output=True,
-            )
+            install_target = link_path
+
+        result = run(
+            [
+                "docker",
+                "exec",
+                container_id,
+                "pip",
+                "install",
+                "-e",
+                install_target,
+                "-q",
+            ],
+            check=False,
+            capture=True,
+        )
+        if result.returncode != 0:
+            failed += 1
+            detail = (result.stderr or result.stdout or "").strip()
+            click.secho(f"    ✗ failed to install {short}", fg="red")
+            if detail:
+                click.secho(f"      {detail}", fg="red")
+
+    return failed
 
 
 # ── Command ──────────────────────────────────────────────────────────
@@ -207,8 +212,14 @@ def product_restart(env_dev, env_prod, full):
                 click.style("  detected ", dim=True)
                 + f"{len(to_install)} feature(s) to install"
             )
-            _install_features(container_id, to_install, workspace, product)
+            failed = _install_features(container_id, to_install, workspace, product)
             click.echo()
+            if failed:
+                click.secho(
+                    f"  {failed} feature(s) failed to install; aborting restart.",
+                    fg="red",
+                )
+                raise SystemExit(1)
 
     # ── Restart feature Docker containers (nginx, redis, etc.) ──
     features = _get_feature_order(workspace, product_path, env)
@@ -265,18 +276,26 @@ def product_restart(env_dev, env_prod, full):
         )
         container_entrypoint = f"/workspace/{product}/entrypoints/entrypoint.{env}.sh"
         source_cmd = f"set -a && . /workspace/{product}/docker/.env && set +a && bash {container_entrypoint}"
-        subprocess.run(
-            ["docker", "exec", "-d", container_id, "bash", "-c", source_cmd],
-            capture_output=True,
-        )
     else:
         click.echo(click.style("  restarting ", dim=True) + f"{product} ({env})")
         start_script = f"/workspace/{product}/scripts/05_0_start_app_{env}.sh"
         source_cmd = f"set -a && . /workspace/{product}/docker/.env && set +a && bash {start_script}"
-        subprocess.run(
-            ["docker", "exec", "-d", container_id, "bash", "-c", source_cmd],
-            capture_output=True,
-        )
+
+    # ``-d`` detaches, so this returncode reflects whether the app could be
+    # *launched* in the container (container reachable, exec accepted), not the
+    # eventual health of the app. A non-zero exit here means the start never
+    # happened, so don't claim success.
+    result = run(
+        ["docker", "exec", "-d", container_id, "bash", "-c", source_cmd],
+        check=False,
+        capture=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        click.secho(f"  Failed to start {product} ({env}).", fg="red")
+        if detail:
+            click.secho(f"    {detail}", fg="red")
+        raise SystemExit(1)
 
     click.secho("  done.", fg="green")
 

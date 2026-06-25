@@ -6,13 +6,14 @@ Check if any pinned features have newer versions available on GitHub.
 
 import os
 import re
-import subprocess
 
 import click
 import requests
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import parse_feature_entry
+from splent_cli.utils.io_utils import load_toml
+from splent_cli.utils.proc import run
 
 
 def _fetch_latest_tag(namespace: str, repo: str) -> str | None:
@@ -74,10 +75,7 @@ def feature_outdated(upgrade):
     product = context.require_app()
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")
 
-    import tomllib
-
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what="product pyproject.toml")
 
     from splent_cli.utils.feature_utils import read_features_from_data
 
@@ -172,13 +170,13 @@ def feature_outdated(upgrade):
     for ns_raw, name, version in to_upgrade:
         short = name.removeprefix("splent_feature_")
         click.echo(f"  ⬆  {short} → {version}")
-        try:
-            subprocess.run(
-                ["splent", "feature:upgrade", f"{ns_raw}/{name}", "--yes"],
-                check=True,
-            )
+        result = run(
+            ["splent", "feature:upgrade", f"{ns_raw}/{name}", "--yes"],
+            check=False,
+        )
+        if result.returncode == 0:
             upgraded += 1
-        except subprocess.CalledProcessError:
+        else:
             click.secho(f"  ❌ Failed to upgrade {short}", fg="red")
 
     click.echo()

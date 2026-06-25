@@ -6,6 +6,7 @@ import subprocess
 import click
 
 from splent_cli.services import compose, context
+from splent_cli.utils.proc import run
 from splent_cli.utils.feature_utils import (
     get_features_from_pyproject,
     get_normalize_feature_name_in_splent_format,
@@ -139,23 +140,39 @@ def _compile_in_container(container_id, feature, watch, production, workspace, p
     # node_modules.
     if container_id:
         run_cmd = ["docker", "exec", container_id, "bash", "-c", cd_cmd]
+        tool_hint = (
+            "Install Docker Desktop or Docker Engine: "
+            "https://docs.docker.com/get-docker/"
+        )
     else:
         run_cmd = ["bash", "-c", cd_cmd]
+        tool_hint = "Install 'bash' and make sure it is on your PATH."
 
-    try:
-        if watch:
+    if watch:
+        try:
             subprocess.Popen(
                 run_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
-            click.echo(
-                click.style(f"👀 Watching {feature} in {mode} mode...", fg="blue")
+        except FileNotFoundError:
+            raise click.ClickException(
+                f"'{run_cmd[0]}' is not installed or not on PATH.\n{tool_hint}"
             )
-        else:
-            subprocess.run(run_cmd, check=True)
+        click.echo(
+            click.style(f"👀 Watching {feature} in {mode} mode...", fg="blue")
+        )
+    else:
+        result = run(run_cmd, check=False, tool_hint=tool_hint)
+        if result.returncode != 0:
             click.echo(
                 click.style(
-                    f"✅ Successfully compiled {feature} in {mode} mode!", fg="green"
+                    f"❌ Error compiling {feature}: webpack exited with "
+                    f"code {result.returncode}",
+                    fg="red",
                 )
             )
-    except subprocess.CalledProcessError as e:
-        click.echo(click.style(f"❌ Error compiling {feature}: {e}", fg="red"))
+            return
+        click.echo(
+            click.style(
+                f"✅ Successfully compiled {feature} in {mode} mode!", fg="green"
+            )
+        )

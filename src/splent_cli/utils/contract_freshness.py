@@ -14,7 +14,11 @@ def _pyproject_mtime(feature_dir: str) -> float | None:
     """Return mtime of pyproject.toml, or None if missing."""
     path = os.path.join(feature_dir, "pyproject.toml")
     if os.path.isfile(path):
-        return os.path.getmtime(path)
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            # Removed between the isfile check and getmtime, or unreadable.
+            return None
     return None
 
 
@@ -30,7 +34,11 @@ def _newest_source_mtime(feature_dir: str) -> float:
             continue
         for f in files:
             if f.endswith((".py", ".html")):
-                mtime = os.path.getmtime(os.path.join(root, f))
+                try:
+                    mtime = os.path.getmtime(os.path.join(root, f))
+                except OSError:
+                    # File removed mid-walk or broken symlink — skip it.
+                    continue
                 if mtime > newest:
                     newest = mtime
     return newest

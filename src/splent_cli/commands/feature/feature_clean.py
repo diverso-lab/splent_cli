@@ -7,6 +7,7 @@ then removes files that are empty stubs or not needed by that archetype.
 
 import os
 import re
+from pathlib import Path
 
 import click
 
@@ -62,7 +63,7 @@ def _get_src_dir(feature_path, ns, feature_name):
 def _read(path):
     if not os.path.isfile(path):
         return None
-    with open(path) as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
 
 
@@ -336,8 +337,19 @@ def feature_clean(feature_ref, apply):
 
     import shutil
 
+    # Guard against path traversal: only remove paths that resolve to a
+    # location inside the workspace (feature_ref/namespace are unvalidated).
+    workspace_resolved = Path(workspace).resolve()
+
     removed = 0
     for path, _ in removable:
+        resolved = Path(path).resolve()
+        if not resolved.is_relative_to(workspace_resolved):
+            click.secho(
+                f"  Refusing to remove path outside workspace: {resolved}",
+                fg="red",
+            )
+            raise SystemExit(1)
         if os.path.isdir(path):
             shutil.rmtree(path)
         elif os.path.isfile(path):

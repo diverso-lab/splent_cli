@@ -9,10 +9,11 @@ Compares the manifest state against actual system state:
 """
 
 import os
-import subprocess
 import sys
 
 import click
+
+from splent_cli.utils.proc import run
 
 
 def _check_symlink(product_path, ns_safe, name, version):
@@ -28,10 +29,11 @@ def _check_symlink(product_path, ns_safe, name, version):
 
 def _check_pip(name):
     """Check that the feature is pip-installed."""
-    result = subprocess.run(
+    result = run(
         [sys.executable, "-m", "pip", "show", name],
-        capture_output=True,
-        text=True,
+        check=False,
+        capture=True,
+        timeout=60,
     )
     if result.returncode != 0:
         return False, "not pip-installed"
@@ -44,7 +46,14 @@ def _check_pip(name):
 
 
 def _check_migrations(name, product_path):
-    """Check migration state: compare DB revision vs filesystem head."""
+    """Check that the feature ships migration files on disk.
+
+    NOTE: this does NOT compare the database revision against the filesystem
+    head. Determining the applied DB revision requires a live Flask app and a
+    reachable database, which is out of scope for this offline integrity check.
+    The presence of migration files is therefore reported as "not verified
+    against DB" rather than as a confirmed-in-sync pass.
+    """
     from splent_framework.managers.migration_manager import MigrationManager
 
     mdir = MigrationManager.get_feature_migration_dir(name)
@@ -64,7 +73,7 @@ def _check_migrations(name, product_path):
     if not migration_files:
         return True, "no migration files"
 
-    return True, "has migrations"
+    return True, f"{len(migration_files)} migration file(s) present (DB revision not verified)"
 
 
 def check_feature_integrity(
@@ -154,10 +163,11 @@ def fix_feature(
 
         if check == "Symlink":
             click.echo("    Fixing symlink → running product:resolve...")
-            result = subprocess.run(
+            result = run(
                 [sys.executable, "-m", "splent_cli", "product:resolve"],
-                capture_output=True,
-                text=True,
+                check=False,
+                capture=True,
+                timeout=300,
                 env={**os.environ, "SPLENT_APP": os.path.basename(product_path)},
             )
             if result.returncode == 0:
@@ -177,10 +187,11 @@ def fix_feature(
 
             if os.path.isdir(feature_dir):
                 click.echo(f"    Fixing pip → installing {name}...")
-                result = subprocess.run(
+                result = run(
                     [sys.executable, "-m", "pip", "install", "-e", feature_dir, "-q"],
-                    capture_output=True,
-                    text=True,
+                    check=False,
+                    capture=True,
+                    timeout=600,
                 )
                 if result.returncode == 0:
                     fixed.append("pip")

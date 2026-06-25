@@ -3,9 +3,9 @@ product:release — Release a product with version bump, tag, GitHub/PyPI/Docker
 """
 
 import os
-import subprocess
 import click
 from splent_cli.services import context, release
+from splent_cli.utils.proc import run, require_docker
 
 
 def _guard_all_features_pinned(product_path: str):
@@ -33,48 +33,53 @@ def _guard_all_features_pinned(product_path: str):
 
 def _release_docker_image(product: str, version: str, docker_dir: str):
     """Build and push Docker images to Docker Hub."""
+    require_docker()
+
     username = os.getenv("DOCKERHUB_USERNAME")
     password = os.getenv("DOCKERHUB_PASSWORD")
+    missing = [
+        name
+        for name, value in (
+            ("DOCKERHUB_USERNAME", username),
+            ("DOCKERHUB_PASSWORD", password),
+        )
+        if not value
+    ]
+    if missing:
+        click.secho(
+            "  error: missing Docker Hub credentials: "
+            + ", ".join(missing)
+            + "\n  Set them in your environment (e.g. export DOCKERHUB_USERNAME=... "
+            "DOCKERHUB_PASSWORD=...) before releasing.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     image_name = f"{username}/{product}"
 
     click.echo("  docker   logging into Docker Hub...")
-    try:
-        subprocess.run(
-            ["docker", "login", "-u", username, "--password-stdin"],
-            input=password,
-            text=True,
-            check=True,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError:
-        click.secho("  error: Docker Hub login failed", fg="red")
-        raise SystemExit(1)
+    run(
+        ["docker", "login", "-u", username, "--password-stdin"],
+        input=password,
+        capture=True,
+    )
 
     click.echo("  docker   building image...")
-    try:
-        subprocess.run(
-            [
-                "docker",
-                "build",
-                "-t",
-                f"{image_name}:{version}",
-                "-t",
-                f"{image_name}:latest",
-                docker_dir,
-            ],
-            check=True,
-        )
-    except subprocess.CalledProcessError:
-        click.secho("  error: Docker image build failed", fg="red")
-        raise SystemExit(1)
+    run(
+        [
+            "docker",
+            "build",
+            "-t",
+            f"{image_name}:{version}",
+            "-t",
+            f"{image_name}:latest",
+            docker_dir,
+        ]
+    )
 
     click.echo("  docker   pushing images...")
-    try:
-        subprocess.run(["docker", "push", f"{image_name}:{version}"], check=True)
-        subprocess.run(["docker", "push", f"{image_name}:latest"], check=True)
-    except subprocess.CalledProcessError:
-        click.secho("  error: Docker image push failed", fg="red")
-        raise SystemExit(1)
+    run(["docker", "push", f"{image_name}:{version}"])
+    run(["docker", "push", f"{image_name}:latest"])
 
     click.echo("  docker   push complete")
 
@@ -103,7 +108,15 @@ def product_release(version, product):
 
     # Determine org/repo for the semver wizard
     repo = release.get_repo_from_path(product_path)
-    org, repo_name = repo.split("/")
+    parts = repo.split("/")
+    if len(parts) != 2 or not all(parts):
+        click.secho(
+            f"  error: unexpected repository format '{repo}'; expected 'org/repo'.\n"
+            "  Check the 'origin' remote URL with: git remote -v",
+            fg="red",
+        )
+        raise SystemExit(1)
+    org, repo_name = parts
 
     if not version:
         version = release.semver_wizard(org, repo_name)

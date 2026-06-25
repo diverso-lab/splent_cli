@@ -1,5 +1,4 @@
 import os
-import tomllib
 import subprocess
 
 import yaml
@@ -7,7 +6,17 @@ import click
 from splent_cli.services import context, compose
 from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.io_utils import load_toml
 from splent_cli.commands.product.product_env import _is_port_var
+
+
+def _load_yaml_file(path):
+    """Load a YAML file, raising a clear ClickException on malformed input."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        raise click.ClickException(f"{path} is not valid YAML:\n  {e}")
 
 
 def load_env_file(path):
@@ -39,8 +48,7 @@ def merge_env_dicts(base, override):
 def load_compose_file(path):
     if not os.path.isfile(path):
         return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    return _load_yaml_file(path)
 
 
 def merge_compose(
@@ -153,8 +161,7 @@ def _collect_feature_dockerfiles(workspace, declared_features, docker_path, env=
         if not os.path.isfile(compose_file):
             continue
 
-        with open(compose_file) as f:
-            data = yaml.safe_load(f) or {}
+        data = _load_yaml_file(compose_file)
 
         for svc_name, svc_def in data.get("services", {}).items():
             build_cfg = svc_def.get("build")
@@ -237,8 +244,7 @@ def _collect_feature_assets(workspace, declared_features, docker_path, env="prod
             continue
 
         # Determine service name(s) from compose
-        with open(compose_file) as f:
-            data = yaml.safe_load(f) or {}
+        data = _load_yaml_file(compose_file)
         services = list(data.get("services", {}).keys())
         if not services:
             continue
@@ -309,8 +315,7 @@ def product_build(no_image, skip_preflight):
     env_result = load_env_file(product_env_file)
 
     # Read declared features from pyproject.toml (not glob)
-    with open(pyproject_path, "rb") as f:
-        pydata = tomllib.load(f)
+    pydata = load_toml(pyproject_path, what="pyproject.toml")
     declared_features = read_features_from_data(pydata, "prod")
 
     # Check for editable (non-versioned) features — these can't be installed from PyPI
@@ -494,8 +499,7 @@ def product_build(no_image, skip_preflight):
                 fg="yellow",
             )
         else:
-            with open(pyproject_path, "rb") as f:
-                data = tomllib.load(f)
+            data = load_toml(pyproject_path, what="pyproject.toml")
             version = data.get("project", {}).get("version", "latest")
 
             click.echo(f"\n🐳 Building Docker image: {product}:{version}...")

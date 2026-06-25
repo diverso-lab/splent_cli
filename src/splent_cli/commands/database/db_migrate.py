@@ -125,18 +125,38 @@ def db_migrate(feature, message, empty):
         prev_level = alembic_logger.level
         alembic_logger.setLevel(logging.WARNING)
 
+        gen_error = None
         try:
             if empty:
                 alembic_revision(directory=mdir, message=message or feat)
             else:
                 alembic_migrate(directory=mdir, message=message or feat)
         except Exception as e:
-            if os.getenv("SPLENT_DEBUG"):
-                click.secho(
-                    f"  ⚠️  {feat}: migration generation skipped ({e})", fg="yellow"
-                )
+            gen_error = e
         finally:
             alembic_logger.setLevel(prev_level)
+
+        # Always surface generation failures — never report "up to date" when the
+        # migration actually failed to generate. Show a one-line error (full
+        # detail only under SPLENT_DEBUG).
+        if gen_error is not None:
+            click.echo(
+                click.style(
+                    f"  ❌ {feat}: migration generation failed ({gen_error})",
+                    fg="red",
+                )
+            )
+            if os.getenv("SPLENT_DEBUG"):
+                import traceback
+
+                click.echo(
+                    "".join(
+                        traceback.format_exception(
+                            type(gen_error), gen_error, gen_error.__traceback__
+                        )
+                    )
+                )
+            continue
 
         after = _count_versions(mdir)
 

@@ -157,6 +157,8 @@ def db_seed(reset, yes, module):
         )
     )
 
+    from sqlalchemy.exc import IntegrityError
+
     success = True
     for seeder in seeders:
         try:
@@ -164,23 +166,23 @@ def db_seed(reset, yes, module):
             click.echo(
                 click.style(f"✔ {seeder.__class__.__name__} completed.", fg="blue")
             )
+        except IntegrityError:
+            click.echo(
+                click.style(
+                    f"❌ {seeder.__class__.__name__}: duplicate data detected.\n"
+                    f"   The database already contains seeded data.\n"
+                    f"   Run: splent db:seed --reset",
+                    fg="red",
+                )
+            )
+            success = False
+            break
         except Exception as e:
-            err_str = str(e)
-            if "Duplicate entry" in err_str or "IntegrityError" in err_str:
-                click.echo(
-                    click.style(
-                        f"❌ {seeder.__class__.__name__}: duplicate data detected.\n"
-                        f"   The database already contains seeded data.\n"
-                        f"   Run: splent db:seed --reset",
-                        fg="red",
-                    )
+            click.echo(
+                click.style(
+                    f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red"
                 )
-            else:
-                click.echo(
-                    click.style(
-                        f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red"
-                    )
-                )
+            )
             success = False
             break
 

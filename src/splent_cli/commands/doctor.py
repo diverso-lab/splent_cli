@@ -4,6 +4,8 @@ splent doctor — Run all diagnostic checks on the workspace.
 Organized in sections: environment, product, services, and credentials.
 """
 
+import os
+
 import click
 
 from splent_cli.commands.check.check_env import check_env
@@ -54,6 +56,45 @@ SECTIONS = [
 ]
 
 
+def _check_workspace_precondition():
+    """Warn once if WORKING_DIR / SPLENT_APP are missing or point nowhere.
+
+    These env vars are the root that almost every section resolves paths from,
+    so when they are wrong the downstream checks fail in confusing ways. We only
+    warn (doctor is a diagnostic, not a gate) and give a concrete fix hint.
+    """
+    problems = []
+
+    wd = os.getenv("WORKING_DIR")
+    workspace = wd or os.getcwd()
+    if not wd:
+        problems.append("WORKING_DIR is not set (falling back to the current directory)")
+    elif not os.path.isdir(wd):
+        problems.append(f"WORKING_DIR points to a missing directory: {wd}")
+
+    app = os.getenv("SPLENT_APP")
+    if not app:
+        problems.append("SPLENT_APP is not set")
+    elif not os.path.isdir(os.path.join(workspace, app)):
+        problems.append(
+            f"SPLENT_APP = {app} but {os.path.join(workspace, app)} does not exist"
+        )
+
+    if not problems:
+        return
+
+    click.secho("  Workspace not fully configured:", fg="yellow", bold=True)
+    for p in problems:
+        click.echo(click.style("    • ", fg="yellow") + p)
+    click.echo(
+        click.style("    → ", fg="yellow")
+        + "Set WORKING_DIR to your workspace and SPLENT_APP to your product "
+        + "directory (usually via the workspace .env). Most checks below will "
+        + "fail until these are correct."
+    )
+    click.echo()
+
+
 @click.command(
     "doctor", short_help="Run all diagnostic checks sequentially and report a summary."
 )
@@ -77,6 +118,12 @@ def doctor(fast):
       splent product:validate
     """
     click.echo(click.style("\n  SPLENT Doctor\n", fg="cyan", bold=True))
+
+    # Precondition: a misconfigured WORKING_DIR / SPLENT_APP makes nearly every
+    # section fail opaquely (each one resolves paths off these env vars). Surface
+    # the root cause ONCE here with an actionable hint, then keep going so the
+    # individual checks (e.g. check:env) can still report their own detail.
+    _check_workspace_precondition()
 
     passed = 0
     failed = 0

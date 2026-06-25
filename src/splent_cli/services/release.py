@@ -17,6 +17,8 @@ import urllib.request
 import click
 import requests
 
+from splent_cli.utils.proc import require_tool
+
 
 # ── Environment validation ────────────────────────────────────────────
 
@@ -77,12 +79,19 @@ def extract_repo(remote_url: str) -> str:
 
 def get_repo_from_path(cwd: str) -> str:
     """Read the remote.origin.url from git config and extract org/repo."""
-    remote_url = subprocess.run(
+    require_tool("git", "Install git: https://git-scm.com/downloads")
+    r = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
         capture_output=True,
         text=True,
         cwd=cwd,
-    ).stdout.strip()
+    )
+    remote_url = r.stdout.strip()
+    if r.returncode != 0 or not remote_url:
+        raise click.ClickException(
+            f"  error: no 'origin' remote configured for the repository at {cwd}.\n"
+            "  Add one with: git remote add origin <github-url>"
+        )
     return extract_repo(remote_url)
 
 
@@ -213,25 +222,38 @@ def create_github_release(repo: str, version: str, token: str | None):
         f"```\npip install {package}=={version_number}\n```\n"
     )
 
-    resp = requests.post(
-        f"https://api.github.com/repos/{repo}/releases",
-        headers={
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github+json",
-        },
-        json={
-            "tag_name": tag,
-            "name": f"Release {tag}",
-            "body": body,
-            "draft": False,
-            "prerelease": False,
-        },
-    )
+    try:
+        resp = requests.post(
+            f"https://api.github.com/repos/{repo}/releases",
+            headers={
+                "Authorization": f"token {token}",
+                "Accept": "application/vnd.github+json",
+            },
+            json={
+                "tag_name": tag,
+                "name": f"Release {tag}",
+                "body": body,
+                "draft": False,
+                "prerelease": False,
+            },
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        click.secho(
+            f"  github   release skipped — could not reach GitHub: {e}", fg="yellow"
+        )
+        return
 
     if resp.status_code in (200, 201):
         click.echo(f"  github   release created: {resp.json().get('html_url')}")
     elif resp.status_code == 422 and "already_exists" in resp.text:
         click.secho("  github   release already exists — skipping", fg="yellow")
+    elif resp.status_code in (401, 403):
+        click.secho(
+            f"  github   release skipped ({resp.status_code}) — check GITHUB_TOKEN "
+            "permissions or rate limit (set GITHUB_TOKEN to raise the limit).",
+            fg="yellow",
+        )
     else:
         click.secho(
             f"  github   release failed: {resp.status_code} {resp.text}", fg="yellow"
@@ -447,6 +469,12 @@ def run_release_pipeline(
     if not os.path.isfile(pyproject):
         raise SystemExit(f"  error: pyproject.toml not found in {path}")
 
+    # Validate git availability + origin remote up front, before any
+    # state-changing step (version bump / commit / tag push). This fails fast
+    # with an actionable message instead of crashing mid-pipeline after the tag
+    # has already been pushed.
+    repo = get_repo_from_path(path)
+
     click.echo()
     click.echo(click.style(f"  Releasing {name} {tag}", bold=True))
     click.echo()
@@ -459,7 +487,6 @@ def run_release_pipeline(
     commit_and_push(path, tag, subject=f"release {name}")
     create_and_push_tag(path, tag)
 
-    repo = get_repo_from_path(path)
     create_github_release(repo, tag, os.getenv("GITHUB_TOKEN"))
 
     from splent_cli.commands.clear.clear_build import clean_build_artifacts

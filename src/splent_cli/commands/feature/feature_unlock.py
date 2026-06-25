@@ -6,6 +6,8 @@ import requests
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.utils.cache_utils import make_feature_writable
+from splent_cli.utils.proc import run
+from splent_cli.utils.io_utils import load_toml, atomic_write
 
 
 # =====================================================================
@@ -23,26 +25,35 @@ def get_feature_paths(workspace: str, ns_fs: str, name: str, version: str | None
 # =====================================================================
 # GIT helpers — bypass safe.directory via -c flag (Docker UID mismatch)
 # =====================================================================
+_GIT_HINT = (
+    "Install git and make sure it is on your PATH: https://git-scm.com/downloads"
+)
+
+
 def _git(path: str, *args, capture: bool = False):
-    return subprocess.run(
+    return run(
         ["git", "-C", path, "-c", "safe.directory=*", *args],
-        capture_output=capture,
-        text=capture,
+        check=False,
+        capture=capture,
+        tool_hint=_GIT_HINT,
     )
 
 
 def _git_check(path: str, *args):
-    return subprocess.run(
+    return run(
         ["git", "-C", path, "-c", "safe.directory=*", *args],
         check=True,
+        capture=True,
+        tool_hint=_GIT_HINT,
     )
 
 
 def _git_out(path: str, *args) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    return run(
         ["git", "-C", path, "-c", "safe.directory=*", *args],
-        capture_output=True,
-        text=True,
+        check=False,
+        capture=True,
+        tool_hint=_GIT_HINT,
     )
 
 
@@ -74,13 +85,49 @@ def ensure_git_main(path: str, ns_git: str, name: str):
 # PYPROJECT UPDATE
 # =====================================================================
 def replace_pyproject_reference(pyproject_path: str, name: str, version: str):
-    with open(pyproject_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    """Drop the ``@version`` from a feature entry in pyproject.toml.
 
-    updated = content.replace(f"{name}@{version}", name)
+    Operates on the parsed TOML feature lists (matching the exact ``name`` and
+    ``version`` of each entry) instead of a raw substring replace, which could
+    corrupt unrelated entries on a substring collision.
+    """
+    from splent_cli.utils.feature_utils import parse_feature_entry
 
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        f.write(updated)
+    data = load_toml(pyproject_path, what="pyproject.toml")
+
+    # All places a feature entry may live, keyed by their containers.
+    splent = data.get("tool", {}).get("splent", {})
+    opt_deps = data.get("project", {}).get("optional-dependencies", {})
+    targets = [
+        (splent, "features"),
+        (splent, "features_dev"),
+        (splent, "features_prod"),
+        (opt_deps, "features"),
+    ]
+
+    changed = False
+    for container, key in targets:
+        entries = container.get(key)
+        if not isinstance(entries, list):
+            continue
+        new_entries = []
+        for entry in entries:
+            if isinstance(entry, str):
+                _, e_name, e_version = parse_feature_entry(entry)
+                if e_name == name and e_version == version:
+                    # Strip the version suffix, preserving any namespace prefix.
+                    new_entries.append(entry.split("@", 1)[0])
+                    changed = True
+                    continue
+            new_entries.append(entry)
+        container[key] = new_entries
+
+    if not changed:
+        return
+
+    import tomli_w
+
+    atomic_write(pyproject_path, tomli_w.dumps(data))
 
 
 # =====================================================================
@@ -198,20 +245,37 @@ def _edit_one(
         click.secho(f"    cached version not found: {versioned_path}", fg="red")
         return False
 
-    if not os.path.exists(editable_path):
-        import shutil
+    import shutil
 
+    # Track whether *we* created the editable copy so we can roll it back if a
+    # later step (git fetch/checkout/pull) fails, avoiding half-converted state.
+    copied_here = False
+    if not os.path.exists(editable_path):
         click.echo(click.style("    copying to workspace root...", dim=True))
-        result = subprocess.run(["cp", "-r", versioned_path, editable_path])
-        if result.returncode != 0:
+        try:
+            shutil.copytree(versioned_path, editable_path, symlinks=True)
+            copied_here = True
+        except OSError as e:
             shutil.rmtree(editable_path, ignore_errors=True)
-            click.secho("    failed to copy feature.", fg="red")
+            click.secho(f"    failed to copy feature: {e}", fg="red")
             return False
+
+    def _rollback():
+        if copied_here:
+            # cache files are read-only; make writable so rmtree can't die.
+            make_feature_writable(editable_path)
+            shutil.rmtree(editable_path, ignore_errors=True)
 
     # Always ensure editable copy is writable (cache files are read-only)
     make_feature_writable(editable_path)
 
-    ensure_git_main(editable_path, ns_git, name)
+    try:
+        ensure_git_main(editable_path, ns_git, name)
+    except click.ClickException as e:
+        _rollback()
+        click.secho(f"    git setup failed: {e.format_message()}", fg="red")
+        return False
+
     replace_pyproject_reference(pyproject_path, name, version)
 
     product_features_dir = os.path.join(product_path, "features", ns_fs)

@@ -5,6 +5,42 @@ import shutil
 import click
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.io_utils import atomic_write
+
+
+def _parse_env_line(line: str):
+    """Tolerantly parse a single .env line into a (key, value) pair.
+
+    Returns None for blanks, comments and otherwise invalid lines so callers
+    can skip them instead of writing a malformed env. Handles:
+
+      * leading/trailing whitespace and full-line comments (``# ...``)
+      * an optional ``export `` prefix (``export X=1``)
+      * surrounding single/double quotes around the value (quotes stripped)
+      * empty keys (skipped) and keys with no ``=`` (skipped)
+
+    Note: ``#`` is treated as part of the value, since unquoted ``#`` is not a
+    reliable comment delimiter in real .env files (values often contain ``#``).
+    """
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    if "=" not in stripped:
+        return None
+
+    if stripped.startswith("export ") or stripped.startswith("export\t"):
+        stripped = stripped[len("export"):].lstrip()
+
+    key, value = stripped.split("=", 1)
+    key = key.strip()
+    if not key or not all(c.isalnum() or c == "_" for c in key):
+        return None
+
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1]
+
+    return key, value
 
 
 def _is_port_var(key: str, value: str) -> bool:
@@ -190,8 +226,9 @@ def product_env(generate, merge, env_name, process_all):
         merged = {}
         with open(target_env, "r", encoding="utf-8") as f:
             for line in f:
-                if "=" in line and not line.strip().startswith("#"):
-                    k, v = line.strip().split("=", 1)
+                parsed = _parse_env_line(line)
+                if parsed is not None:
+                    k, v = parsed
                     merged[k] = v
 
         # Always set SPLENT_ENV to match the current merge target
@@ -245,18 +282,20 @@ def product_env(generate, merge, env_name, process_all):
                 continue
             with open(f_env, "r", encoding="utf-8") as f:
                 for line in f:
-                    if "=" in line and not line.strip().startswith("#"):
-                        k, v = line.strip().split("=", 1)
-                        if k not in merged and _is_port_var(k, v):
-                            try:
-                                original = int(v)
-                                adjusted = original + port_offset
-                                merged.setdefault(k, str(adjusted))
-                                port_adjusted.append((k, original, adjusted))
-                            except ValueError:
-                                merged.setdefault(k, v)
-                        else:
+                    parsed = _parse_env_line(line)
+                    if parsed is None:
+                        continue
+                    k, v = parsed
+                    if k not in merged and _is_port_var(k, v):
+                        try:
+                            original = int(v)
+                            adjusted = original + port_offset
+                            merged.setdefault(k, str(adjusted))
+                            port_adjusted.append((k, original, adjusted))
+                        except ValueError:
                             merged.setdefault(k, v)
+                    else:
+                        merged.setdefault(k, v)
 
         # Replace __PRODUCT__ placeholder with the actual product name
         product_replaced = []
@@ -265,9 +304,10 @@ def product_env(generate, merge, env_name, process_all):
                 merged[k] = v.replace("__PRODUCT__", product)
                 product_replaced.append(k)
 
-        with open(target_env, "w", encoding="utf-8") as f:
-            for k, v in merged.items():
-                f.write(f"{k}={v}\n")
+        atomic_write(
+            target_env,
+            "".join(f"{k}={v}\n" for k, v in merged.items()),
+        )
 
         if product_replaced:
             click.echo(

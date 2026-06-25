@@ -9,6 +9,7 @@ import click
 
 from splent_cli.services import context
 from splent_cli.commands.spl.spl_utils import _resolve_spl
+from splent_cli.utils.io_utils import atomic_write, backup_file
 
 
 def _parse_uvl_packages(uvl_path: str) -> dict[str, str]:
@@ -230,6 +231,19 @@ def spl_add_feature(spl_name, feature_package, org):
     if insert_idx is None:
         insert_idx = len(lines)
 
+    # The line-insertion below assumes "constraints" lives on its own line.
+    # If it doesn't (e.g. malformed or unexpected layout), bail out before
+    # touching the file rather than silently corrupting the model.
+    if detected_deps and constraints_idx is None:
+        click.secho(
+            f"  ❌ No 'constraints' section found in {uvl_path}.\n"
+            f"     Refusing to edit: the UVL layout is not what this command "
+            f"expects (a 'constraints' header on its own line). "
+            f"Add the feature and constraints manually.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     # Insert feature declaration
     feature_line = (
         f"\t\toptional\n\t\t\t{short_name} {{org '{org}', package '{feature_package}'}}"
@@ -245,8 +259,43 @@ def spl_add_feature(spl_name, feature_package, org):
             )
             lines.insert(constraints_idx, f"\t{short_name} => {dep}")
 
-    with open(uvl_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+    # Back up the original UVL, then write atomically so a crash mid-write can
+    # never leave a half-written / truncated model.
+    bak = backup_file(uvl_path, ".bak")
+    new_text = "\n".join(lines) + "\n"
+    atomic_write(uvl_path, new_text)
+
+    # Post-write validation: re-parse the file and confirm the feature (and any
+    # constraints) actually landed as expected. If the structure is not what we
+    # produced, restore from the backup and report clearly instead of leaving a
+    # silently corrupted model behind.
+    try:
+        written_packages = _parse_uvl_packages(uvl_path)
+    except Exception as exc:  # noqa: BLE001 - re-read should not normally fail
+        written_packages = {}
+        parse_error = exc
+    else:
+        parse_error = None
+
+    if parse_error is not None or feature_package not in set(
+        written_packages.values()
+    ):
+        if bak is not None:
+            atomic_write(uvl_path, bak.read_text(encoding="utf-8"))
+        detail = (
+            f" ({parse_error})"
+            if parse_error is not None
+            else " (feature not found after write)"
+        )
+        click.secho(
+            f"  ❌ UVL did not validate after editing{detail}.\n"
+            f"     The original was restored"
+            + (f" from {bak}." if bak is not None else ".")
+            + "\n     The model layout was not what this command expects; "
+            "add the feature manually.",
+            fg="red",
+        )
+        raise SystemExit(1)
 
     click.echo()
     click.secho(f"  ✅ Feature '{short_name}' added to {spl_name}.", fg="green")

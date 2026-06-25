@@ -1,9 +1,9 @@
 import os
-import subprocess
 import click
 import tomllib
 from splent_cli.services import compose, context
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.proc import run, require_docker
 
 
 def _docker_down(name: str, base_path: str, env: str):
@@ -11,13 +11,20 @@ def _docker_down(name: str, base_path: str, env: str):
     if compose_file is None:
         return
     project_name = compose.project_name(name, env)
-    subprocess.run(
+    # Destructive: 'down -v' removes all volumes/data. Do not silence stderr —
+    # surface failures instead of always reporting success.
+    result = run(
         ["docker", "compose", "-p", project_name, "-f", compose_file, "down", "-v"],
         check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
     )
-    click.echo(f"  🛑  {name} stopped and volumes removed.")
+    if result.returncode != 0:
+        click.secho(
+            f"  ⚠️  {name}: 'docker compose down -v' failed "
+            f"(exit {result.returncode}) — see output above.",
+            fg="yellow",
+        )
+    else:
+        click.echo(f"  🛑  {name} stopped and volumes removed.")
 
 
 @click.command(
@@ -48,7 +55,7 @@ def product_clean(env_dev, env_prod, yes):
     product = context.require_app()
 
     click.secho(f"\n⚠️  This will completely wipe {product} ({env}):", fg="yellow")
-    click.echo("  - Stop all Docker containers and remove volumes")
+    click.echo("  - Stop all Docker containers and DELETE ALL VOLUMES/DATA (irreversible)")
     click.echo("  - Reset the database and regenerate migrations")
     click.echo("  - Clear uploads and application log")
     click.echo()
@@ -61,6 +68,8 @@ def product_clean(env_dev, env_prod, yes):
 
     # ── 1. Docker down --volumes ─────────────────────────────────────
     click.secho("\n🐳 Stopping containers and removing volumes...", fg="cyan")
+
+    require_docker()
 
     pyproject_path = os.path.join(product_path, "pyproject.toml")
     features = []
@@ -77,7 +86,7 @@ def product_clean(env_dev, env_prod, yes):
 
     # ── 2. DB reset ──────────────────────────────────────────────────
     click.secho("\n🗄️  Resetting database...", fg="cyan")
-    result = subprocess.run(
+    result = run(
         ["splent", "db:reset", "--clear-migrations", "--yes"],
         check=False,
     )
@@ -90,7 +99,7 @@ def product_clean(env_dev, env_prod, yes):
 
     # ── 3. Clear uploads ─────────────────────────────────────────────
     click.secho("\n🗂️  Clearing uploads...", fg="cyan")
-    result = subprocess.run(["splent", "clear:uploads"], check=False)
+    result = run(["splent", "clear:uploads"], check=False)
     if result.returncode == 0:
         click.secho("  ✔ Uploads cleared.", fg="green")
     else:
@@ -101,7 +110,7 @@ def product_clean(env_dev, env_prod, yes):
 
     # ── 4. Clear log ─────────────────────────────────────────────────
     click.secho("\n📋 Clearing application log...", fg="cyan")
-    result = subprocess.run(["splent", "clear:log"], check=False)
+    result = run(["splent", "clear:log"], check=False)
     if result.returncode == 0:
         click.secho("  ✔ Log cleared.", fg="green")
     else:

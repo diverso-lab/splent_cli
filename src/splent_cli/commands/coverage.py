@@ -1,8 +1,8 @@
 import click
-import subprocess
 import os
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.utils.proc import run
 from splent_cli.services import context
 
 
@@ -36,9 +36,12 @@ def coverage(module_name, html):
     if html:
         coverage_cmd.extend(["--cov-report", "html"])
 
-    try:
-        subprocess.run(coverage_cmd, check=True)
-    except subprocess.CalledProcessError:
+    result = run(
+        coverage_cmd,
+        check=False,
+        tool_hint="Install it with: pip install pytest pytest-cov",
+    )
+    if result.returncode != 0:
         click.echo(
             click.style("❌ Coverage run failed (tests may be failing).", fg="red")
         )

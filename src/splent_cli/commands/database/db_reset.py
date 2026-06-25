@@ -41,9 +41,14 @@ def db_reset(yes):
         return
 
     # --- STEP 1: Drop ALL tables (including alembic_* and splent_migrations) ---
+    # Run every DROP inside a single transaction (engine.begin) so that a
+    # mid-operation connection failure rolls back as a unit rather than
+    # leaving a half-dropped schema. Note: MySQL/MariaDB issue an implicit
+    # COMMIT on DDL, so a full rollback is not guaranteed there; we therefore
+    # also surface explicit partial-state recovery guidance on failure.
     click.echo(click.style("🗑️  Dropping all tables...", fg="yellow"))
     try:
-        with db.engine.connect() as conn:
+        with db.engine.begin() as conn:
             conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
             meta = MetaData()
             meta.reflect(bind=db.engine)
@@ -51,11 +56,21 @@ def db_reset(yes):
                 conn.execute(text(f"DROP TABLE IF EXISTS `{table.name}`"))
                 click.echo(click.style(f"   Dropped {table.name}", fg="bright_black"))
             conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-            conn.commit()
         click.echo(click.style("✅ All tables dropped.", fg="yellow"))
     except Exception as e:
         click.echo(click.style(f"❌ Error dropping tables: {e}", fg="red"))
-        return
+        click.echo(
+            click.style(
+                "⚠️  The database may now be in a PARTIAL state: some tables "
+                "may have been dropped while others remain.\n"
+                "   To recover, re-run this command once the database is "
+                "reachable again (it is safe to repeat — drops use "
+                "DROP TABLE IF EXISTS), or manually drop the remaining "
+                "tables / re-create the schema from migrations.",
+                fg="red",
+            )
+        )
+        raise SystemExit(1)
 
     # --- STEP 2: Recreate splent_migrations tracking table ---
     click.echo(click.style("📋 Recreating splent_migrations table...", fg="cyan"))
@@ -74,7 +89,15 @@ def db_reset(yes):
             )
     except Exception as e:
         click.echo(click.style(f"❌ Error creating tracking table: {e}", fg="red"))
-        return
+        click.echo(
+            click.style(
+                "⚠️  All tables were dropped but the tracking table could not "
+                "be recreated. Re-run this command once the database is "
+                "reachable to finish the reset.",
+                fg="red",
+            )
+        )
+        raise SystemExit(1)
 
     # --- STEP 3: Clear uploads ---
     ctx = click.get_current_context()

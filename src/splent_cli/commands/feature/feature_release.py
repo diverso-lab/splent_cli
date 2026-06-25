@@ -4,6 +4,8 @@ feature:release — Release a feature: bump version, tag, publish to GitHub/PyPI
 
 import os
 import re
+import shutil
+import stat
 import subprocess
 import tomllib
 
@@ -13,6 +15,7 @@ from pathlib import Path
 from splent_cli.commands.feature.feature_attach import feature_attach
 from splent_cli.services import context, release
 from splent_cli.utils.feature_utils import normalize_namespace
+from splent_cli.utils.proc import run
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -472,6 +475,27 @@ def _compile_before_release(feature_name: str):
 # ── Versioned snapshot ────────────────────────────────────────────────
 
 
+def _remove_snapshot_dir(path: str) -> None:
+    """Best-effort removal of a (possibly partial / read-only) snapshot dir.
+
+    git writes read-only pack files under ``.git/objects``; ``rmtree`` would die
+    with PermissionError on those, leaving partial state. The onerror handler
+    chmods the offending path writable and retries so cleanup always completes.
+    """
+
+    if not os.path.exists(path):
+        return
+
+    def _on_rm_error(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWUSR | stat.S_IRUSR)
+            func(p)
+        except OSError:
+            pass
+
+    shutil.rmtree(path, onerror=_on_rm_error)
+
+
 def create_versioned_snapshot(namespace, feature_name, version, workspace):
     namespace_fs = normalize_namespace(namespace)
     org_github = namespace.replace("_", "-")
@@ -486,7 +510,7 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
     click.echo(f"  snapshot cloning {feature_name}@{version}...")
 
     try:
-        subprocess.run(
+        run(
             [
                 "git",
                 "clone",
@@ -498,11 +522,19 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
                 snapshot_path,
             ],
             check=True,
-            capture_output=True,
+            capture=True,
+            timeout=300,
+            tool_hint="Install git: https://git-scm.com/downloads",
         )
-    except subprocess.CalledProcessError:
+    except click.ClickException as exc:
+        # run() already translated missing-git / non-zero exit / timeout into an
+        # actionable message. Remove any partially-cloned directory so we never
+        # leave a half-baked snapshot behind, then surface the cause.
+        _remove_snapshot_dir(snapshot_path)
         click.secho(
-            f"  error: failed to clone snapshot for {feature_name}@{version}", fg="red"
+            f"  error: failed to clone snapshot for {feature_name}@{version}\n"
+            f"  {exc.message}",
+            fg="red",
         )
         raise SystemExit(1)
 

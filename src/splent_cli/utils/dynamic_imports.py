@@ -1,13 +1,14 @@
 import os
 import sys
-import subprocess
-import tomllib
 import importlib
+import click
 from dotenv import load_dotenv
 from importlib.metadata import distributions
 from flask import Flask
 
 from splent_framework.utils.path_utils import PathUtils
+from splent_cli.utils.io_utils import load_toml
+from splent_cli.utils.proc import run
 
 load_dotenv()
 
@@ -28,13 +29,13 @@ def install_features_if_needed():
     if not module_name:
         return  # No app defined yet
 
-    pyproject_path = f"/workspace/{module_name}/pyproject.toml"
+    base_dir = PathUtils.get_working_dir()
+    pyproject_path = os.path.join(base_dir, module_name, "pyproject.toml")
     if not os.path.exists(pyproject_path):
         return
 
     installed = {dist.metadata["Name"] for dist in distributions()}
-    with open(pyproject_path, "rb") as f_toml:
-        pyproject = tomllib.load(f_toml)
+    pyproject = load_toml(pyproject_path, what=f"{module_name}/pyproject.toml")
 
     features = (
         pyproject.get("project", {})
@@ -42,16 +43,29 @@ def install_features_if_needed():
         .get("features", [])
     )
     for feature in features:
-        path = f"/workspace/{feature}"
+        path = os.path.join(base_dir, feature)
         pyproject_feature = os.path.join(path, "pyproject.toml")
         if not os.path.exists(pyproject_feature):
             continue
 
-        with open(pyproject_feature, "rb") as f_feat:
-            name = tomllib.load(f_feat)["project"]["name"]
-            if name not in installed:
-                subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "-e", path], check=True
+        feature_toml = load_toml(
+            pyproject_feature, what=f"{feature}/pyproject.toml"
+        )
+        name = feature_toml.get("project", {}).get("name")
+        if not name:
+            click.secho(
+                f"⚠️  Skipping feature '{feature}': no [project].name in "
+                f"{pyproject_feature}",
+                fg="yellow",
+            )
+        elif name not in installed:
+            try:
+                run([sys.executable, "-m", "pip", "install", "-e", path])
+            except click.ClickException as e:
+                click.secho(
+                    f"⚠️  Failed to install feature '{feature}' ({name}): "
+                    f"{e.format_message()}",
+                    fg="yellow",
                 )
 
         src_path = os.path.join(path, "src")
@@ -70,7 +84,7 @@ def get_app_module():
 
     install_features_if_needed()
 
-    src_path = f"/workspace/{module_name}/src"
+    src_path = os.path.join(PathUtils.get_working_dir(), module_name, "src")
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
 

@@ -1,10 +1,12 @@
 import os
 import sys
-import subprocess
 
 import click
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.utils.proc import require_tool, run
+
+_RUFF_HINT = "Install it with: pip install ruff"
 
 _TARGETS = ("cli", "framework", "app", "features")
 
@@ -53,6 +55,8 @@ def linter(fix, targets):
     if not directories:
         raise click.ClickException("No valid target directories found.")
 
+    require_tool("ruff", _RUFF_HINT)
+
     active_targets = sorted(set(targets) if targets else set(_TARGETS))
     click.echo(click.style("\n📦 SPLENT Linter (Ruff)\n", fg="cyan", bold=True))
     click.echo(f"Targets : {', '.join(active_targets)}")
@@ -68,7 +72,7 @@ def linter(fix, targets):
         label = f"{'Fixing' if fix else 'Checking'} {directory}"
         click.echo(click.style(f"🔍 {label}...\n", fg="yellow"))
 
-        result = subprocess.run(lint_cmd + [directory], capture_output=True, text=True)
+        result = run(lint_cmd + [directory], check=False, capture=True, tool_hint=_RUFF_HINT)
 
         output = (result.stdout + result.stderr).strip()
         if result.returncode != 0:
@@ -88,8 +92,11 @@ def linter(fix, targets):
     if fix:
         click.echo(click.style("\n🎨 Reformatting code...\n", fg="blue"))
         for directory in directories:
-            result = subprocess.run(
-                ["ruff", "format", directory], capture_output=True, text=True
+            result = run(
+                ["ruff", "format", directory],
+                check=False,
+                capture=True,
+                tool_hint=_RUFF_HINT,
             )
             output = (result.stdout + result.stderr).strip()
             if result.returncode != 0:
@@ -107,8 +114,11 @@ def linter(fix, targets):
     else:
         click.echo(click.style("\n🎨 Checking format...\n", fg="blue"))
         for directory in directories:
-            result = subprocess.run(
-                ["ruff", "format", "--check", directory], capture_output=True, text=True
+            result = run(
+                ["ruff", "format", "--check", directory],
+                check=False,
+                capture=True,
+                tool_hint=_RUFF_HINT,
             )
             output = (result.stdout + result.stderr).strip()
             if result.returncode != 0:

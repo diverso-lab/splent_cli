@@ -12,13 +12,13 @@ Example:
 """
 
 import os
-import subprocess
 import sys
 
 import click
 import tomllib
 
 from splent_cli.services import context
+from splent_cli.utils.proc import run
 
 
 def _parse_feature_entry(entry: str) -> tuple[str, str | None]:
@@ -71,18 +71,18 @@ def feature_pip_install():
 
         click.echo(f"  ⬇️  {spec}")
 
-        result = subprocess.run(
+        result = run(
             [sys.executable, "-m", "pip", "install", "--no-cache-dir", spec],
-            capture_output=True,
-            text=True,
+            check=False,
+            capture=True,
         )
 
         if result.returncode == 0:
             click.echo(f"  ✅ {spec}")
         else:
-            click.secho(
-                f"  ❌ {spec}: {result.stderr.strip().splitlines()[-1]}", fg="red"
-            )
+            output = (result.stderr or result.stdout or "").strip()
+            last_line = output.splitlines()[-1] if output else "no output"
+            click.secho(f"  ❌ {spec}: {last_line}", fg="red")
             failed.append(spec)
 
     click.echo()

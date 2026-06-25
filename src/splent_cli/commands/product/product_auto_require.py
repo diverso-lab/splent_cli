@@ -2,7 +2,6 @@ import os
 import re
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import List
 
 import click
 
@@ -114,90 +113,6 @@ def _dep_spec_from_meta(
 # -------------------------
 
 
-def _extract_string_items(list_body: str) -> List[str]:
-    """
-    Extrae strings TOML dentro de un bloque de lista, soportando "..." y '...'.
-    Ignora comentarios y whitespace. No intenta soportar escapes complejos.
-    """
-    items = []
-
-    # quita comentarios // o # al final de línea (muy común en tus pyproject)
-    cleaned_lines = []
-    for line in list_body.splitlines():
-        line2 = re.sub(r"(\s+#.*)$", "", line)
-        line2 = re.sub(r"(\s+//.*)$", "", line2)
-        cleaned_lines.append(line2)
-
-    cleaned = "\n".join(cleaned_lines)
-
-    # captura "..." o '...'
-    for m in re.finditer(r'["\']([^"\']+)["\']', cleaned):
-        items.append(m.group(1))
-
-    return items
-
-
-def _render_features_block(items: List[str], indent_key: str, indent_item: str) -> str:
-    """
-    Renderiza:
-      features = [
-          "...",
-          "...",
-      ]
-    """
-    out = []
-    out.append(f"{indent_key}features = [\n")
-    for it in items:
-        out.append(f'{indent_item}"{it}",\n')
-    out.append(f"{indent_key}]\n")
-    return "".join(out)
-
-
-def _rewrite_pyproject_features_block(py_text: str, to_add: List[str]) -> str:
-    """
-    Reescribe el bloque completo 'features = [ ... ]' manteniendo el resto intacto.
-    Busca el bloque dentro del archivo, no depende de tabulaciones exactas.
-    """
-    if not to_add:
-        return py_text
-
-    # Captura:
-    # 1) indent del key (espacios antes de "features")
-    # 2) cuerpo de la lista
-    #
-    # Importante: asumimos que el ']' está en su propia línea (como en tu pyproject generado).
-    pattern = re.compile(
-        r"(?ms)^(?P<indent>\s*)features\s*=\s*\[\s*\n(?P<body>.*?)(?P=indent)\]\s*$"
-    )
-
-    m = pattern.search(py_text)
-    if not m:
-        raise ValueError("Cannot find 'features = [ ... ]' block in pyproject.toml")
-
-    indent_key = m.group("indent")
-    body = m.group("body")
-
-    current = _extract_string_items(body)
-
-    # añade sin duplicar, preservando orden original
-    existing = set(current)
-    new_items = list(current)
-    for x in to_add:
-        if x not in existing:
-            new_items.append(x)
-            existing.add(x)
-
-    # decide indent de items: 4 espacios más que el key (tu estilo actual)
-    indent_item = indent_key + "    "
-
-    new_block = _render_features_block(
-        new_items, indent_key=indent_key, indent_item=indent_item
-    )
-
-    # reemplaza exactamente el match completo por el bloque regenerado
-    return py_text[: m.start()] + new_block + py_text[m.end() :]
-
-
 @click.command(
     "product:auto-require",
     short_help="Auto-add missing required features to pyproject.toml from UVL constraints.",
@@ -289,17 +204,36 @@ def product_complete(pyproject, default_org, yes, dry_run):
         click.echo()
         return
 
-    # Apply patch
-    py_text = Path(pyproject_path).read_text(encoding="utf-8", errors="replace")
-    new_text = _rewrite_pyproject_features_block(py_text, to_add_specs)
+    # Apply patch: parse pyproject as TOML, append missing specs to the base
+    # features list (dedup, preserving order), then write back atomically with
+    # a backup. Avoids fragile in-place regex edits of hand-formatted blocks.
+    import tomli_w
+    from splent_cli.utils.feature_utils import write_features_to_data
+    from splent_cli.utils.io_utils import (
+        atomic_write,
+        backup_file,
+        load_toml,
+    )
+
+    current_data = load_toml(pyproject_path, what="pyproject.toml")
+    current_features = _get_feature_deps(current_data)
+
+    existing = set(current_features)
+    new_features = list(current_features)
+    for spec in to_add_specs:
+        if spec not in existing:
+            new_features.append(spec)
+            existing.add(spec)
 
     # If nothing changes (already present), say so
-    if new_text == py_text:
+    if new_features == current_features:
         click.echo("No changes needed (entries already present).")
         click.echo()
         return
 
-    Path(pyproject_path).write_text(new_text, encoding="utf-8")
+    write_features_to_data(current_data, new_features)
+    backup_file(pyproject_path, ".bak")
+    atomic_write(pyproject_path, tomli_w.dumps(current_data))
     click.echo(f"Updated: {pyproject_path}")
     click.echo()
 

@@ -1,13 +1,13 @@
 import json
 import os
 import subprocess
-import tomllib
 
 import click
 
 from splent_cli.services import context, compose
 from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.io_utils import load_toml
 from splent_cli.commands.product.product_resolve import product_sync
 from splent_cli.commands.product.product_env import product_env
 from splent_cli.commands.product.product_up import product_up
@@ -164,8 +164,8 @@ def product_derive(mode):
         pyproject_path = os.path.join(product_dir, "pyproject.toml")
         features = []
         if os.path.exists(pyproject_path):
-            with open(pyproject_path, "rb") as f:
-                features = read_features_from_data(tomllib.load(f), mode)
+            pydata = load_toml(pyproject_path, what="pyproject.toml")
+            features = read_features_from_data(pydata, mode)
         port_conflicts = _run_port_check(
             workspace, product, product_dir, features, mode
         )

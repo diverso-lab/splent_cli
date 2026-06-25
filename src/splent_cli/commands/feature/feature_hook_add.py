@@ -7,12 +7,12 @@ Also updates [tool.splent.contract.provides].hooks in pyproject.toml.
 
 import os
 import re
-import tomllib
 import click
 from pathlib import Path
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import normalize_namespace
+from splent_cli.utils.io_utils import load_toml, atomic_write
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -84,48 +84,33 @@ def _append_hook(hooks_path: Path, slot: str, function_name: str) -> None:
 
 
 def _update_contract(pyproject_path: Path, slot: str) -> None:
-    """Add slot to [tool.splent.contract.provides].hooks in pyproject.toml."""
+    """Add slot to [tool.splent.contract.provides].hooks in pyproject.toml.
+
+    Parses the TOML, mutates the structure, and writes it back atomically so
+    hooks.py and the contract can never silently drift (multi-line arrays and
+    missing keys are handled correctly, unlike line-based regex editing).
+    """
     if not pyproject_path.exists():
         return
 
-    text = pyproject_path.read_text()
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-    except Exception:
-        return
+    data = load_toml(pyproject_path, what="pyproject.toml")
 
-    current = (
-        data.get("tool", {})
-        .get("splent", {})
-        .get("contract", {})
-        .get("provides", {})
-        .get("hooks", [])
+    provides = (
+        data.setdefault("tool", {})
+        .setdefault("splent", {})
+        .setdefault("contract", {})
+        .setdefault("provides", {})
     )
+    current = provides.get("hooks", [])
 
     if slot in current:
         return
 
-    updated = sorted(set(current) | {slot})
-    hooks_toml = "[" + ", ".join(f'"{h}"' for h in updated) + "]"
+    provides["hooks"] = sorted(set(current) | {slot})
 
-    if re.search(r"^hooks\s*=", text, re.MULTILINE):
-        text = re.sub(
-            r"^hooks\s*=.*$",
-            f"hooks      = {hooks_toml}",
-            text,
-            flags=re.MULTILINE,
-        )
-    else:
-        # Insert after commands = [...] line
-        text = re.sub(
-            r"(^commands\s*=.*$)",
-            rf"\1\nhooks      = {hooks_toml}",
-            text,
-            flags=re.MULTILINE,
-        )
+    import tomli_w
 
-    pyproject_path.write_text(text)
+    atomic_write(pyproject_path, tomli_w.dumps(data))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

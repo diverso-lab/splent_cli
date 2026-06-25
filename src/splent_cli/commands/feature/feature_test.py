@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 import click
 from splent_cli.utils.dynamic_imports import get_current_app_config_value
+from splent_cli.utils.proc import run
 from splent_cli.utils.feature_utils import (
     get_features_from_pyproject,
     get_normalize_feature_name_in_splent_format,
@@ -89,6 +90,16 @@ def _validate_testing_environment():
         )
         raise SystemExit(1)
 
+    if not db_url:
+        click.secho(
+            "❌ Could not determine the active database (SQLALCHEMY_DATABASE_URI is unset).\n\n"
+            "   Make sure you are running in the development environment:\n"
+            "     splent product:up --dev\n"
+            "     splent product:run --dev",
+            fg="red",
+        )
+        raise SystemExit(1)
+
     if "test" not in db_url.lower():
         click.secho(
             f"❌ Non-test database in use: {db_url}\n\n"
@@ -155,11 +166,23 @@ def _get_feature_roots(feature_ref=None) -> list[tuple[str, Path]]:
             )
             raise SystemExit(1)
 
+    workspace_root = workspace.resolve()
     result = []
     for ref in raw_refs:
         pkg = _pkg_name(ref)
         root = _find_feature_root(pkg, workspace, splent_app)
         if root:
+            # Guard against a feature ref / symlink resolving outside the workspace.
+            try:
+                resolved = root.resolve()
+                resolved.relative_to(workspace_root)
+            except ValueError:
+                click.secho(
+                    f"  ⚠️  {pkg} resolves outside the workspace "
+                    f"({resolved}) — skipping.",
+                    fg="yellow",
+                )
+                continue
             result.append((pkg, root))
         else:
             click.secho(f"  ⚠️  {pkg} not found on disk — skipping.", fg="yellow")
@@ -275,7 +298,16 @@ def _run_pytest(
 
             click.echo(f"     {click.style(level, fg=level_color, bold=True)}")
 
-            result = subprocess.run(cmd, env=env, cwd=src_dir)
+            result = run(
+                cmd,
+                check=False,
+                env=env,
+                cwd=src_dir,
+                tool_hint=(
+                    "Install pytest in the active environment, e.g.:\n"
+                    "  pip install pytest"
+                ),
+            )
             if result.returncode == 0:
                 passed += 1
             elif result.returncode == 5:

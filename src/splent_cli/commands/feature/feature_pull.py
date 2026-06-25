@@ -94,11 +94,15 @@ def feature_pull(feature_ref):
             status = click.style("✖", fg="red")
         click.echo(f"  {status}  {label}  {msg}")
 
+    total = len(targets)
     click.echo()
     click.secho(
-        f"{ok}/{len(targets)} pulled successfully.",
-        fg="green" if ok == len(targets) else "yellow",
+        f"{ok}/{total} pulled successfully.",
+        fg="green" if ok == total else "yellow",
     )
+
+    if ok < total:
+        raise SystemExit(1)
 
 
 cli_command = feature_pull

@@ -61,6 +61,7 @@ def db_upgrade(feature):
     logging.getLogger("alembic").setLevel(logging.WARNING)
     logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
 
+    failures = []
     for feat, mdir in dirs.items():
         try:
             logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
@@ -89,8 +90,15 @@ def db_upgrade(feature):
                 # Feature has migrations/ dir but no models module — skip silently
                 continue
             click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
+            failures.append(feat)
         except Exception as e:
             click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
+            failures.append(feat)
+
+    if failures:
+        raise click.ClickException(
+            "Migration upgrade failed for: " + ", ".join(failures)
+        )
 
 
 cli_command = db_upgrade

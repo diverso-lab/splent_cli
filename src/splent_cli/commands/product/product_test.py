@@ -9,12 +9,13 @@ Multiple --product flags can be passed to test several products in a single run.
 """
 
 import os
-import subprocess
+import sys
 
 import click
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import load_product_features
+from splent_cli.utils.proc import run
 
 
 def _run_product_tests(product, workspace, levels, verbose):
@@ -37,7 +38,7 @@ def _run_product_tests(product, workspace, levels, verbose):
         bold=True,
     )
 
-    cmd = ["splent", "feature:test"]
+    cmd = [sys.executable, "-m", "splent_cli", "feature:test"]
     cmd.extend(levels)
     if verbose:
         cmd.append("-v")
@@ -45,7 +46,7 @@ def _run_product_tests(product, workspace, levels, verbose):
     env_vars = dict(os.environ)
     env_vars["SPLENT_APP"] = product
 
-    result = subprocess.run(cmd, env=env_vars)
+    result = run(cmd, check=False, env=env_vars)
     return result.returncode
 
 

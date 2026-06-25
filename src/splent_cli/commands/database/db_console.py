@@ -1,9 +1,9 @@
 import click
-import subprocess
 from dotenv import load_dotenv
 import os
 
 from splent_cli.services import context
+from splent_cli.utils.proc import run, require_tool
 
 
 @click.command(
@@ -38,19 +38,34 @@ def db_console():
         )
         raise SystemExit(1)
 
-    try:
-        subprocess.run(
-            [
-                "mysql",
-                f"-h{mariadb_hostname}",
-                f"-u{mariadb_user}",
-                f"-p{mariadb_password}",
-                mariadb_database,
-            ],
-            check=True,
+    require_tool(
+        "mysql",
+        "Install the MariaDB/MySQL client (e.g. 'mariadb-client') and ensure it is on your PATH.",
+    )
+
+    result = run(
+        [
+            "mysql",
+            f"-h{mariadb_hostname}",
+            f"-u{mariadb_user}",
+            f"-p{mariadb_password}",
+            mariadb_database,
+        ],
+        check=False,
+    )
+    if result.returncode != 0:
+        click.secho(
+            f"❌ Could not open the MariaDB console (mysql exited {result.returncode}).",
+            fg="red",
         )
-    except subprocess.CalledProcessError as e:
-        click.secho(f"❌ Error opening MariaDB console: {e}", fg="red")
+        click.secho(
+            "   Is the database container running and reachable?\n"
+            f"   Tried to connect to host '{mariadb_hostname}' as user "
+            f"'{mariadb_user}'.\n"
+            "   Start it with: splent product:up   (or check 'docker ps').",
+            fg="yellow",
+        )
+        raise SystemExit(1)
 
 
 cli_command = db_console

@@ -14,6 +14,7 @@ import click
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
+from splent_cli.utils.io_utils import atomic_write, backup_file, load_toml
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -22,13 +23,60 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
+# Markers that identify a file as a feature:create scaffold stub (safe to
+# overwrite). Anything else is treated as developer-authored content and we
+# warn before clobbering it.
+_SCAFFOLD_MARKERS = (
+    "# This is the entry point",
+    "# Define your models here",
+    "# Define your services here",
+    "# Define your repositories here",
+    "scaffolded by feature:create",
+    "auto-generated",
+)
+
+
+def _is_stub(content: str) -> bool:
+    """Heuristic: True if a source file is empty or a feature:create scaffold
+    stub (safe to overwrite without asking)."""
+    stripped = content.strip()
+    if not stripped:
+        return True
+    # Only comments / pass / docstring → effectively empty
+    meaningful = [
+        ln
+        for ln in stripped.splitlines()
+        if ln.strip() and not ln.lstrip().startswith("#")
+    ]
+    if not meaningful or all(ln.strip() in ("pass", '"""', "'''") for ln in meaningful):
+        return True
+    lower = content.lower()
+    return any(marker.lower() in lower for marker in _SCAFFOLD_MARKERS)
+
+
+def _confirm_overwrite(path: str, label: str) -> bool:
+    """Warn before overwriting a non-stub source file. Returns True if it is
+    safe to write (file absent, a stub, or the user confirmed)."""
+    if not os.path.isfile(path):
+        return True
+    with open(path, "r", encoding="utf-8") as f:
+        existing = f.read()
+    if _is_stub(existing):
+        return True
+    click.echo()
+    click.secho(
+        f"  {label} already has content and is not a scaffold stub:", fg="yellow"
+    )
+    click.echo(click.style(f"    {path}", dim=True))
+    return click.confirm("  Overwrite it?", default=False)
+
+
 def _read_extensible_contract(feature_path: str) -> dict:
     """Read the extensible section from a feature's contract."""
     pyproject = os.path.join(feature_path, "pyproject.toml")
     if not os.path.isfile(pyproject):
         return {}
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject, what="feature pyproject.toml")
     ext = (
         data.get("tool", {}).get("splent", {}).get("contract", {}).get("extensible", {})
     )
@@ -46,8 +94,7 @@ def _read_provides(feature_path: str) -> dict:
     pyproject = os.path.join(feature_path, "pyproject.toml")
     if not os.path.isfile(pyproject):
         return {}
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject, what="feature pyproject.toml")
     provides = (
         data.get("tool", {}).get("splent", {}).get("contract", {}).get("provides", {})
     )
@@ -92,8 +139,7 @@ def _get_product_features(workspace: str, product: str) -> list[dict]:
     if not os.path.isfile(pyproject):
         return []
 
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject, what="product pyproject.toml")
 
     features = read_features_from_data(data)
     result = []
@@ -257,6 +303,11 @@ class {mixin_name}:
         if mixin_name in content:
             return
 
+    # Warn before clobbering developer-authored models.py
+    if not _confirm_overwrite(models_path, "models.py"):
+        click.echo(click.style("  skipped:    ", dim=True) + "models.py (kept)")
+        return
+
     # Overwrite — refinement features only need mixins, not db.Model classes
     os.makedirs(os.path.dirname(models_path), exist_ok=True)
     with open(models_path, "w") as f:
@@ -299,6 +350,11 @@ def _scaffold_service(
         if replacement_name in content:
             return
 
+    # Warn before clobbering developer-authored services.py
+    if not _confirm_overwrite(services_path, "services.py"):
+        click.echo(click.style("  skipped:    ", dim=True) + "services.py (kept)")
+        return
+
     # Overwrite — refinement features only need replacement classes
     os.makedirs(os.path.dirname(services_path), exist_ok=True)
     with open(services_path, "w") as f:
@@ -308,7 +364,9 @@ def _scaffold_service(
     repos_path = os.path.join(
         feature_path, "src", ns_safe, feature_name, "repositories.py"
     )
-    if os.path.isfile(repos_path):
+    if os.path.isfile(repos_path) and _confirm_overwrite(
+        repos_path, "repositories.py"
+    ):
         with open(repos_path, "w") as f:
             f.write(
                 "# Refinement features do not need their own repository.\n"
@@ -379,6 +437,11 @@ def _scaffold_init(
         + "def inject_context_vars(app):\n"
         + "    return {}\n"
     )
+
+    # Warn before clobbering a developer-authored __init__.py
+    if not _confirm_overwrite(init_path, "__init__.py"):
+        click.echo(click.style("  skipped:    ", dim=True) + "__init__.py (kept)")
+        return
 
     os.makedirs(os.path.dirname(init_path), exist_ok=True)
     with open(init_path, "w") as f:
@@ -462,6 +525,11 @@ def _scaffold_hooks(
         if "register_template_hook" in existing:
             return
 
+    # Warn before clobbering developer-authored hooks.py
+    if not _confirm_overwrite(hooks_path, "hooks.py"):
+        click.echo(click.style("  skipped:    ", dim=True) + "hooks.py (kept)")
+        return
+
     os.makedirs(os.path.dirname(hooks_path), exist_ok=True)
     with open(hooks_path, "w") as f:
         f.write(code)
@@ -528,8 +596,7 @@ def feature_refinement(refiner_name):
         raise SystemExit(1)
 
     # Check if refinement already configured
-    with open(refiner_pyproject, "rb") as f:
-        refiner_data = tomllib.load(f)
+    refiner_data = load_toml(refiner_pyproject, what=f"{refiner_name} pyproject.toml")
     existing_refinement = (
         refiner_data.get("tool", {}).get("splent", {}).get("refinement")
     )
@@ -801,8 +868,21 @@ def feature_refinement(refiner_name):
 
     content = content.rstrip() + "\n" + refinement_toml
 
-    with open(refiner_pyproject, "w", encoding="utf-8") as f:
-        f.write(content)
+    # Guard against a bad regex match silently corrupting the file: the result
+    # must still parse as TOML before we overwrite anything. Then write
+    # atomically with a backup so a failure never truncates pyproject.toml.
+    try:
+        tomllib.loads(content)
+    except tomllib.TOMLDecodeError as e:
+        click.secho(
+            f"  Refusing to write pyproject.toml: the result is not valid TOML.\n"
+            f"  {e}",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+    backup_file(refiner_pyproject)
+    atomic_write(refiner_pyproject, content)
 
     click.echo(click.style("  pyproject.toml updated.", dim=True))
 
@@ -881,8 +961,9 @@ def feature_refinement(refiner_name):
 
         org = ns
         product_pyproject = os.path.join(workspace, product, "pyproject.toml")
-        with open(product_pyproject, "rb") as f:
-            existing = read_features_from_data(tomllib.load(f))
+        existing = read_features_from_data(
+            load_toml(product_pyproject, what="product pyproject.toml")
+        )
         for entry in existing:
             if "/" in entry:
                 org = entry.split("/", 1)[0]

@@ -54,8 +54,15 @@ def check_features():
         _fail("pyproject.toml not found")
         raise SystemExit(1)
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        _fail(f"pyproject.toml is not valid TOML: {e}")
+        raise SystemExit(1)
+    except OSError as e:
+        _fail(f"Could not read pyproject.toml: {e}")
+        raise SystemExit(1)
 
     env = os.getenv("SPLENT_ENV")
     features = read_features_from_data(data, env)

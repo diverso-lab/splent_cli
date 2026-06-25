@@ -7,18 +7,43 @@ import subprocess
 import json
 
 import click
-import tomllib
 
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.io_utils import load_toml
+
+
+class _Result:
+    """Minimal stand-in for CompletedProcess used by the guarded ``_run``."""
+
+    __slots__ = ("returncode", "stdout", "stderr")
+
+    def __init__(self, returncode: int, stdout: str = "", stderr: str = ""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def _run(cmd: list) -> _Result:
+    """Run a docker command, never crashing the diagnostic.
+
+    Missing tool (FileNotFoundError) and timeouts are mapped to a non-zero
+    returncode so callers treat them as a normal FAIL/skip, exactly like
+    check_docker._run.
+    """
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        return _Result(r.returncode, r.stdout, r.stderr)
+    except FileNotFoundError:
+        return _Result(1, "", "command not found")
+    except subprocess.TimeoutExpired:
+        return _Result(1, "", "timed out")
 
 
 def _parse_compose_ports(compose_file: str) -> list[tuple[int, str, str]]:
     """Return [(host_port, service_name, source_label)] from a compose file."""
-    result = subprocess.run(
-        ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
-        capture_output=True,
-        text=True,
+    result = _run(
+        ["docker", "compose", "-f", compose_file, "config", "--format", "json"]
     )
     if result.returncode != 0:
         return []
@@ -41,10 +66,8 @@ def _parse_compose_ports(compose_file: str) -> list[tuple[int, str, str]]:
 
 def _parse_compose_services(compose_file: str) -> list[tuple[str, str, str]]:
     """Return [(service_name, container_name_or_None, source_label)]."""
-    result = subprocess.run(
-        ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
-        capture_output=True,
-        text=True,
+    result = _run(
+        ["docker", "compose", "-f", compose_file, "config", "--format", "json"]
     )
     if result.returncode != 0:
         return []
@@ -97,8 +120,7 @@ def check_infra():
         _fail("pyproject.toml not found")
         raise SystemExit(1)
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what="pyproject.toml")
 
     env = os.getenv("SPLENT_ENV", "dev")
     features = read_features_from_data(data, env)
@@ -132,21 +154,19 @@ def check_infra():
     else:
         _ok(f"No port conflicts ({len(all_ports)} ports declared)")
 
-    # Check against running containers
+    # Check against running containers (query docker ps once, not per-port)
     running_conflicts = []
-    for port in all_ports:
-        result = subprocess.run(
-            ["docker", "ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Ports}}"],
-            capture_output=True,
-            text=True,
-        )
-        for line in result.stdout.splitlines():
-            parts = line.split("\t", 2)
-            if len(parts) < 3:
-                continue
-            cid, name, ports_str = parts
-            if f":{port}->" in ports_str:
-                running_conflicts.append((port, name))
+    ps_result = _run(["docker", "ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Ports}}"])
+    if ps_result.returncode == 0:
+        ps_lines = ps_result.stdout.splitlines()
+        for port in all_ports:
+            for line in ps_lines:
+                parts = line.split("\t", 2)
+                if len(parts) < 3:
+                    continue
+                cid, name, ports_str = parts
+                if f":{port}->" in ports_str:
+                    running_conflicts.append((port, name))
 
     if running_conflicts:
         for port, cname in running_conflicts:
@@ -189,10 +209,8 @@ def check_infra():
     click.echo(click.style("  Networks", bold=True))
     required_networks: set[str] = set()
     for label, cf in compose_files:
-        result = subprocess.run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"],
-            capture_output=True,
-            text=True,
+        result = _run(
+            ["docker", "compose", "-f", cf, "config", "--format", "json"]
         )
         if result.returncode != 0:
             continue
@@ -205,10 +223,8 @@ def check_infra():
                 required_networks.add(net_name)
 
     if required_networks:
-        existing_networks = subprocess.run(
-            ["docker", "network", "ls", "--format", "{{.Name}}"],
-            capture_output=True,
-            text=True,
+        existing_networks = _run(
+            ["docker", "network", "ls", "--format", "{{.Name}}"]
         ).stdout.splitlines()
         for net in sorted(required_networks):
             if net in existing_networks:
@@ -226,10 +242,8 @@ def check_infra():
     build_count = 0
     for label, cf in compose_files:
         docker_dir = os.path.dirname(cf)
-        result = subprocess.run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"],
-            capture_output=True,
-            text=True,
+        result = _run(
+            ["docker", "compose", "-f", cf, "config", "--format", "json"]
         )
         if result.returncode != 0:
             continue
@@ -268,10 +282,8 @@ def check_infra():
     services_depended_on: dict[str, str] = {}  # depended_svc -> by_svc
 
     for label, cf in compose_files:
-        result = subprocess.run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"],
-            capture_output=True,
-            text=True,
+        result = _run(
+            ["docker", "compose", "-f", cf, "config", "--format", "json"]
         )
         if result.returncode != 0:
             continue
@@ -309,10 +321,8 @@ def check_infra():
     click.echo(click.style("  Volumes", bold=True))
     all_volumes: dict[str, list[str]] = {}  # vol_name -> [labels]
     for label, cf in compose_files:
-        result = subprocess.run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"],
-            capture_output=True,
-            text=True,
+        result = _run(
+            ["docker", "compose", "-f", cf, "config", "--format", "json"]
         )
         if result.returncode != 0:
             continue

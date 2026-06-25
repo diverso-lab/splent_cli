@@ -175,13 +175,13 @@ def make_feature(full_name, feature_type):
 
     # --- Validation ---
     if os.path.exists(feature_dir):
-        click.echo(
-            click.style(
-                f"⚠️  The feature '{full_name}' already exists at {feature_dir}.",
-                fg="yellow",
-            )
+        click.secho(
+            f"❌ The feature '{full_name}' already exists at {feature_dir}.\n"
+            "   Remove it (or pick another name) before scaffolding again; "
+            "a partial directory from a failed run will NOT be completed.",
+            fg="red",
         )
-        return
+        raise SystemExit(1)
 
     # --- Jinja setup ---
     templates_dir = PathUtils.get_splent_cli_templates_dir()

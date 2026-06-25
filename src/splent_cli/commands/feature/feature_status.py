@@ -18,12 +18,32 @@ import os
 import click
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import load_product_features
+from splent_cli.utils.io_utils import load_json
 from splent_cli.utils.manifest import (
     read_manifest,
     manifest_exists,
+    MANIFEST_FILENAME,
     STATE_COLORS,
     STATES,
 )
+
+
+def _read_manifest_safe(product_path: str) -> dict:
+    """Read splent.manifest.json with an actionable error on corruption.
+
+    ``read_manifest`` does a raw ``json.load`` and would raise a bare
+    ``JSONDecodeError`` traceback if the file exists but is malformed.
+    When the manifest is present we validate it via ``load_json`` (clear
+    ClickException naming the file); otherwise we fall back to the empty
+    scaffold that ``read_manifest`` returns for an absent file.
+    """
+    if manifest_exists(product_path):
+        manifest_path = os.path.join(product_path, MANIFEST_FILENAME)
+        data = load_json(manifest_path, what=MANIFEST_FILENAME)
+        if not isinstance(data.get("features"), dict):
+            data["features"] = {}
+        return data
+    return read_manifest(product_path)
 
 
 def _state_badge(state: str) -> str:
@@ -76,7 +96,7 @@ def _render_timeline(product, product_path):
         click.secho("  No manifest found — run product:derive first.", fg="yellow")
         return
 
-    manifest = read_manifest(product_path)
+    manifest = _read_manifest_safe(product_path)
     all_features = manifest.get("features", {})
 
     from splent_cli.utils.lifecycle import resolve_feature_key_from_entry
@@ -251,7 +271,7 @@ def feature_status(as_json, integrity, do_fix, timeline):
     if as_json:
         import json
 
-        click.echo(json.dumps(read_manifest(product_path), indent=2))
+        click.echo(json.dumps(_read_manifest_safe(product_path), indent=2))
         return
 
     if timeline:
@@ -263,7 +283,7 @@ def feature_status(as_json, integrity, do_fix, timeline):
     click.echo(click.style(f"  {'─' * 66}", fg="bright_black"))
 
     if manifest_exists(product_path):
-        manifest = read_manifest(product_path)
+        manifest = _read_manifest_safe(product_path)
         all_features = manifest.get("features", {})
 
         # Filter: only show features declared in pyproject.toml
@@ -289,7 +309,15 @@ def feature_status(as_json, integrity, do_fix, timeline):
 
         # Build rows and compute dynamic column width
         rows = []
-        from splent_framework.managers.migration_manager import MigrationManager
+        try:
+            from splent_framework.managers.migration_manager import MigrationManager
+        except ImportError as e:
+            raise click.ClickException(
+                "Could not import splent_framework's MigrationManager "
+                f"({e}).\n  The installed splent_framework looks out of date or "
+                "incompatible with this CLI.\n  Reinstall/upgrade it (e.g. "
+                "'pip install -U splent_framework' or 'product:sync')."
+            )
 
         for key, entry in sorted(features.items()):
             name = entry.get("name", key)

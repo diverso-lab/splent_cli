@@ -1,14 +1,25 @@
 import os
 import shutil
-import tomllib
+import stat
 import tomli_w
 import click
 from splent_cli.services import context
+from splent_cli.utils.io_utils import atomic_write, load_toml
 from splent_cli.utils.feature_utils import (
     normalize_namespace,
     read_features_from_data,
     write_features_to_data,
 )
+
+
+def _ensure_writable(path):
+    """Best-effort: make a file user-writable so an in-place rewrite of a
+    read-only cache file does not fail with PermissionError."""
+    try:
+        mode = os.stat(path).st_mode
+        os.chmod(path, mode | stat.S_IWUSR)
+    except OSError:
+        pass
 
 
 @click.command(
@@ -91,14 +102,16 @@ def feature_rename(old_name, new_name, namespace):
         pyproject_path = os.path.join(workspace, splent_app, "pyproject.toml")
         if os.path.exists(pyproject_path):
             try:
-                with open(pyproject_path, "rb") as f:
-                    data = tomllib.load(f)
+                data = load_toml(pyproject_path, what="pyproject.toml")
                 features_list = read_features_from_data(data)
                 if old_name in features_list:
                     feature_is_active = True
-            except Exception as e:
+            except click.ClickException as e:
                 click.echo(
-                    click.style(f"⚠️  Could not read pyproject.toml: {e}", fg="yellow")
+                    click.style(
+                        f"⚠️  Could not read pyproject.toml: {e.format_message()}",
+                        fg="yellow",
+                    )
                 )
 
     # -----------------------------
@@ -107,34 +120,66 @@ def feature_rename(old_name, new_name, namespace):
     click.echo(
         f"🚚 Renaming feature '{old_name}' → '{new_name}' in namespace '{org_safe}'..."
     )
-    shutil.move(old_dir, new_dir)
 
-    old_src = os.path.join(new_dir, "src", org_safe, old_name)
-    new_src = os.path.join(new_dir, "src", org_safe, new_name)
-    if os.path.exists(old_src):
-        os.rename(old_src, new_src)
+    # The folder move + in-place rewrites below mutate the cache as a unit. If
+    # any step fails mid-way (e.g. a read-only cache file), undo the directory
+    # move so we never leave a half-renamed feature behind. If even the rollback
+    # fails, tell the user exactly what to fix by hand.
+    moved = False
+    try:
+        shutil.move(old_dir, new_dir)
+        moved = True
 
-    # -----------------------------
-    # Update imports & templates
-    # -----------------------------
-    modified_files = 0
-    for root, _, files in os.walk(new_dir):
-        for file in files:
-            if not file.endswith((".py", ".html", ".toml", ".js")):
-                continue
-            path = os.path.join(root, file)
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-            new_content = content.replace(
-                f"{org_safe}.{old_name}", f"{org_safe}.{new_name}"
-            )
-            new_content = new_content.replace(
-                f"templates/{old_name}/", f"templates/{new_name}/"
-            )
-            if new_content != content:
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(new_content)
-                modified_files += 1
+        old_src = os.path.join(new_dir, "src", org_safe, old_name)
+        new_src = os.path.join(new_dir, "src", org_safe, new_name)
+        if os.path.exists(old_src):
+            os.rename(old_src, new_src)
+
+        # -----------------------------
+        # Update imports & templates
+        # -----------------------------
+        modified_files = 0
+        for root, _, files in os.walk(new_dir):
+            for file in files:
+                if not file.endswith((".py", ".html", ".toml", ".js")):
+                    continue
+                path = os.path.join(root, file)
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                new_content = content.replace(
+                    f"{org_safe}.{old_name}", f"{org_safe}.{new_name}"
+                )
+                new_content = new_content.replace(
+                    f"templates/{old_name}/", f"templates/{new_name}/"
+                )
+                if new_content != content:
+                    # Cache files may be read-only; make writable before rewrite.
+                    _ensure_writable(path)
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(new_content)
+                    modified_files += 1
+    except Exception as e:
+        if moved and os.path.exists(new_dir) and not os.path.exists(old_dir):
+            try:
+                shutil.move(new_dir, old_dir)
+                click.echo(
+                    click.style(
+                        f"❌ Rename failed ({e}); rolled back to '{old_name}'.",
+                        fg="red",
+                    )
+                )
+            except Exception as rb:
+                click.echo(
+                    click.style(
+                        f"❌ Rename failed ({e}) and rollback failed ({rb}).\n"
+                        f"   Manual cleanup needed: move '{new_dir}' back to "
+                        f"'{old_dir}'.",
+                        fg="red",
+                    )
+                )
+        else:
+            click.echo(click.style(f"❌ Rename failed: {e}", fg="red"))
+        raise SystemExit(1)
 
     # -----------------------------
     # Update symlink + pyproject if active
@@ -157,15 +202,14 @@ def feature_rename(old_name, new_name, namespace):
         # Update pyproject
         updated_features = [new_name if f == old_name else f for f in features_list]
         try:
-            with open(pyproject_path, "rb") as f:
-                data = tomllib.load(f)
+            data = load_toml(pyproject_path, what="pyproject.toml")
             write_features_to_data(data, updated_features)
-            with open(pyproject_path, "wb") as f:
-                tomli_w.dump(data, f)
+            atomic_write(pyproject_path, tomli_w.dumps(data))
             pyproject_updated = True
         except Exception as e:
+            msg = e.format_message() if isinstance(e, click.ClickException) else e
             click.echo(
-                click.style(f"⚠️  Could not update pyproject.toml: {e}", fg="yellow")
+                click.style(f"⚠️  Could not update pyproject.toml: {msg}", fg="yellow")
             )
 
     # -----------------------------

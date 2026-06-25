@@ -10,9 +10,22 @@ import subprocess
 
 import click
 
+# Cache the SSH probe for the lifetime of the process: the probe spawns
+# `ssh -T git@github.com` (up to ~10s when offline) and can otherwise run on
+# every git op. None = not yet probed.
+_ssh_available_cache: bool | None = None
+
 
 def _ssh_available() -> bool:
-    """Check if SSH access to github.com works (key loaded, agent running)."""
+    """Check if SSH access to github.com works (key loaded, agent running).
+
+    The result is memoized for the process so the (potentially ~10s) probe
+    runs at most once per invocation.
+    """
+    global _ssh_available_cache
+    if _ssh_available_cache is not None:
+        return _ssh_available_cache
+
     try:
         result = subprocess.run(
             [
@@ -29,9 +42,11 @@ def _ssh_available() -> bool:
             timeout=10,
         )
         # GitHub returns exit code 1 with "successfully authenticated"
-        return "successfully authenticated" in result.stderr.lower()
+        _ssh_available_cache = "successfully authenticated" in result.stderr.lower()
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return False
+        _ssh_available_cache = False
+
+    return _ssh_available_cache
 
 
 def build_git_url(namespace: str, repo: str) -> tuple[str, str]:

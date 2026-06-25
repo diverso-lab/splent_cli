@@ -1,10 +1,11 @@
 import click
-import subprocess
 from dotenv import load_dotenv
 import os
+import tempfile
 from datetime import datetime
 
 from splent_cli.services import context
+from splent_cli.utils.proc import run, require_tool
 
 
 @click.command(
@@ -44,10 +45,23 @@ def db_dump(filename):
         if not filename.endswith(".sql"):
             filename += ".sql"
 
+    require_tool(
+        "mysqldump",
+        "Install the MariaDB/MySQL client tools (provides 'mysqldump').",
+    )
+
+    env = {**os.environ, "MYSQL_PWD": mariadb_password or ""}
+
+    # Dump to a temp file first and only replace the target on success, so a
+    # pre-existing file with the same name is never truncated or deleted if the
+    # dump fails midway.
+    target_dir = os.path.dirname(os.path.abspath(filename)) or "."
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=".db_dump_", suffix=".sql.tmp", dir=target_dir
+    )
     try:
-        env = {**os.environ, "MYSQL_PWD": mariadb_password or ""}
-        with open(filename, "wb") as out:
-            subprocess.run(
+        with os.fdopen(fd, "wb") as out:
+            run(
                 [
                     "mysqldump",
                     f"-h{mariadb_hostname}",
@@ -55,17 +69,18 @@ def db_dump(filename):
                     mariadb_database,
                 ],
                 stdout=out,
-                check=True,
+                text=False,
                 env=env,
+                tool_hint="Install the MariaDB/MySQL client tools (provides 'mysqldump').",
             )
+        os.replace(tmp_path, filename)
         click.echo(
             click.style(f"Database dump created successfully: {filename}", fg="green")
         )
-    except subprocess.CalledProcessError as e:
-        click.echo(click.style(f"Error creating database dump: {e}", fg="red"))
-        if os.path.exists(filename):
-            os.remove(filename)
-            click.echo(click.style(f"Partial file removed: {filename}", fg="yellow"))
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
 
 
 cli_command = db_dump

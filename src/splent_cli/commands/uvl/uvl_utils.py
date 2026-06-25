@@ -166,7 +166,14 @@ def list_all_features_from_uvl(uvl_path: str) -> tuple[list[str], str]:
     Parse a UVL file and return (sorted_feature_names, root_name).
     """
     dm = _discover_metamodels()
-    fm = dm.use_transformation_t2m(uvl_path, "fm")
+    try:
+        fm = dm.use_transformation_t2m(uvl_path, "fm")
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise click.ClickException(
+            f"Failed to parse UVL file '{uvl_path}': {exc}"
+        )
 
     root = get_root_feature(fm)
     root_name = getattr(root, "name", None)
@@ -224,6 +231,7 @@ def run_uvl_check(workspace: str) -> tuple[bool, str]:
     Programmatic UVL validation. Returns (ok, message).
     Does not print anything and does not call sys.exit.
     """
+    _require_flamapy()
     from flamapy.interfaces.python.flamapy_feature_model import FLAMAFeatureModel
 
     try:

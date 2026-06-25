@@ -6,6 +6,7 @@ import signal
 import psutil
 
 from splent_cli.services import context
+from splent_cli.utils.proc import run, require_docker, require_tool
 
 
 @click.command("locust", short_help="Launch the Locust load testing container.")
@@ -57,12 +58,29 @@ def locust(module):
             ".",
         ]
         click.echo(f"Build command: {' '.join(build_command)}")
-        subprocess.run(build_command, check=True)
+        run(build_command)
 
         # Define the locustfile path
         locustfile_path = os.path.join(core_dir, "bootstraps/locustfile_bootstrap.py")
         if module:
             locustfile_path = f"{modules_dir}/{module}/tests/locustfile.py"
+
+        # Only attach to docker_flasky_network if it actually exists; otherwise
+        # the container would fail to start with an unhelpful docker error.
+        network_name = "docker_flasky_network"
+        network_args = []
+        network_check = run(
+            ["docker", "network", "inspect", network_name],
+            check=False,
+            capture=True,
+        )
+        if network_check.returncode == 0:
+            network_args = ["--network", network_name]
+        else:
+            click.secho(
+                f"⚠️  Network '{network_name}' not found; starting Locust without it.",
+                fg="yellow",
+            )
 
         # Run the Locust container
         up_command = [
@@ -75,23 +93,42 @@ def locust(module):
             f"{volume_name}:/workspace",
             "--name",
             "locust_container",
-            "--network",
-            "docker_flasky_network",
+            *network_args,
             "locust-image",
             "-f",
             locustfile_path,
         ]
 
         click.echo(f"Docker Run command: {' '.join(up_command)}")
-        subprocess.run(up_command, check=True)
+        run(up_command)
         click.echo(
             click.style("Locust is running at http://localhost:8089", fg="green")
         )
 
+    def _is_our_locust(proc):
+        """True only for a locust process started from this working dir."""
+        try:
+            info = proc.as_dict(attrs=["name", "cmdline", "cwd"])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return False
+        name = info.get("name") or ""
+        cmdline = info.get("cmdline") or []
+        is_locust = name == "locust" or any(
+            os.path.basename(part) == "locust" for part in cmdline[:1]
+        )
+        if not is_locust:
+            return False
+        # Scope to processes launched from this working dir so we don't match
+        # an unrelated locust running elsewhere on the machine.
+        cwd = info.get("cwd")
+        if cwd and working_dir:
+            return os.path.normpath(cwd).startswith(os.path.normpath(working_dir))
+        return cwd is None or not working_dir
+
     def is_locust_running():
-        """Check if Locust is already running."""
+        """Check if Locust is already running for this working dir."""
         for proc in psutil.process_iter(["pid", "name"]):
-            if proc.info["name"] == "locust":
+            if _is_our_locust(proc):
                 return True
         return False
 
@@ -105,6 +142,10 @@ def locust(module):
             locustfile_path = os.path.join(
                 modules_dir, module, "tests", "locustfile.py"
             )
+        require_tool(
+            "locust",
+            "Install it with: pip install locust",
+        )
         locust_command = ["locust", "-f", locustfile_path]
         click.echo(f"Locust command: {' '.join(locust_command)}")
         subprocess.Popen(
@@ -132,15 +173,23 @@ def locust(module):
         validate_module(module)
 
     if working_dir == "/workspace/":
-        client = docker.from_env()
+        # Ensure docker is installed and the daemon is reachable before we try
+        # to talk to it, so a broken setup yields an actionable message.
+        require_docker()
+        try:
+            client = docker.from_env()
+        except docker.errors.DockerException as e:
+            raise click.ClickException(
+                f"Could not connect to the Docker daemon: {e}"
+            )
 
         try:
             web_container = client.containers.get("web_app_container")
             volume_name = next(
                 (
                     mount.get("Name") or mount.get("Source")
-                    for mount in web_container.attrs["Mounts"]
-                    if mount["Destination"] == "/app"
+                    for mount in web_container.attrs.get("Mounts", [])
+                    if mount.get("Destination") == "/app"
                 ),
                 None,
             )
@@ -152,6 +201,8 @@ def locust(module):
 
         except docker.errors.NotFound:
             click.echo(click.style("Web container not found.", fg="red"))
+        except click.ClickException:
+            raise
         except Exception as e:
             click.echo(click.style(f"An error occurred: {str(e)}", fg="red"))
 
@@ -169,24 +220,48 @@ def locust(module):
 def stop():
     working_dir = os.getenv("WORKING_DIR", "")
 
+    def _is_our_locust(proc):
+        """True only for a locust process started from this working dir."""
+        try:
+            info = proc.as_dict(attrs=["name", "cmdline", "cwd"])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return False
+        name = info.get("name") or ""
+        cmdline = info.get("cmdline") or []
+        is_locust = name == "locust" or any(
+            os.path.basename(part) == "locust" for part in cmdline[:1]
+        )
+        if not is_locust:
+            return False
+        cwd = info.get("cwd")
+        if cwd and working_dir:
+            return os.path.normpath(cwd).startswith(os.path.normpath(working_dir))
+        return cwd is None or not working_dir
+
     def stop_local_locust():
         """Stop Locust process in the local environment."""
         click.echo("Stopping Locust in local environment...")
         for proc in psutil.process_iter(["pid", "name"]):
-            if proc.info["name"] == "locust":
-                click.echo(f"Stopping Locust process with PID {proc.info['pid']}...")
-                os.kill(proc.info["pid"], signal.SIGTERM)
+            if _is_our_locust(proc):
+                click.echo(f"Stopping Locust process with PID {proc.pid}...")
+                try:
+                    os.kill(proc.pid, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError) as e:
+                    click.secho(
+                        f"⚠️  Could not stop PID {proc.pid}: {e}", fg="yellow"
+                    )
 
     def stop_docker_locust():
         click.echo("Stopping Locust container if it is running...")
+        require_docker()
         stop_command = ["docker", "stop", "locust_container"]
         rm_command = ["docker", "rm", "locust_container"]
 
-        result = subprocess.run(stop_command, capture_output=True)
+        result = run(stop_command, check=False, capture=True)
         if result.returncode != 0:
             click.secho("⚠️  Could not stop Locust container.", fg="yellow")
 
-        result = subprocess.run(rm_command, capture_output=True)
+        result = run(rm_command, check=False, capture=True)
         if result.returncode != 0:
             click.secho("⚠️  Could not remove Locust container.", fg="yellow")
 

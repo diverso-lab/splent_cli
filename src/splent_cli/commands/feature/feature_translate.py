@@ -7,8 +7,9 @@ Wraps pybabel extract/init/compile with SPLENT conventions:
 - Supports per-feature or all-features mode
 """
 
+import importlib.util
 import os
-import subprocess
+import tempfile
 
 import click
 
@@ -17,6 +18,16 @@ from splent_cli.utils.feature_utils import (
     load_product_features,
     parse_feature_entry,
 )
+from splent_cli.utils.proc import run
+
+
+def _require_babel():
+    """Abort with an actionable message if the Babel package is unavailable."""
+    if importlib.util.find_spec("babel") is None:
+        raise click.ClickException(
+            "Babel is required for feature:translate but is not installed.\n"
+            "Install it with: pip install Babel"
+        )
 
 
 def _resolve_feature_src(workspace, ns_safe, name):
@@ -45,10 +56,10 @@ def _run_pybabel(args, cwd):
         "-c",
         "from babel.messages.frontend import main; main()",
     ] + args
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    result = run(cmd, cwd=cwd, check=False, capture=True, timeout=300)
     if result.returncode != 0:
-        return False, result.stderr.strip()
-    return True, result.stdout.strip()
+        return False, (result.stderr or "").strip()
+    return True, (result.stdout or "").strip()
 
 
 def _extract_feature(feature_root, src_dir, translations_dir, name):
@@ -56,16 +67,23 @@ def _extract_feature(feature_root, src_dir, translations_dir, name):
     os.makedirs(translations_dir, exist_ok=True)
     pot_file = os.path.join(translations_dir, "messages.pot")
 
-    # Create babel.cfg if missing
-    babel_cfg = os.path.join(feature_root, "babel.cfg")
-    if not os.path.isfile(babel_cfg):
-        with open(babel_cfg, "w") as f:
+    # Generate babel.cfg in a temp location so a failed run never leaves a
+    # stray config behind in the feature directory.
+    fd, babel_cfg = tempfile.mkstemp(prefix="babel-", suffix=".cfg")
+    try:
+        with os.fdopen(fd, "w") as f:
             f.write("[python: **.py]\n[jinja2: **/templates/**.html]\n")
 
-    ok, output = _run_pybabel(
-        ["extract", "-F", babel_cfg, "-o", pot_file, "src/"],
-        cwd=feature_root,
-    )
+        ok, output = _run_pybabel(
+            ["extract", "-F", babel_cfg, "-o", pot_file, "src/"],
+            cwd=feature_root,
+        )
+    finally:
+        try:
+            os.remove(babel_cfg)
+        except OSError:
+            pass
+
     if ok:
         click.echo(f"  {name}: extracted to {os.path.basename(pot_file)}")
     else:
@@ -156,6 +174,8 @@ def feature_translate(feature_ref, do_extract, init_locale, do_compile):
     if not do_extract and not init_locale and not do_compile:
         click.secho("Specify --extract, --init <locale>, or --compile.", fg="yellow")
         return
+
+    _require_babel()
 
     workspace = str(context.workspace())
     product = context.require_app()

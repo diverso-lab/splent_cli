@@ -53,13 +53,17 @@ def product_ctx(product_name: str) -> dict:
     try:
         import tomllib
 
+        from splent_cli.utils.path_utils import PathUtils
+
         pyproject = os.path.join(
-            os.getenv("WORKING_DIR", "/workspace"), product_name, "pyproject.toml"
+            PathUtils.get_working_dir(), product_name, "pyproject.toml"
         )
-        if os.path.isfile(pyproject):
+        try:
             with open(pyproject, "rb") as f:
                 data = tomllib.load(f)
-            spl_name = data.get("tool", {}).get("splent", {}).get("spl", "")
+        except OSError:
+            data = {}
+        spl_name = data.get("tool", {}).get("splent", {}).get("spl", "")
     except Exception:
         pass
 
@@ -95,9 +99,12 @@ def feature_ctx(org_safe: str, feature_name: str) -> dict:
 
 def file_diff(path: Path, expected: str) -> list[str] | None:
     """Return unified diff lines if file differs from expected, else None."""
-    if not path.exists():
+    try:
+        current = path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
         return None
-    current = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
     if current == expected:
         return None
     return list(

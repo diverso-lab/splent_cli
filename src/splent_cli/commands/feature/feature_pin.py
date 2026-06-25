@@ -10,7 +10,6 @@ the product's pyproject.toml to reference the latest version found in
 
 import os
 import re
-import tomllib
 
 import click
 import tomli_w
@@ -20,6 +19,7 @@ from splent_cli.utils.feature_utils import (
     parse_feature_entry,
     write_features_to_data,
 )
+from splent_cli.utils.io_utils import load_toml, atomic_write
 
 
 def _latest_cached_version(cache_base: str, feature_name: str) -> str | None:
@@ -71,8 +71,7 @@ def feature_pin(dry_run):
     product = context.require_app()
     pyproject_path = os.path.join(workspace, product, "pyproject.toml")
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what="pyproject.toml")
 
     click.echo()
     click.secho("  feature:pin", fg="cyan", bold=True)
@@ -131,8 +130,7 @@ def feature_pin(dry_run):
         click.echo()
         return
 
-    with open(pyproject_path, "wb") as f:
-        tomli_w.dump(data, f)
+    atomic_write(pyproject_path, tomli_w.dumps(data))
 
     click.echo()
     click.secho(f"  ✅ Pinned {pinned_count} feature(s) in pyproject.toml.", fg="green")

@@ -1,7 +1,7 @@
-import subprocess
 from pathlib import Path
 import click
 from splent_cli.utils.feature_utils import get_normalize_feature_name_in_splent_format
+from splent_cli.utils.proc import run
 from splent_cli.services import context
 
 
@@ -71,7 +71,7 @@ def feature_git(feature_ref, git_args):
         raise SystemExit(1)
 
     click.secho(f"  📁 {root}", fg="bright_black")
-    result = subprocess.run(["git"] + list(git_args), cwd=root)
+    result = run(["git"] + list(git_args), cwd=root, check=False)
     raise SystemExit(result.returncode)
 
 

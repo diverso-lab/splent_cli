@@ -3,7 +3,8 @@
 from splent_framework.utils.feature_utils import get_features_from_pyproject  # noqa: F401
 
 import os
-import subprocess
+
+from splent_cli.utils.proc import run
 
 
 def hot_reinstall(product_path: str, install_path: str, name: str):
@@ -27,28 +28,56 @@ def hot_reinstall(product_path: str, install_path: str, name: str):
 
     compose_file = compose.resolve_file(product_path, env)
     if not compose_file:
+        click.secho(
+            f"    no compose file for '{product}' (env={env}); "
+            "skipping hot reinstall in web container.",
+            fg="yellow",
+        )
         return
 
     pname = compose.project_name(product, env)
     container_id = compose.find_main_container(pname, compose_file, docker_dir)
     if not container_id:
+        click.secho(
+            f"    web container for '{product}' (env={env}) is not running; "
+            "skipping hot reinstall.",
+            fg="yellow",
+        )
         return
 
     click.echo(click.style("    reinstalling in web container...", dim=True))
     pip_cmd = (
         f"pip install --no-cache-dir --root-user-action=ignore -q -e {install_path}"
     )
-    subprocess.run(
+    result = run(
         ["docker", "exec", container_id, "bash", "-c", pip_cmd],
-        capture_output=True,
+        check=False,
+        capture=True,
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        msg = f"    pip install of '{name}' failed in web container (exit {result.returncode})."
+        if detail:
+            msg += f"\n{detail}"
+        click.secho(msg, fg="red")
+        raise SystemExit(1)
 
     # Touch the app's __init__.py to trigger watchmedo auto-restart
     init_py = f"/workspace/{product}/src/{product}/__init__.py"
-    subprocess.run(
+    touch = run(
         ["docker", "exec", container_id, "bash", "-c", f"touch {init_py}"],
-        capture_output=True,
+        check=False,
+        capture=True,
     )
+    if touch.returncode != 0:
+        detail = (touch.stderr or touch.stdout or "").strip()
+        msg = (
+            "    could not touch __init__.py to trigger reload "
+            f"(exit {touch.returncode}); restart the web container manually."
+        )
+        if detail:
+            msg += f"\n{detail}"
+        click.secho(msg, fg="yellow")
 
 
 def hot_uninstall(product_path: str, name: str):
@@ -70,26 +99,54 @@ def hot_uninstall(product_path: str, name: str):
 
     compose_file = compose.resolve_file(product_path, env)
     if not compose_file:
+        click.secho(
+            f"    no compose file for '{product}' (env={env}); "
+            "skipping hot uninstall from web container.",
+            fg="yellow",
+        )
         return
 
     pname = compose.project_name(product, env)
     container_id = compose.find_main_container(pname, compose_file, docker_dir)
     if not container_id:
+        click.secho(
+            f"    web container for '{product}' (env={env}) is not running; "
+            "skipping hot uninstall.",
+            fg="yellow",
+        )
         return
 
     click.echo(click.style("    uninstalling from web container...", dim=True))
     pip_cmd = f"pip uninstall -y -q {name}"
-    subprocess.run(
+    result = run(
         ["docker", "exec", container_id, "bash", "-c", pip_cmd],
-        capture_output=True,
+        check=False,
+        capture=True,
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        msg = f"    pip uninstall of '{name}' failed in web container (exit {result.returncode})."
+        if detail:
+            msg += f"\n{detail}"
+        click.secho(msg, fg="red")
+        raise SystemExit(1)
 
     # Touch the app's __init__.py to trigger watchmedo auto-restart
     init_py = f"/workspace/{product}/src/{product}/__init__.py"
-    subprocess.run(
+    touch = run(
         ["docker", "exec", container_id, "bash", "-c", f"touch {init_py}"],
-        capture_output=True,
+        check=False,
+        capture=True,
     )
+    if touch.returncode != 0:
+        detail = (touch.stderr or touch.stdout or "").strip()
+        msg = (
+            "    could not touch __init__.py to trigger reload "
+            f"(exit {touch.returncode}); restart the web container manually."
+        )
+        if detail:
+            msg += f"\n{detail}"
+        click.secho(msg, fg="yellow")
 
 
 DEFAULT_NAMESPACE = "splent-io"

@@ -5,12 +5,12 @@ Returns True if all checks pass, False otherwise.
 """
 
 import os
-import tomllib
 
 import click
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.io_utils import load_toml
 
 
 def _check_pypi_exists(package: str, version: str) -> bool:
@@ -33,8 +33,7 @@ def _check_features_ready(workspace: str, product_dir: str, interactive: bool) -
     Returns True if all features pass.
     """
     pyproject_path = os.path.join(product_dir, "pyproject.toml")
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what="pyproject.toml")
 
     features = read_features_from_data(data, "prod")
     if not features:
@@ -159,45 +158,62 @@ def run_preflight(*, interactive: bool = True, build_mode: bool = False) -> bool
     # Phase 1: SAT
     try:
         sat_ok, selected, _, _ = _run_sat_check(workspace, app_name, data, None, False)
-    except Exception:
-        sat_ok = False
-
-    if sat_ok:
+    except Exception as exc:
+        # A crash in the SAT checker is NOT a clean "not satisfiable" result —
+        # surface it so a broken checker is never reported as a normal failure.
         if interactive:
-            click.echo("  validate UVL configuration is satisfiable")
-    else:
-        if interactive:
-            click.secho("  validate UVL configuration is NOT satisfiable", fg="red")
+            click.secho(f"  validate SAT check crashed: {exc}", fg="red")
             click.secho(
                 "           run 'splent product:validate' to inspect", fg="bright_black"
             )
         failed = True
+    else:
+        if sat_ok:
+            if interactive:
+                click.echo("  validate UVL configuration is satisfiable")
+        else:
+            if interactive:
+                click.secho("  validate UVL configuration is NOT satisfiable", fg="red")
+                click.secho(
+                    "           run 'splent product:validate' to inspect",
+                    fg="bright_black",
+                )
+            failed = True
 
     # Phase 2: Contracts
     try:
         findings, errors, warnings = _run_compat_check(workspace, product_dir)
-    except Exception:
-        errors = []
-        warnings = []
-
-    if not errors:
+    except Exception as exc:
+        # An empty `errors` list reads as a clean PASS — a checker crash must
+        # never be swallowed into that. Treat the crash as a failure and say so.
         if interactive:
-            if warnings:
-                click.echo(
-                    f"  contract no conflicts — {len(warnings)} warning(s), "
-                    "run 'splent product:validate' to review"
-                )
-            else:
-                click.echo("  contract no conflicts detected")
-    else:
-        if interactive:
-            for err in errors:
-                click.secho(f"  contract [{err['field']}] {err['message']}", fg="red")
+            click.secho(f"  contract checker crashed: {exc}", fg="red")
             click.secho(
                 "           run 'splent product:validate' to inspect",
                 fg="bright_black",
             )
         failed = True
+    else:
+        if not errors:
+            if interactive:
+                if warnings:
+                    click.echo(
+                        f"  contract no conflicts — {len(warnings)} warning(s), "
+                        "run 'splent product:validate' to review"
+                    )
+                else:
+                    click.echo("  contract no conflicts detected")
+        else:
+            if interactive:
+                for err in errors:
+                    click.secho(
+                        f"  contract [{err['field']}] {err['message']}", fg="red"
+                    )
+                click.secho(
+                    "           run 'splent product:validate' to inspect",
+                    fg="bright_black",
+                )
+            failed = True
 
     # Phase 3: Feature readiness (build/deploy only)
     if build_mode:

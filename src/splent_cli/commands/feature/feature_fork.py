@@ -34,22 +34,57 @@ def feature_fork(feature_name, version):
     click.secho(
         f"🔁 Forking {upstream_owner}/{feature_name} into {github_user}...", fg="cyan"
     )
-    resp = requests.post(api_url, headers=headers, json={"default_branch_only": False})
+    try:
+        resp = requests.post(
+            api_url,
+            headers=headers,
+            json={"default_branch_only": False},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        click.secho(f"❌ Could not reach GitHub: {e}", fg="red")
+        raise SystemExit(2)
+
+    if resp.status_code in (403, 429):
+        click.secho(
+            "⚠ GitHub API rate limit or access denied. "
+            "Set GITHUB_TOKEN to a token with repo scope and try again.",
+            fg="yellow",
+        )
+        if os.getenv("SPLENT_DEBUG"):
+            click.secho(f"   {resp.text[:300]}", fg="bright_black")
+        raise SystemExit(2)
     if resp.status_code not in (201, 202):
         click.secho(f"❌ Fork failed (HTTP {resp.status_code}).", fg="red")
         if os.getenv("SPLENT_DEBUG"):
             click.secho(f"   {resp.text[:300]}", fg="bright_black")
         raise SystemExit(2)
 
-    fork_html_url = resp.json()["html_url"]
+    try:
+        fork_html_url = resp.json().get("html_url")
+    except ValueError:
+        fork_html_url = None
+    if not fork_html_url:
+        click.secho(
+            "❌ Fork response did not contain the expected repository URL.", fg="red"
+        )
+        if os.getenv("SPLENT_DEBUG"):
+            click.secho(f"   {resp.text[:300]}", fg="bright_black")
+        raise SystemExit(2)
     click.secho(f"🌐 Fork created: {fork_html_url}", fg="green")
 
     # Esperar a que GitHub lo procese
     for i in range(5):
-        r = requests.get(
-            f"https://api.github.com/repos/{github_user}/{feature_name}",
-            headers=headers,
-        )
+        try:
+            r = requests.get(
+                f"https://api.github.com/repos/{github_user}/{feature_name}",
+                headers=headers,
+                timeout=30,
+            )
+        except requests.RequestException as e:
+            click.secho(f"⌛ Waiting for GitHub to process fork... ({e})", fg="yellow")
+            time.sleep(3)
+            continue
         if r.status_code == 200:
             click.secho("✅ Fork is ready.", fg="green")
             break

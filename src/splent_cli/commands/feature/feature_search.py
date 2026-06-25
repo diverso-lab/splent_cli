@@ -20,7 +20,29 @@ def _github_request(url: str, token: str | None) -> dict | list | None:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
-        raise
+        if e.code in (403, 429):
+            remaining = e.headers.get("X-RateLimit-Remaining") if e.headers else None
+            if e.code == 429 or remaining == "0":
+                click.secho(
+                    "❌ GitHub API rate limit exceeded.", fg="red"
+                )
+                if not token:
+                    click.secho(
+                        "💡 Set GITHUB_TOKEN to raise your rate limit and access private repos.",
+                        fg="yellow",
+                    )
+                raise SystemExit(1)
+            click.secho(
+                f"❌ GitHub API access forbidden (HTTP {e.code}).", fg="red"
+            )
+            if not token:
+                click.secho(
+                    "💡 Set GITHUB_TOKEN to access private repos and raise rate limits.",
+                    fg="yellow",
+                )
+            raise SystemExit(1)
+        click.secho(f"❌ GitHub API error (HTTP {e.code}).", fg="red")
+        raise SystemExit(1)
     except urllib.error.URLError as e:
         click.secho(f"❌ Network error: {e.reason}", fg="red")
         raise SystemExit(1)

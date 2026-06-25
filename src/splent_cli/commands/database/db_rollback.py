@@ -146,7 +146,11 @@ def db_rollback(feature, steps, cascade):
                 click.echo("  ❎ Cancelled.")
                 raise SystemExit(1)
 
-        # Rollback dependents first (reverse order)
+        # Rollback dependents first (reverse order).
+        # NOTE: there is no cross-feature transaction — if a later dependent
+        # fails, earlier ones have already been rolled back. Track progress so
+        # the failure message can tell the user the partial state to recover.
+        rolled_back: list[str] = []
         for dep in reversed(migrated_dependents):
             dep_mdir = MigrationManager.get_feature_migration_dir(dep)
             if dep_mdir:
@@ -160,6 +164,7 @@ def db_rollback(feature, steps, cascade):
                     )
                     MigrationManager.update_feature_status(app, dep, dep_rev)
                     click.secho(f"  ✅ {dep} → {dep_rev or 'base'}", fg="green")
+                    rolled_back.append(dep)
 
                     for entry in get_features_from_pyproject() or []:
                         key, ns, name, version = resolve_feature_key_from_entry(entry)
@@ -177,6 +182,22 @@ def db_rollback(feature, steps, cascade):
                             break
                 except Exception as e:
                     click.secho(f"  ❌ {dep}: {e}", fg="red")
+                    click.secho(
+                        f"  ⚠️  Partial rollback: '{feature}' was NOT rolled back.",
+                        fg="yellow",
+                    )
+                    if rolled_back:
+                        click.secho(
+                            "     Already rolled back (not restored): "
+                            + ", ".join(rolled_back),
+                            fg="yellow",
+                        )
+                        click.secho(
+                            "     To recover, re-apply migrations with "
+                            "'flask db:migrate' for those features, "
+                            "or fix the error above and re-run db:rollback.",
+                            fg="yellow",
+                        )
                     raise SystemExit(1)
 
     # Rollback the target feature
@@ -206,7 +227,19 @@ def db_rollback(feature, steps, cascade):
                 )
                 break
     except Exception as e:
-        click.secho(f"  {feature}: {e}", fg="red")
+        click.secho(f"  ❌ {feature}: {e}", fg="red")
+        if migrated_dependents:
+            click.secho(
+                "  ⚠️  Partial rollback: dependent feature(s) were already "
+                "rolled back but '" + feature + "' failed.",
+                fg="yellow",
+            )
+            click.secho(
+                "     The product is in a mixed state. Fix the error above and "
+                "re-run db:rollback, or re-apply migrations with 'flask "
+                "db:migrate' to restore the rolled-back dependents.",
+                fg="yellow",
+            )
         raise SystemExit(1)
 
     # Offer to delete migration files if fully rolled back to base
@@ -218,8 +251,16 @@ def db_rollback(feature, steps, cascade):
                 for f in os.listdir(versions_dir)
                 if f.endswith(".py") and not f.startswith("__")
             ]
+            if migration_files:
+                click.secho(
+                    "  ⚠️  Deleting migration files is IRREVERSIBLE — the "
+                    "files cannot be recovered and the feature will need new "
+                    "migrations to be re-applied.",
+                    fg="yellow",
+                )
             if migration_files and click.confirm(
-                f"  Delete {len(migration_files)} migration file(s)?",
+                f"  Permanently delete {len(migration_files)} migration "
+                "file(s)? (irreversible)",
                 default=False,
             ):
                 for f in migration_files:

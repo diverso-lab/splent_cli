@@ -11,6 +11,7 @@ import click
 
 from splent_cli.services import context
 from splent_cli.commands.spl.spl_utils import _resolve_spl
+from splent_cli.utils.io_utils import atomic_write, backup_file
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +115,12 @@ def _resolve_feature_paths(workspace: str, spl_packages: set[str]) -> dict[str, 
 def _write_constraints(
     uvl_path: str, raw_text: str, new_constraints: list[str]
 ) -> None:
-    """Append new constraints to the UVL file."""
+    """Append new constraints to the UVL file.
+
+    Backs up the file first, writes atomically, then re-parses the result to
+    confirm the new constraints landed. On a failed validation the backup is
+    restored so a malformed write never replaces a good file.
+    """
     lines = raw_text.rstrip().splitlines()
 
     # Find the last constraint line or the "constraints" header
@@ -128,8 +134,35 @@ def _write_constraints(
         lines.insert(insert_idx, f"\t{c}")
         insert_idx += 1
 
-    with open(uvl_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+    content = "\n".join(lines) + "\n"
+
+    bak = backup_file(uvl_path)
+    try:
+        atomic_write(uvl_path, content)
+
+        # Validate: re-parse and confirm every new constraint is present.
+        _, written_constraints, _ = _parse_uvl(uvl_path)
+        written_pairs = {_parse_constraint(c) for c in written_constraints}
+        missing_after = [
+            c for c in new_constraints if _parse_constraint(c) not in written_pairs
+        ]
+        if missing_after:
+            raise click.ClickException(
+                "UVL validation failed after write — these constraints were not "
+                f"found in the saved file: {', '.join(missing_after)}"
+            )
+    except BaseException:
+        # Restore the original file from the backup so we never leave a
+        # corrupted UVL behind.
+        if bak is not None:
+            atomic_write(uvl_path, bak.read_text(encoding="utf-8"))
+        raise
+    finally:
+        if bak is not None:
+            try:
+                bak.unlink()
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------

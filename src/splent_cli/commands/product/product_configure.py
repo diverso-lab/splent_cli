@@ -1016,30 +1016,14 @@ def product_configure():
 
     click.echo()
 
-    import subprocess
     import tomli_w
     from splent_cli.utils.feature_utils import write_features_to_data
+    from splent_cli.utils.io_utils import atomic_write, backup_file, load_toml
+    from splent_cli.utils.proc import run
 
-    # Clear existing
-    with open(pyproject_path, "rb") as f:
-        pydata = tomllib.load(f)
-    write_features_to_data(pydata, [])
-    with open(pyproject_path, "wb") as f:
-        tomli_w.dump(pydata, f)
-
-    # Clean stale symlinks
-    features_dir = os.path.join(product_path, "features")
-    if os.path.isdir(features_dir):
-        for org_dir in os.listdir(features_dir):
-            org_path = os.path.join(features_dir, org_dir)
-            if not os.path.isdir(org_path):
-                continue
-            for entry in os.listdir(org_path):
-                entry_path = os.path.join(org_path, entry)
-                if os.path.islink(entry_path):
-                    os.unlink(entry_path)
-
-    # Resolve versions and build feature entries
+    # ── Resolve versions and build feature entries FIRST ─────
+    # Compute the entire new state before mutating anything on disk, so a
+    # failure here leaves the existing pyproject.toml and symlinks intact.
     cache_dir = os.path.join(workspace, ".splent_cache", "features")
     feature_entries = []  # env=None → always loaded
     feature_entries_dev = []  # env="dev"
@@ -1065,18 +1049,24 @@ def product_configure():
                 version = candidates[0].split("@", 1)[1]
 
         if not version:
-            try:
-                result = subprocess.run(
-                    ["pip", "index", "versions", package],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if result.returncode == 0 and "(" in result.stdout:
-                    pypi_ver = result.stdout.split("(")[1].split(")")[0].strip()
-                    version = f"v{pypi_ver}"
-            except Exception:
-                pass
+            result = run(
+                ["pip", "index", "versions", package],
+                check=False,
+                capture=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and "(" in (result.stdout or ""):
+                pypi_ver = result.stdout.split("(")[1].split(")")[0].strip()
+                version = f"v{pypi_ver}"
+
+        if not version:
+            click.secho(
+                f"    Warning: could not resolve a version for {org}/{package} "
+                f"(not in cache and 'pip index versions' returned nothing). "
+                f"Pinning it unversioned, which 'splent product:build' will "
+                f"reject. Cache or publish the feature, then re-run.",
+                fg="yellow",
+            )
 
         entry = f"{org}/{package}@{version}" if version else f"{org}/{package}"
 
@@ -1094,14 +1084,27 @@ def product_configure():
             feature_entries.append(entry)
             click.echo(f"    {entry}")
 
-    # Write to pyproject
-    with open(pyproject_path, "rb") as pf:
-        current_data = tomllib.load(pf)
+    # ── Write new state atomically (with backup) ─────────────
+    # Only now do we touch disk: back up, then write the fully-computed
+    # feature lists in a single atomic replace.
+    current_data = load_toml(pyproject_path, what="pyproject.toml")
     write_features_to_data(current_data, feature_entries)
     write_features_to_data(current_data, feature_entries_dev, key="features_dev")
     write_features_to_data(current_data, feature_entries_prod, key="features_prod")
-    with open(pyproject_path, "wb") as pf:
-        tomli_w.dump(current_data, pf)
+    backup_file(pyproject_path, ".bak")
+    atomic_write(pyproject_path, tomli_w.dumps(current_data))
+
+    # ── Clean stale symlinks (after pyproject is safely written) ─
+    features_dir = os.path.join(product_path, "features")
+    if os.path.isdir(features_dir):
+        for org_dir in os.listdir(features_dir):
+            org_path = os.path.join(features_dir, org_dir)
+            if not os.path.isdir(org_path):
+                continue
+            for entry in os.listdir(org_path):
+                entry_path = os.path.join(org_path, entry)
+                if os.path.islink(entry_path):
+                    os.unlink(entry_path)
 
     click.echo()
     click.secho("  Configuration applied.", fg="green", bold=True)

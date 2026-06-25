@@ -2,6 +2,7 @@ import os
 import subprocess
 import click
 from splent_cli.services import compose, context
+from splent_cli.utils.proc import require_docker, run
 
 
 @click.command(
@@ -43,14 +44,28 @@ def product_runc(env_dev, env_prod):
     project_name = compose.project_name(product, env)
 
     # -------------------------------------------------------------
-    # 3. FIND CONTAINER
+    # 3. VERIFY ENTRYPOINT EXISTS
     # -------------------------------------------------------------
-    result = subprocess.run(
+    if not os.path.isfile(entrypoint):
+        click.secho(f"  Entrypoint not found: {entrypoint}", fg="red")
+        raise SystemExit(1)
+
+    # -------------------------------------------------------------
+    # 4. FIND CONTAINER
+    # -------------------------------------------------------------
+    require_docker()
+    result = run(
         ["docker", "compose", "-p", project_name, "-f", compose_used, "ps", "-q"],
         cwd=docker_dir,
-        capture_output=True,
-        text=True,
+        capture=True,
+        check=False,
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        click.secho("  Failed to query running containers via 'docker compose ps'.", fg="red")
+        if detail:
+            click.secho(f"  {detail}", fg="red")
+        raise SystemExit(result.returncode)
     container_ids = [c.strip() for c in result.stdout.splitlines() if c.strip()]
 
     target_id = None
@@ -78,12 +93,13 @@ def product_runc(env_dev, env_prod):
         target_id = container_ids[0]
 
     # -------------------------------------------------------------
-    # 4. EXEC ENTRYPOINT
+    # 5. EXEC ENTRYPOINT
     # -------------------------------------------------------------
     if target_id:
-        subprocess.run(
-            ["docker", "exec", "-i", target_id, "bash", "-lc", f"bash {entrypoint}"]
+        run(
+            ["docker", "exec", "-i", target_id, "bash", "-lc", f"bash {entrypoint}"],
+            check=False,
         )
     else:
         click.secho(f"  No containers found, running locally ({env})", fg="yellow")
-        subprocess.run(["bash", entrypoint], cwd=docker_dir, check=False)
+        run(["bash", entrypoint], cwd=docker_dir, check=False)

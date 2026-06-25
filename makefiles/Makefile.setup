@@ -21,6 +21,7 @@ env-prepare:
 	fi
 
 docker-up:
+	@bash scripts/preflight_cli.sh
 	@echo "🐳 Starting containers..."
 	@HOST_UID=$$(id -u); \
 	HOST_GID=$$(id -g); \
@@ -28,6 +29,7 @@ docker-up:
 	HOST_UID=$$HOST_UID HOST_GID=$$HOST_GID $(SPLENT_DOCKER_COMPOSE) up -d
 
 cli-enter:
+	@bash scripts/preflight_cli.sh splent_cli_container
 	@echo "🧠 Entering SPLENT CLI..."
 	@docker exec -it splent_cli_container bash -lc '\
 		uid=$$(id -u splent); \
@@ -40,6 +42,7 @@ cli-enter:
 setup: env-prepare docker-up cli-enter
 
 setup-rebuild: env-prepare
+	@bash scripts/preflight_cli.sh
 	@echo "🧹 Stopping existing containers..."
 	@$(SPLENT_DOCKER_COMPOSE) down -v --remove-orphans || true
 

@@ -36,7 +36,10 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import click
+
 from splent_cli.utils.feature_utils import normalize_namespace
+from splent_cli.utils.io_utils import load_json
 
 MANIFEST_FILENAME = "splent.manifest.json"
 SCHEMA_VERSION = "1"
@@ -71,8 +74,15 @@ def _load(product_path: str) -> dict:
     p = _path(product_path)
     if not p.exists():
         return {"schema_version": SCHEMA_VERSION, "features": {}}
-    with open(p, encoding="utf-8") as f:
-        data = json.load(f)
+    # A corrupt/truncated manifest must not crash every manifest-touching
+    # command with a raw JSONDecodeError. load_json raises a clear
+    # ClickException naming the file; abort cleanly so the user can repair or
+    # delete it (resetting silently would erase feature tracking state).
+    data = load_json(p, what=MANIFEST_FILENAME)
+    if not isinstance(data, dict):
+        raise click.ClickException(
+            f"{MANIFEST_FILENAME} is malformed (expected an object) at: {p}"
+        )
     if not isinstance(data.get("features"), dict):
         data["features"] = {}
     return data

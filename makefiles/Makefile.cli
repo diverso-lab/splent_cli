@@ -1,6 +1,11 @@
-.PHONY: cli
+.PHONY: cli preflight
+
+# Host-side pre-flight: Docker installed/running, Compose v2, gitconfig/ssh sanity.
+preflight:
+	@bash scripts/preflight_cli.sh
 
 cli:
+	@bash scripts/preflight_cli.sh splent_cli_container
 	@echo "🚀 Entering SPLENT CLI shell..."
 	@docker exec -it splent_cli_container bash -lc '\
 		uid=$$(id -u splent); \

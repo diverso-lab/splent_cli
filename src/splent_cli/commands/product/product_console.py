@@ -62,7 +62,10 @@ def product_console():
     from splent_cli.utils.dynamic_imports import get_app
     from splent_framework.db import db
 
-    app = get_app()
+    try:
+        app = get_app()
+    except Exception as exc:
+        raise click.ClickException(f"could not boot app: {exc}")
 
     with app.app_context():
         # Build namespace

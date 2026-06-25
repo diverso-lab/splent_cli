@@ -17,7 +17,12 @@ def _product_info(product_dir: Path) -> dict | None:
         version = data.get("project", {}).get("version", "?")
         n_features = len(read_features_from_data(data))
         return {"name": name, "version": version, "features": n_features}
-    except Exception:
+    except Exception as e:
+        click.secho(
+            f"⚠️  Skipping product '{product_dir.name}': could not read {pyproject}: {e}",
+            fg="yellow",
+            err=True,
+        )
         return None
 
 

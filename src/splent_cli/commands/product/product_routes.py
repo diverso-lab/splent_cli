@@ -43,7 +43,10 @@ def product_routes(filter_feature, group):
     os.environ.setdefault("SPLENT_ENV", "dev")
     from splent_cli.utils.dynamic_imports import get_app
 
-    app = get_app()
+    try:
+        app = get_app()
+    except Exception as exc:
+        raise click.ClickException(f"could not boot app: {exc}")
 
     trace: dict = app.extensions.get("splent_blueprint_trace", {})
 

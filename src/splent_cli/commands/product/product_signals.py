@@ -20,7 +20,10 @@ def product_signals():
     os.environ.setdefault("SPLENT_ENV", "dev")
     from splent_cli.utils.dynamic_imports import get_app
 
-    get_app()
+    try:
+        get_app()
+    except Exception as exc:
+        raise click.ClickException(f"could not boot app: {exc}")
 
     from splent_framework.signals.registry import get_registry
 

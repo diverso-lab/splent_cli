@@ -1,9 +1,10 @@
 import os
 import click
-import subprocess
+from datetime import datetime
 from dotenv import load_dotenv
 
 from splent_cli.services import context
+from splent_cli.utils.proc import run
 
 
 @click.command(
@@ -59,18 +60,57 @@ def db_restore(filename, yes):
             click.echo("❎ Cancelled.")
             raise SystemExit(0)
 
+    env = {**os.environ, "MYSQL_PWD": password or ""}
+
+    # Take an automatic pre-restore backup so a corrupt/partial dump cannot
+    # leave the live database half-overwritten with no way back.
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"pre_restore_{database}_{timestamp}.sql"
     try:
-        env = {**os.environ, "MYSQL_PWD": password or ""}
+        with open(backup_filename, "wb") as backup_out:
+            run(
+                ["mysqldump", f"-h{host}", f"-u{user}", database],
+                stdout=backup_out,
+                env=env,
+                tool_hint=(
+                    "Install the MariaDB/MySQL client tools (provides 'mysqldump'), "
+                    "e.g. 'mysql-client' / 'mariadb-client'."
+                ),
+            )
+    except click.ClickException:
+        # mysqldump missing/failed (often a connection failure): do not proceed
+        # to overwrite the live database without a safety net.
+        if os.path.exists(backup_filename):
+            os.remove(backup_filename)
+        click.secho(
+            f"❌ Could not create a pre-restore backup of '{database}' "
+            f"(check the database is reachable at '{host}' and credentials are correct).\n"
+            "Aborting before overwriting the live database.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+    click.secho(f"🛟 Pre-restore backup saved to: {backup_filename}", fg="cyan")
+
+    try:
         with open(filename, "rb") as sql_file:
-            subprocess.run(
+            run(
                 ["mysql", f"-h{host}", f"-u{user}", database],
                 stdin=sql_file,
-                check=True,
                 env=env,
+                tool_hint=(
+                    "Install the MariaDB/MySQL client tools (provides 'mysql'), "
+                    "e.g. 'mysql-client' / 'mariadb-client'."
+                ),
             )
         click.secho(f"✅ Database restored from: {filename}", fg="green")
-    except subprocess.CalledProcessError as e:
-        click.secho(f"❌ Error restoring database: {e}", fg="red")
+    except click.ClickException as e:
+        click.secho(f"❌ Error restoring database: {e.format_message()}", fg="red")
+        click.secho(
+            "The database may be in an inconsistent state. To roll back, restore "
+            f"the pre-restore backup:\n  splent db:restore {backup_filename} --yes",
+            fg="yellow",
+        )
         raise SystemExit(1)
 
 

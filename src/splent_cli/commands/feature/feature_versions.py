@@ -31,7 +31,17 @@ def _get_json(url: str, headers: dict) -> list | dict | None:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
-        raise
+        if e.code in (403, 429):
+            hint = ""
+            if "Authorization" not in headers:
+                hint = " Set GITHUB_TOKEN to raise the limit."
+            click.secho(
+                f"⚠️  GitHub API rate limit or access denied (HTTP {e.code}).{hint}",
+                fg="yellow",
+            )
+            return None
+        click.secho(f"❌ GitHub API error (HTTP {e.code}).", fg="red")
+        raise SystemExit(1)
     except urllib.error.URLError as e:
         click.secho(f"❌ Network error: {e.reason}", fg="red")
         raise SystemExit(1)
@@ -44,16 +54,15 @@ def _github_versions(org: str, repo: str, token: str | None) -> list[str]:
     """Return all tag names from the GitHub repo, newest first."""
     headers = _github_headers(token)
     tags = []
-    page = 1
-    while True:
+    MAX_PAGES = 50  # safety cap: 50 * 100 = 5000 tags
+    for page in range(1, MAX_PAGES + 1):
         url = f"https://api.github.com/repos/{org}/{repo}/tags?per_page=100&page={page}"
         batch = _get_json(url, headers)
         if not batch:
             break
-        tags.extend(t["name"] for t in batch)
+        tags.extend(t.get("name", "") for t in batch if t.get("name"))
         if len(batch) < 100:
             break
-        page += 1
     return tags
 
 
@@ -64,10 +73,11 @@ def _pypi_versions(package: str) -> list[str]:
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
-        versions = list(data.get("releases", {}).keys())
+        releases = data.get("releases", {})
+        versions = list(releases.keys())
 
         def _latest_upload(v):
-            files = data["releases"][v]
+            files = releases.get(v) or []
             if not files:
                 return ""
             return max(f.get("upload_time", "") for f in files)
@@ -76,7 +86,8 @@ def _pypi_versions(package: str) -> list[str]:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return []
-        raise
+        click.secho(f"⚠️  PyPI API error (HTTP {e.code}).", fg="yellow")
+        return []
     except urllib.error.URLError:
         return []
 

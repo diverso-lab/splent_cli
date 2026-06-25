@@ -1,6 +1,7 @@
 import os
 import click
 from splent_cli.services import context
+from splent_cli.utils.io_utils import atomic_write
 
 
 @click.command(
@@ -25,8 +26,7 @@ def product_deselect(shell):
         with open(workspace_env_path, "r") as f:
             lines = f.readlines()
         new_lines = [line for line in lines if not line.startswith("SPLENT_APP=")]
-        with open(workspace_env_path, "w") as f:
-            f.writelines(new_lines)
+        atomic_write(workspace_env_path, "".join(new_lines))
 
     if shell:
         print("unset SPLENT_APP")

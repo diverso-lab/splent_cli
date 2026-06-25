@@ -3,12 +3,12 @@ feature:xray — Show the refinement map for the active product.
 """
 
 import os
-import tomllib
 
 import click
 
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.io_utils import load_toml
 
 
 def _read_feature_splent(workspace: str, feature_name: str) -> dict:
@@ -19,8 +19,7 @@ def _read_feature_splent(workspace: str, feature_name: str) -> dict:
     ]:
         pyproject = os.path.join(candidate_dir, "pyproject.toml")
         if os.path.isfile(pyproject):
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
+            data = load_toml(pyproject, what=f"{feature_name} pyproject.toml")
             return data.get("tool", {}).get("splent", {})
 
     # Try versioned entries in cache
@@ -30,8 +29,7 @@ def _read_feature_splent(workspace: str, feature_name: str) -> dict:
             if entry.startswith(feature_name + "@"):
                 pyproject = os.path.join(cache_dir, entry, "pyproject.toml")
                 if os.path.isfile(pyproject):
-                    with open(pyproject, "rb") as f:
-                        data = tomllib.load(f)
+                    data = load_toml(pyproject, what=f"{feature_name} pyproject.toml")
                     return data.get("tool", {}).get("splent", {})
 
     return {}
@@ -138,8 +136,7 @@ def feature_xray(feature_ref, filter_cat, validate, full):
         click.secho("❌ pyproject.toml not found.", fg="red")
         raise SystemExit(1)
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what=f"{product} pyproject.toml")
 
     env = os.getenv("SPLENT_ENV", "dev")
     features = read_features_from_data(data, env)

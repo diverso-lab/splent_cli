@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import stat
+import sys
 import click
 import yaml
 import zlib
@@ -73,8 +74,11 @@ def _has_uvl(spl_dir):
 @click.option(
     "--features-file", type=click.Path(exists=True), help="Path to features.txt"
 )
+@click.option(
+    "--force", is_flag=True, help="Overwrite the product if it already exists."
+)
 @context.requires_detached
-def make_product(name, spl_name, features_file):
+def make_product(name, spl_name, features_file, force):
     workspace_path = context.workspace()
     catalog_dir = workspace_path / "splent_catalog"
 
@@ -179,8 +183,12 @@ def make_product(name, spl_name, features_file):
     base_path = str(context.workspace() / name)
 
     if os.path.exists(base_path):
-        click.echo(click.style(f"The product '{name}' already exists.", fg="red"))
-        return
+        if not force:
+            raise click.ClickException(
+                f"The product '{name}' already exists at {base_path}. "
+                f"Use --force to overwrite it."
+            )
+        shutil.rmtree(base_path)
 
     for subdir in [
         "docker",
@@ -247,38 +255,42 @@ def make_product(name, spl_name, features_file):
         abs_path = os.path.join(base_path, rel_path)
         copy_raw_file(tpl, abs_path)
 
+    # The container runtime expects files to be owned by uid/gid 1000. Only
+    # attempt chown on Linux/container hosts: on macOS/Windows uid 1000 is
+    # meaningless and chown would either fail or assign the wrong owner. chmod
+    # always keeps owner write so the generated tree stays editable.
     uid = 1000
     gid = 1000
-    try:
-        os.chown(base_path, uid, gid)
-    except PermissionError:
-        pass
-    os.chmod(base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+    do_chown = sys.platform.startswith("linux")
+    dir_mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
+    file_mode = (
+        stat.S_IRUSR
+        | stat.S_IWUSR
+        | stat.S_IRGRP
+        | stat.S_IWGRP
+        | stat.S_IROTH
+    )
+
+    def _maybe_chown(path):
+        if not do_chown:
+            return
+        try:
+            os.chown(path, uid, gid)
+        except (PermissionError, OSError):
+            pass
+
+    _maybe_chown(base_path)
+    os.chmod(base_path, dir_mode)
 
     for root, dirs, files in os.walk(base_path):
         for d in dirs:
             dir_path = os.path.join(root, d)
-            try:
-                os.chown(dir_path, uid, gid)
-            except PermissionError:
-                pass
-            os.chmod(
-                dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
-            )
+            _maybe_chown(dir_path)
+            os.chmod(dir_path, dir_mode)
         for f in files:
             file_path = os.path.join(root, f)
-            try:
-                os.chown(file_path, uid, gid)
-            except PermissionError:
-                pass
-            os.chmod(
-                file_path,
-                stat.S_IRUSR
-                | stat.S_IWUSR
-                | stat.S_IRGRP
-                | stat.S_IWGRP
-                | stat.S_IROTH,
-            )
+            _maybe_chown(file_path)
+            os.chmod(file_path, file_mode)
 
     click.echo(
         click.style(

@@ -1,8 +1,13 @@
 import os
-import re
 import click
+import tomli_w
 from splent_cli.services import context, compose
-from splent_cli.utils.feature_utils import hot_uninstall
+from splent_cli.utils.feature_utils import (
+    hot_uninstall,
+    parse_feature_entry,
+    write_features_to_data,
+)
+from splent_cli.utils.io_utils import load_toml, atomic_write
 from splent_cli.utils.manifest import (
     feature_key,
     remove_feature,
@@ -71,14 +76,30 @@ def feature_detach(feature_identifier, version, force):
             raise SystemExit(1)
 
     # ── Remove versioned reference from pyproject ─────────────────────
-    with open(pyproject_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    data = load_toml(pyproject_path, what="pyproject.toml")
 
-    pattern = re.escape(f"{feature_name}@{version}")
-    new_content = re.sub(pattern, feature_name, content)
+    changed = False
+    for features_key in ("features", "features_dev", "features_prod"):
+        features = data.get("tool", {}).get("splent", {}).get(features_key, [])
+        if not features:
+            continue
 
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        f.write(new_content)
+        updated = []
+        for entry in features:
+            _, name, entry_version = parse_feature_entry(entry)
+            if name == feature_name and entry_version == version:
+                # Drop the @version pin → revert to editable entry.
+                ns_raw = entry.split("/", 1)[0] if "/" in entry else None
+                updated.append(f"{ns_raw}/{name}" if ns_raw else name)
+            else:
+                updated.append(entry)
+
+        if updated != features:
+            write_features_to_data(data, updated, key=features_key)
+            changed = True
+
+    if changed:
+        atomic_write(pyproject_path, tomli_w.dumps(data))
 
     click.echo(f"  {short}@{version} removed from pyproject.toml")
 

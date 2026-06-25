@@ -4,6 +4,7 @@ import subprocess
 import click
 import yaml
 from splent_cli.services import context
+from splent_cli.utils.proc import require_docker
 
 
 @click.command(
@@ -40,6 +41,8 @@ def product_deploy(down, ci):
         if not os.path.isfile(compose_path):
             click.secho("  docker-compose.deploy.yml not found.", fg="red")
             raise SystemExit(1)
+
+        require_docker()
 
         click.echo(click.style("  stopping ", dim=True) + f"{product} (prod)...")
         try:
@@ -182,6 +185,11 @@ def product_deploy(down, ci):
             f.writelines(lines)
 
     # ---------------------------------------------------------
+    # Ensure docker is available before any container operations
+    # ---------------------------------------------------------
+    require_docker()
+
+    # ---------------------------------------------------------
     # Port conflict check
     # ---------------------------------------------------------
     from splent_cli.commands.product.product_derive import (
@@ -241,6 +249,8 @@ def product_deploy(down, ci):
                 "--build",
             ],
             check=True,
+            capture_output=True,
+            text=True,
             cwd=docker_dir,
         )
 
@@ -325,8 +335,9 @@ def product_deploy(down, ci):
             click.secho("  done.", fg="green")
     except subprocess.CalledProcessError as e:
         click.secho("  Deployment failed.", fg="red")
-        if e.stderr:
-            for line in e.stderr.strip().splitlines():
+        output = (e.stderr or e.stdout or "").strip()
+        if output:
+            for line in output.splitlines():
                 click.echo(f"    {line}")
         raise SystemExit(1)
 

@@ -1,5 +1,4 @@
 import os
-import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
@@ -9,6 +8,7 @@ from splent_cli.utils.feature_utils import (
     write_features_to_data,
     hot_uninstall,
 )
+from splent_cli.utils.io_utils import load_toml, atomic_write
 from splent_cli.utils.manifest import (
     feature_key,
     remove_feature,
@@ -80,8 +80,7 @@ def feature_remove(feature_name, namespace, force):
         click.secho("  pyproject.toml not found.", fg="red")
         raise SystemExit(1)
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what="pyproject.toml")
 
     features = read_features_from_data(data)
 
@@ -100,8 +99,7 @@ def feature_remove(feature_name, namespace, force):
     if entry_name in features:
         features.remove(entry_name)
         write_features_to_data(data, features)
-        with open(pyproject_path, "wb") as f:
-            tomli_w.dump(data, f)
+        atomic_write(pyproject_path, tomli_w.dumps(data))
         click.echo(f"  {short} removed from pyproject.toml")
     else:
         click.echo(click.style(f"  {short} not found in pyproject.toml", dim=True))

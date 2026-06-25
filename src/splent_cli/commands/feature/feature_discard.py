@@ -1,9 +1,10 @@
 import os
 import click
-import shutil
 import tomllib
 from splent_cli.services import context
+from splent_cli.utils.cache_utils import rmtree_force
 from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
+
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
@@ -87,9 +88,18 @@ def feature_discard(feature_name, namespace):
             click.echo("🚫 Aborted. Nothing removed.")
             raise SystemExit(1)
 
-    # 3) Delete editable folder
+    # 3) Delete editable folder.
+    # The cache may be read-only (versioned snapshots are protected), so a
+    # plain rmtree raises PermissionError and leaves a partial delete. Use an
+    # error handler that clears the read-only bit and retries.
     click.echo("🗑️ Removing editable feature folder...")
-    shutil.rmtree(editable_path)
+    try:
+        rmtree_force(editable_path)
+    except OSError as e:
+        raise click.ClickException(
+            f"Failed to remove editable feature at {editable_path}: {e}\n"
+            "Check filesystem permissions and that no process is using the folder."
+        )
 
     click.echo("✅ Editable feature removed.")
     click.echo("🎯 All versioned snapshots preserved.")

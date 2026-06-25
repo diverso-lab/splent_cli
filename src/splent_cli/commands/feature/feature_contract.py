@@ -13,13 +13,13 @@ Works with both editable features (no version) and versioned features (@v1.x.x).
 """
 
 import os
-import tomllib
 import click
 from pathlib import Path
 
 from splent_cli.services import context
 from splent_cli.commands.feature.feature_release import infer_contract, write_contract
 from splent_cli.utils.feature_utils import normalize_namespace
+from splent_cli.utils.io_utils import load_toml
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -86,8 +86,7 @@ def _read_current_contract(pyproject_path: Path) -> dict:
     """Read the contract block currently written in pyproject.toml."""
     if not pyproject_path.exists():
         return {}
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what="pyproject.toml")
     raw = data.get("tool", {}).get("splent", {}).get("contract", {})
     ext = raw.get("extensible", {})
     return {
@@ -338,7 +337,7 @@ def _check_config_py(feature_path, ns, name, inferred):
         return
 
     # Config exists — check for missing vars
-    text = config_path.read_text()
+    text = config_path.read_text(encoding="utf-8", errors="replace")
     existing = set(re.findall(r'"([A-Z][A-Z0-9_]+)":\s*', text))
     missing = sorted(set(env_vars) - existing)
 

@@ -24,13 +24,12 @@ from splent_framework.managers.feature_order import FeatureLoadOrderResolver
 from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
-def _uvl_path(product_dir: str) -> str | None:
+def _uvl_path(product_dir: str, workspace: str) -> str | None:
     try:
         reader = PyprojectReader.for_product(product_dir)
         # 1. Catalog: [tool.splent].spl
         spl_name = reader.splent_config.get("spl")
         if spl_name:
-            workspace = os.getenv("WORKING_DIR", "/workspace")
             catalog_uvl = os.path.join(
                 workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
             )
@@ -159,7 +158,7 @@ def feature_order(as_json, no_namespace, no_version, short, reverse_feature):
         click.echo("  No features declared in pyproject.toml.")
         return
 
-    uvl = _uvl_path(product_dir)
+    uvl = _uvl_path(product_dir, workspace)
     ordered = FeatureLoadOrderResolver().resolve(features_raw, uvl)
     requires_map = _build_requires_map(uvl)
 

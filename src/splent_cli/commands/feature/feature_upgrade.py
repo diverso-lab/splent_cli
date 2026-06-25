@@ -1,6 +1,5 @@
 import json
 import os
-import subprocess
 import tomllib
 import urllib.error
 import urllib.request
@@ -11,6 +10,7 @@ from packaging.version import Version, InvalidVersion
 
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
+from splent_cli.utils.proc import run
 
 
 # ── GitHub helpers ────────────────────────────────────────────────────────────
@@ -39,7 +39,19 @@ def _latest_remote_version(org: str, repo: str, token: str | None) -> str | None
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
-        raise
+        if e.code == 403:
+            # Most commonly GitHub rate-limiting an unauthenticated request.
+            click.secho(
+                f"  ⚠  GitHub rate limit hit for {repo} (HTTP 403); skipping. "
+                "Set GITHUB_TOKEN to raise the limit.",
+                fg="yellow",
+            )
+            return None
+        click.secho(
+            f"  ⚠  GitHub error fetching {repo} (HTTP {e.code}); skipping.",
+            fg="yellow",
+        )
+        return None
     except urllib.error.URLError as e:
         click.secho(f"  ⚠  Network error fetching {repo}: {e.reason}", fg="yellow")
         return None
@@ -101,11 +113,11 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
 
     url, _ = build_git_url(ns_github, name)
     click.echo(f"  ⬇️  Cloning {ns_fs}/{name}@{version}...")
-    subprocess.run(
+    run(
         ["git", "clone", "--branch", version, "--depth", "1", url, str(target)],
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture=True,
+        tool_hint="Install git: https://git-scm.com/downloads",
     )
     from splent_cli.utils.cache_utils import make_feature_readonly
 

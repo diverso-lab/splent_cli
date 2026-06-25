@@ -1,9 +1,9 @@
 import os
-import tomllib
 import tomli_w
 import click
 from splent_cli.services import context
 from splent_cli.utils.feature_utils import normalize_namespace, hot_reinstall
+from splent_cli.utils.io_utils import load_toml, atomic_write
 from splent_cli.utils.manifest import feature_key, set_feature_state
 
 
@@ -63,8 +63,7 @@ def feature_add(full_name, env_scope):
     if not env_scope:
         feat_pyproject = os.path.join(feature_dir, "pyproject.toml")
         if os.path.isfile(feat_pyproject):
-            with open(feat_pyproject, "rb") as f:
-                feat_data = tomllib.load(f)
+            feat_data = load_toml(feat_pyproject, what="pyproject.toml")
             contract_env = (
                 feat_data.get("tool", {})
                 .get("splent", {})
@@ -84,8 +83,7 @@ def feature_add(full_name, env_scope):
         click.secho("  pyproject.toml not found.", fg="red")
         raise SystemExit(1)
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(pyproject_path, what="pyproject.toml")
 
     from splent_cli.utils.feature_utils import (
         read_features_from_data,
@@ -107,8 +105,7 @@ def feature_add(full_name, env_scope):
 
     features.append(full_name)
     write_features_to_data(data, features, key=features_key)
-    with open(pyproject_path, "wb") as f:
-        tomli_w.dump(data, f)
+    atomic_write(pyproject_path, tomli_w.dumps(data))
 
     scope_label = f" ({env_scope} only)" if env_scope else ""
     click.echo(f"  {short} added to {features_key}{scope_label}")

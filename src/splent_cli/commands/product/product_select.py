@@ -1,6 +1,7 @@
 import os
 import click
 from splent_cli.services import context
+from splent_cli.utils.io_utils import atomic_write
 
 
 @click.command(
@@ -44,8 +45,14 @@ def select_app(app_name, shell):
     if not found:
         new_lines.append(f"SPLENT_APP={app_name}\n")
 
-    with open(workspace_env_path, "w") as f:
-        f.writelines(new_lines)
+    try:
+        atomic_write(workspace_env_path, "".join(new_lines))
+    except OSError as e:
+        click.echo(
+            f"Error: failed to update SPLENT_APP in {workspace_env_path}: {e}",
+            err=True,
+        )
+        raise SystemExit(1)
 
     # If --shell, print commands for eval
     if shell:

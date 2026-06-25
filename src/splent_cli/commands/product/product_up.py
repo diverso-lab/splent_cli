@@ -8,6 +8,7 @@ import yaml
 
 from splent_cli.services import compose, context
 from splent_cli.utils.feature_utils import read_features_from_data
+from splent_cli.utils.proc import require_docker
 
 
 def _sync_splent_env(product_path: str, env: str) -> None:
@@ -36,22 +37,6 @@ def _sync_splent_env(product_path: str, env: str) -> None:
         f.writelines(lines)
 
 
-def _check_docker_running():
-    """Exit with a clear message if the Docker daemon is not reachable."""
-    result = subprocess.run(
-        ["docker", "info"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        click.secho(
-            "  Docker daemon is not running or not reachable.\n"
-            "  Start Docker and try again.",
-            fg="red",
-        )
-        raise SystemExit(1)
-
-
 def _get_feature_order(workspace, product_path, env):
     """Return features in UVL topological order."""
     py = os.path.join(product_path, "pyproject.toml")
@@ -67,14 +52,23 @@ def _get_feature_order(workspace, product_path, env):
     # Try to order via UVL
     try:
         from splent_framework.managers.feature_order import FeatureLoadOrderResolver
+    except ImportError:
+        # Framework not available: fall back to declared feature order silently.
+        return features
 
-        spl_name = data.get("tool", {}).get("splent", {}).get("spl")
-        if spl_name:
-            uvl = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
-            if os.path.isfile(uvl):
+    spl_name = data.get("tool", {}).get("splent", {}).get("spl")
+    if spl_name:
+        uvl = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
+        if os.path.isfile(uvl):
+            try:
                 return FeatureLoadOrderResolver().resolve(features, uvl)
-    except Exception:
-        pass
+            except Exception as e:
+                click.secho(
+                    f"  Could not resolve UVL load order from {uvl}:\n"
+                    f"    {e}\n"
+                    "  Falling back to unordered feature launch.",
+                    fg="yellow",
+                )
 
     return features
 
@@ -88,11 +82,17 @@ def _has_healthcheck(docker_dir, env):
     try:
         with open(compose_file) as f:
             data = yaml.safe_load(f) or {}
-        for svc_def in data.get("services", {}).values():
-            if "healthcheck" in svc_def:
-                return True
-    except Exception:
-        pass
+    except (yaml.YAMLError, OSError) as e:
+        click.secho(
+            f"  Could not parse compose file {compose_file}:\n"
+            f"    {e}\n"
+            "  Skipping health-wait for this feature.",
+            fg="yellow",
+        )
+        return False
+    for svc_def in data.get("services", {}).values():
+        if "healthcheck" in svc_def:
+            return True
     return False
 
 
@@ -105,11 +105,17 @@ def _has_build(docker_dir, env):
     try:
         with open(compose_file) as f:
             data = yaml.safe_load(f) or {}
-        for svc_def in data.get("services", {}).values():
-            if "build" in svc_def:
-                return True
-    except Exception:
-        pass
+    except (yaml.YAMLError, OSError) as e:
+        click.secho(
+            f"  Could not parse compose file {compose_file}:\n"
+            f"    {e}\n"
+            "  Assuming no build directive for this feature.",
+            fg="yellow",
+        )
+        return False
+    for svc_def in data.get("services", {}).values():
+        if "build" in svc_def:
+            return True
     return False
 
 
@@ -122,9 +128,14 @@ def _get_service_names(docker_dir, env):
     try:
         with open(compose_file) as f:
             data = yaml.safe_load(f) or {}
-        return list(data.get("services", {}).keys())
-    except Exception:
+    except (yaml.YAMLError, OSError) as e:
+        click.secho(
+            f"  Could not parse compose file {compose_file}:\n"
+            f"    {e}",
+            fg="yellow",
+        )
         return []
+    return list(data.get("services", {}).keys())
 
 
 def _wait_for_healthy(project_name, compose_file, docker_dir, timeout=60):
@@ -201,7 +212,7 @@ def product_up(dev, prod):
         )
         raise SystemExit(1)
 
-    _check_docker_running()
+    require_docker()
 
     env = context.resolve_env(dev, prod)
     product = context.require_app()

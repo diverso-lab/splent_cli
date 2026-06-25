@@ -1,8 +1,8 @@
 import os
-import subprocess
 import click
 
 from splent_cli.utils.path_utils import PathUtils
+from splent_cli.utils.proc import run
 from splent_cli.services import context
 
 
@@ -33,7 +33,7 @@ def selenium(module):
             selenium_test_path = os.path.join(
                 modules_dir, module, "tests", "test_selenium.py"
             )
-            test_command = ["python", selenium_test_path]
+            selenium_test_paths = [selenium_test_path]
         else:
             selenium_test_paths = []
             for module in os.listdir(modules_dir):
@@ -41,12 +41,19 @@ def selenium(module):
                 selenium_test_path = os.path.join(tests_dir, "test_selenium.py")
                 if os.path.exists(selenium_test_path):
                     selenium_test_paths.append(selenium_test_path)
-            test_command = ["python"] + selenium_test_paths
 
+        if not selenium_test_paths:
+            click.secho("No Selenium tests found to run.", fg="yellow")
+            return
+
+        test_command = ["python"] + selenium_test_paths
         click.echo(f"Running Selenium tests with command: {' '.join(test_command)}")
-        try:
-            subprocess.run(test_command, check=True)
-        except subprocess.CalledProcessError:
+        result = run(
+            test_command,
+            check=False,
+            tool_hint="Install Python 3 and make sure 'python' is on your PATH.",
+        )
+        if result.returncode != 0:
             click.secho("❌ Selenium tests failed.", fg="red")
             raise SystemExit(1)
 
@@ -54,7 +61,7 @@ def selenium(module):
     if module:
         validate_module(module)
 
-    if working_dir == "/workspace/":
+    if working_dir == "/workspace":
         click.echo(
             click.style(
                 "Currently it is not possible to run this "
@@ -63,10 +70,7 @@ def selenium(module):
             )
         )
 
-    elif working_dir == "":
-        run_selenium_tests_in_local(module)
-
-    elif working_dir == "/vagrant/":
+    elif working_dir == "/vagrant":
         click.echo(
             click.style(
                 "Currently it is not possible to run this "
@@ -76,4 +80,4 @@ def selenium(module):
         )
 
     else:
-        click.echo(click.style(f"Unrecognized WORKING_DIR: {working_dir}", fg="red"))
+        run_selenium_tests_in_local(module)

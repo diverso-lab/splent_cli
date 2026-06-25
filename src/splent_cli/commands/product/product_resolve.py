@@ -46,7 +46,13 @@ def _feature_env_tag(entry: str, dev_set: set[str], prod_set: set[str]) -> str:
     is_flag=True,
     help="Force reclone each feature (delete its cache folder first).",
 )
-def product_sync(ctx, force):
+@click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Skip confirmation prompts (e.g. when deleting cache folders with --force).",
+)
+def product_sync(ctx, force, yes):
     workspace = str(context.workspace())
     product = context.require_app()
 
@@ -145,8 +151,7 @@ def product_sync(ctx, force):
 
             # Force reclone
             if os.path.exists(cache_dir) and force:
-                make_feature_writable(cache_dir)
-                shutil.rmtree(cache_dir)
+                _force_remove_cache_dir(workspace, cache_dir, yes)
 
             # Clone if missing
             cloned = False
@@ -244,6 +249,64 @@ def _clean_stale_symlinks(features_dir: str, declared: list[str]) -> None:
 
     if removed:
         click.secho(f"  Removed {removed} stale symlink(s).", fg="yellow")
+
+
+def _force_remove_cache_dir(workspace: str, cache_dir: str, yes: bool) -> None:
+    """Safely delete a cached feature folder for --force reclone.
+
+    Guards against accidental deletion: the path must resolve to a location
+    inside the workspace ``.splent_cache`` directory, the user is asked to
+    confirm unless ``--yes`` was passed, and read-only / permission errors
+    during removal are reported as actionable messages instead of tracebacks.
+    """
+    cache_root = os.path.realpath(os.path.join(workspace, ".splent_cache"))
+    target = os.path.realpath(cache_dir)
+
+    # Path validation: refuse to rmtree anything outside .splent_cache.
+    if target != cache_root and not target.startswith(cache_root + os.sep):
+        click.secho(
+            f"Refusing to delete '{cache_dir}': not inside {cache_root}",
+            fg="red",
+        )
+        raise SystemExit(1)
+    if target == cache_root:
+        click.secho(
+            f"Refusing to delete the entire cache root: {cache_root}",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+    if not yes:
+        if not click.confirm(f"  Delete cached feature folder '{cache_dir}'?"):
+            click.secho("  Skipped (not confirmed).", fg="yellow")
+            return
+
+    make_feature_writable(cache_dir)
+    try:
+        shutil.rmtree(cache_dir, onerror=_rmtree_chmod_retry)
+    except OSError as e:
+        click.secho(f"Failed to delete cache folder '{cache_dir}': {e}", fg="red")
+        click.secho(
+            "   Check filesystem permissions or remove it manually.",
+            fg="red",
+            dim=True,
+        )
+        raise SystemExit(1)
+
+
+def _rmtree_chmod_retry(func, path, exc_info):
+    """onerror handler for shutil.rmtree: chmod the path writable and retry.
+
+    Handles read-only files/dirs that would otherwise raise PermissionError
+    and leave the cache folder partially removed.
+    """
+    import stat
+
+    try:
+        os.chmod(path, stat.S_IRWXU)
+    except OSError:
+        raise
+    func(path)
 
 
 def _create_symlink(cache_dir, product_features_dir, link_path):
