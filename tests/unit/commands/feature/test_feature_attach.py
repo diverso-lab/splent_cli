@@ -1,6 +1,5 @@
 """Tests for the feature:attach command."""
 import pytest
-from pathlib import Path
 from click.testing import CliRunner
 
 from splent_cli.commands.feature.feature_attach import feature_attach

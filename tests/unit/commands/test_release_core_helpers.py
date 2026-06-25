@@ -1,6 +1,5 @@
 """Tests for shared release helpers in services/release.py."""
 import pytest
-from unittest.mock import patch, MagicMock
 
 from splent_cli.services.release import (
     extract_repo,

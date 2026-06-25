@@ -6,9 +6,7 @@ _compile_in_container(). Full integration (docker exec) is not testable
 in unit tests — those paths require a running container.
 """
 
-import subprocess
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from splent_cli.commands.feature.feature_compile import _is_product_container, _compile_in_container
 
 

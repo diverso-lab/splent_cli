@@ -160,6 +160,13 @@ class TestBuildAndUploadPypi:
             assert "build failed" in result.output.lower() or "error:" in result.output.lower()
 
     def test_upload_failure_shows_manual_recovery_hint(self, tmp_path):
+        # The real build step is mocked, so it produces no files. Create a dummy
+        # artifact in dist/ so the dist/-not-empty guard passes and execution
+        # reaches the twine upload path we actually want to exercise here.
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        (dist_dir / "pkg-1.0.0-py3-none-any.whl").write_text("dummy")
+
         with patch(
             "splent_cli.services.release.subprocess.run"
         ) as mock_run:

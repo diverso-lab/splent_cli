@@ -4,7 +4,6 @@ Tests for the product:build command.
 product:build is pure filesystem: reads env files + docker-compose YAML,
 merges them, and writes output files. No subprocess calls.
 """
-import os
 import yaml
 import pytest
 from click.testing import CliRunner

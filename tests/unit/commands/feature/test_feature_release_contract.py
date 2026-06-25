@@ -6,7 +6,6 @@ These functions are pure (file I/O + regex), no CLI invocation needed.
 
 import tomllib
 from pathlib import Path
-import pytest
 
 from splent_cli.commands.feature.feature_release import (
     _extract_routes,
@@ -185,7 +184,7 @@ class TestInferContract:
         src.mkdir(parents=True)
 
         (src / "__init__.py").write_text(
-            f"demo_bp = BaseBlueprint('demo', __name__)\n"
+            "demo_bp = BaseBlueprint('demo', __name__)\n"
             "def init_feature(app): pass\n"
             "def inject_context_vars(app): return {}\n"
         )

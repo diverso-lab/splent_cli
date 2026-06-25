@@ -58,12 +58,10 @@ class TestDeclaredFeatures:
         assert "ns/feat_b" in result
 
     def test_returns_empty_list_when_no_pyproject(self, tmp_path):
-        import pytest
         with pytest.raises(FileNotFoundError):
             load_product_features(str(tmp_path / "missing"))
 
     def test_returns_empty_list_on_malformed_toml(self, tmp_path):
-        import pytest
         (tmp_path / "pyproject.toml").write_bytes(b"[bad toml\n")
         with pytest.raises(Exception):
             load_product_features(str(tmp_path))

@@ -1,5 +1,4 @@
 """Tests for pure helper functions in cache_outdated.py."""
-import pytest
 
 from splent_cli.commands.cache.cache_outdated import (
     _get_cache_versions,

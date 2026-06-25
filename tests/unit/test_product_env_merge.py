@@ -2,7 +2,6 @@
 Tests for product:env --merge org normalization.
 """
 import os
-from pathlib import Path
 
 
 class TestProductEnvMergeOrgNormalization:

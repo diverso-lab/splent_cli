@@ -148,7 +148,7 @@ class TestContainerFound:
             return MagicMock(returncode=0)
 
         with patch("subprocess.run", side_effect=fake_run):
-            result = runner.invoke(product_shell, ["--dev"])
+            runner.invoke(product_shell, ["--dev"])
 
         exec_calls = [c for c in call_cmds if "exec" in c]
         # Should have tried bash and then sh

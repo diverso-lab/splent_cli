@@ -2,7 +2,6 @@
 Tests for the feature lifecycle state machine.
 """
 import pytest
-from pathlib import Path
 
 from splent_cli.utils.lifecycle import (
     state_rank,

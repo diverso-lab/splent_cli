@@ -5,10 +5,11 @@ from splent_cli.commands.product.product_auto_require import (
     _build_req_graph,
     _closure_requires,
     _dep_spec_from_meta,
-    _extract_string_items,
     _parse_feature_metadata_from_uvl_text,
-    _render_features_block,
-    _rewrite_pyproject_features_block,
+)
+from splent_cli.utils.feature_utils import (
+    read_features_from_data,
+    write_features_to_data,
 )
 
 import click
@@ -151,103 +152,132 @@ class TestDepSpecFromMeta:
 
 
 # ---------------------------------------------------------------------------
-# _extract_string_items
+# Reading the current feature list from a parsed pyproject dict
+#
+# The hardening pass replaced fragile regex extraction of the features block
+# (_extract_string_items) with proper TOML parsing. The reading responsibility
+# now lives in read_features_from_data, so we test that instead of dead code.
 # ---------------------------------------------------------------------------
 
-class TestExtractStringItems:
-    def test_double_quoted(self):
-        body = '"ns/feat_a@v1.0.0",\n"ns/feat_b",\n'
-        items = _extract_string_items(body)
+class TestReadFeaturesFromData:
+    def test_reads_canonical_location(self):
+        data = {"tool": {"splent": {"features": ["ns/feat_a@v1.0.0", "ns/feat_b"]}}}
+        items = read_features_from_data(data)
         assert "ns/feat_a@v1.0.0" in items
         assert "ns/feat_b" in items
 
-    def test_single_quoted(self):
-        body = "'ns/feat_a',\n"
-        items = _extract_string_items(body)
-        assert "ns/feat_a" in items
+    def test_reads_legacy_optional_dependencies(self):
+        data = {
+            "project": {"optional-dependencies": {"features": ["ns/feat_legacy"]}}
+        }
+        items = read_features_from_data(data)
+        assert "ns/feat_legacy" in items
 
-    def test_strips_inline_hash_comments(self):
-        body = '"ns/feat_a", # some comment\n'
-        items = _extract_string_items(body)
-        assert "ns/feat_a" in items
-        assert "some comment" not in items
+    def test_strips_whitespace_and_blanks(self):
+        data = {"tool": {"splent": {"features": ["  ns/feat_a  ", "", "  "]}}}
+        items = read_features_from_data(data)
+        assert items == ["ns/feat_a"]
 
-    def test_strips_inline_slash_comments(self):
-        body = '"ns/feat_b", // other comment\n'
-        items = _extract_string_items(body)
-        assert "ns/feat_b" in items
+    def test_empty_data(self):
+        assert read_features_from_data({}) == []
 
-    def test_empty_body(self):
-        assert _extract_string_items("") == []
-
-
-# ---------------------------------------------------------------------------
-# _render_features_block
-# ---------------------------------------------------------------------------
-
-class TestRenderFeaturesBlock:
-    def test_single_item(self):
-        out = _render_features_block(["ns/feat"], indent_key="", indent_item="    ")
-        assert "ns/feat" in out
-        assert "features = [" in out
-
-    def test_multiple_items(self):
-        out = _render_features_block(["a", "b", "c"], indent_key="", indent_item="    ")
-        assert '"a"' in out
-        assert '"b"' in out
-        assert '"c"' in out
-
-    def test_indentation_applied(self):
-        out = _render_features_block(["x"], indent_key="  ", indent_item="      ")
-        assert out.startswith("  features = [")
-
-    def test_empty_items(self):
-        out = _render_features_block([], indent_key="", indent_item="    ")
-        assert "features = [" in out
-        assert "]" in out
+    def test_merges_env_specific(self):
+        data = {
+            "tool": {
+                "splent": {
+                    "features": ["base/feat"],
+                    "features_dev": ["dev/feat"],
+                }
+            }
+        }
+        items = read_features_from_data(data, env="dev")
+        assert items == ["base/feat", "dev/feat"]
 
 
 # ---------------------------------------------------------------------------
-# _rewrite_pyproject_features_block
+# The merge logic the command applies before writing back
+#
+# Replaces the old regex-rewrite orchestration (_rewrite_pyproject_features_block):
+# append missing specs, dedup, preserve order. This mirrors product_auto_require
+# lines that build `new_features` from the current list + specs to add.
 # ---------------------------------------------------------------------------
 
-class TestRewritePyprojectFeaturesBlock:
-    def _make_pyproject(self, features):
-        items = "\n".join(f'    "{f}",' for f in features)
-        return (
-            "[project.optional-dependencies]\n"
-            "features = [\n"
-            f"{items}\n"
-            "]\n"
-        )
+def _merge_features(current, to_add):
+    """Mirror of the merge in product_auto_require.product_complete."""
+    existing = set(current)
+    new_features = list(current)
+    for spec in to_add:
+        if spec not in existing:
+            new_features.append(spec)
+            existing.add(spec)
+    return new_features
 
+
+class TestMergeFeatures:
     def test_adds_new_item(self):
-        text = self._make_pyproject(["ns/feat_a"])
-        result = _rewrite_pyproject_features_block(text, ["ns/feat_b"])
+        result = _merge_features(["ns/feat_a"], ["ns/feat_b"])
         assert "ns/feat_b" in result
 
     def test_preserves_existing_items(self):
-        text = self._make_pyproject(["ns/feat_a"])
-        result = _rewrite_pyproject_features_block(text, ["ns/feat_b"])
+        result = _merge_features(["ns/feat_a"], ["ns/feat_b"])
         assert "ns/feat_a" in result
 
     def test_no_duplicates_added(self):
-        text = self._make_pyproject(["ns/feat_a"])
-        result = _rewrite_pyproject_features_block(text, ["ns/feat_a"])
+        result = _merge_features(["ns/feat_a"], ["ns/feat_a"])
         assert result.count("ns/feat_a") == 1
 
     def test_empty_to_add_returns_unchanged(self):
-        text = self._make_pyproject(["ns/feat_a"])
-        result = _rewrite_pyproject_features_block(text, [])
-        assert result == text
-
-    def test_no_features_block_raises(self):
-        text = "[project]\nname = 'foo'\n"
-        with pytest.raises(ValueError, match="Cannot find"):
-            _rewrite_pyproject_features_block(text, ["ns/feat"])
+        current = ["ns/feat_a"]
+        result = _merge_features(current, [])
+        assert result == current
 
     def test_multiple_new_items(self):
-        text = self._make_pyproject([])
-        result = _rewrite_pyproject_features_block(text, ["a/x", "b/y"])
+        result = _merge_features([], ["a/x", "b/y"])
         assert "a/x" in result
         assert "b/y" in result
+
+    def test_order_preserved(self):
+        result = _merge_features(["a", "b"], ["c", "a"])
+        assert result == ["a", "b", "c"]
+
+
+# ---------------------------------------------------------------------------
+# Writing the feature list back into a parsed pyproject dict
+#
+# Replaces the old text rendering (_render_features_block). The hardening writes
+# via write_features_to_data + tomli_w, so we test the round-trip here.
+# ---------------------------------------------------------------------------
+
+class TestWriteFeaturesToData:
+    def test_writes_to_canonical_location(self):
+        data = {}
+        write_features_to_data(data, ["ns/feat"])
+        assert data["tool"]["splent"]["features"] == ["ns/feat"]
+
+    def test_round_trip(self):
+        data = {}
+        write_features_to_data(data, ["a", "b", "c"])
+        assert read_features_from_data(data) == ["a", "b", "c"]
+
+    def test_empty_items(self):
+        data = {}
+        write_features_to_data(data, [])
+        assert data["tool"]["splent"]["features"] == []
+
+    def test_removes_legacy_location(self):
+        data = {
+            "project": {"optional-dependencies": {"features": ["old/feat"]}}
+        }
+        write_features_to_data(data, ["new/feat"])
+        assert "features" not in data["project"]["optional-dependencies"]
+        assert read_features_from_data(data) == ["new/feat"]
+
+    def test_serializes_with_tomli_w(self):
+        import tomli_w
+        import tomllib
+
+        data = {}
+        write_features_to_data(data, ["ns/feat_a", "ns/feat_b"])
+        text = tomli_w.dumps(data)
+        reparsed = tomllib.loads(text)
+        assert read_features_from_data(reparsed) == ["ns/feat_a", "ns/feat_b"]

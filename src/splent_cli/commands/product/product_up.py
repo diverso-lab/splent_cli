@@ -11,6 +11,18 @@ from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.utils.proc import require_docker
 
 
+def _check_docker_running() -> None:
+    """Abort unless Docker is installed and its daemon is reachable.
+
+    Thin wrapper around :func:`splent_cli.utils.proc.require_docker` kept as a
+    named, individually-testable unit for the "is docker running" guarantee that
+    ``product:up`` depends on. Delegating to the shared helper means the
+    not-installed / daemon-down / permission-denied messages stay consistent
+    across the CLI (and distinct from one another).
+    """
+    require_docker()
+
+
 def _sync_splent_env(product_path: str, env: str) -> None:
     """Write ``SPLENT_ENV=<env>`` into the product's ``docker/.env``.
 
@@ -212,7 +224,7 @@ def product_up(dev, prod):
         )
         raise SystemExit(1)
 
-    require_docker()
+    _check_docker_running()
 
     env = context.resolve_env(dev, prod)
     product = context.require_app()

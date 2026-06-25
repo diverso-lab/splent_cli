@@ -5,7 +5,7 @@ Pattern: filesystem via product_workspace fixture + mock subprocess.run
 to avoid actually running docker compose.
 """
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
 from splent_cli.commands.product.product_up import product_up

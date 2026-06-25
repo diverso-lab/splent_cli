@@ -74,7 +74,7 @@ class TestVolumeRemoval:
 
     def test_confirm_adds_v_flag(self, runner, product_workspace):
         with patch("subprocess.run", side_effect=_success_run) as mock_run:
-            result = runner.invoke(product_down, ["--v"], input="y\n")
+            runner.invoke(product_down, ["--v"], input="y\n")
         calls_flat = [arg for c in mock_run.call_args_list for arg in c[0][0]]
         assert "-v" in calls_flat
 

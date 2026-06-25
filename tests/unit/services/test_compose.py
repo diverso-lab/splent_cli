@@ -4,8 +4,6 @@ Tests for splent_cli.services.compose
 Pure Python functions — no mocking needed for most cases.
 Only resolve_file() touches the filesystem, so we use tmp_path there.
 """
-import pytest
-from pathlib import Path
 
 from splent_cli.services import compose
 

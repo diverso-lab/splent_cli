@@ -1,5 +1,4 @@
 """Tests for uvl_sync metadata parsing — single and double quote support."""
-import pytest
 from splent_cli.commands.product.product_auto_require import _parse_feature_metadata_from_uvl_text
 
 

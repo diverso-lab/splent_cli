@@ -1,6 +1,4 @@
 """Tests for regex-based extraction helpers in feature_release.py."""
-import pytest
-from pathlib import Path
 
 from splent_cli.commands.feature.feature_release import (
     _extract_blueprints,

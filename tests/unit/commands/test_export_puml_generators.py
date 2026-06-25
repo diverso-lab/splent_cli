@@ -1,5 +1,4 @@
 """Tests for PlantUML generator functions in export_puml.py."""
-import pytest
 
 from splent_cli.commands.export.export_puml import (
     _generate_class_puml,
@@ -224,7 +223,7 @@ class TestGenerateClassPuml:
         }
         result = _generate_class_puml("myapp", models, _uvl())
         # name without nullable=True should not have '?' after the type
-        lines = [l for l in result.splitlines() if "name" in l and "str" in l]
+        lines = [line for line in result.splitlines() if "name" in line and "str" in line]
         assert lines, "Should have a line with 'name' attribute"
         assert "?" not in lines[0]
 

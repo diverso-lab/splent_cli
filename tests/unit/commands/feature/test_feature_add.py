@@ -5,7 +5,6 @@ Pattern: real filesystem via tmp_path — this command reads/writes pyproject.to
 and creates symlinks. No subprocess to mock.
 """
 import pytest
-from pathlib import Path
 from click.testing import CliRunner
 
 from splent_cli.commands.feature.feature_add import feature_add
@@ -127,7 +126,7 @@ class TestIdempotency:
 
     def test_existing_symlink_replaced_not_errored(self, runner, product_workspace_with_feature, tmp_path):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
-        result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
+        runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         link = tmp_path / "test_app" / "features" / "splent_io" / "splent_feature_auth"
         assert link.is_symlink()
 

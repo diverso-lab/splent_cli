@@ -1,6 +1,4 @@
 """Tests for context.workspace() validation."""
-import pytest
-from pathlib import Path
 from click.testing import CliRunner
 import click
 from splent_cli.services.context import workspace

@@ -1,7 +1,6 @@
 """
 Tests for the feature:remove command.
 """
-import os
 import tomllib
 import tomli_w
 import pytest

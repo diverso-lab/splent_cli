@@ -1,7 +1,6 @@
 """Tests for the check:features command."""
 import os
 import pytest
-from pathlib import Path
 from click.testing import CliRunner
 
 from splent_cli.commands.check.check_features import check_features, _pkg_installed
@@ -35,7 +34,6 @@ def _make_feature_symlink(product_workspace, org_safe, name, version, target):
     link_dir = product_workspace / "test_app" / "features" / org_safe
     link_dir.mkdir(parents=True, exist_ok=True)
     link = link_dir / f"{name}@{version}"
-    rel = os.path.relpath(str(target.parent.parent.parent.parent.parent), str(link_dir))
     link.symlink_to(os.path.relpath(str(target.parent.parent.parent.parent), str(link_dir)))
     return link
 
@@ -104,7 +102,7 @@ class TestCheckFeaturesWithFeature:
         assert "missing src" in result.output
 
     def test_ok_when_cache_and_src_exist(self, runner, product_workspace):
-        src = _make_feature_cache(product_workspace, "splent_io", "auth", "v1.0.0")
+        _make_feature_cache(product_workspace, "splent_io", "auth", "v1.0.0")
         _add_feature_to_pyproject(product_workspace, "splent_io/auth@v1.0.0")
         result = runner.invoke(check_features)
         assert "Found in cache" in result.output
@@ -122,7 +120,7 @@ class TestCheckFeaturesWithFeature:
         assert "splent_io/auth" in result.output
 
     def test_all_ok_message_shown_on_success(self, runner, product_workspace):
-        src = _make_feature_cache(product_workspace, "splent_io", "auth", "v1.0.0")
+        _make_feature_cache(product_workspace, "splent_io", "auth", "v1.0.0")
         # Create symlink
         link_dir = product_workspace / "test_app" / "features" / "splent_io"
         link_dir.mkdir(parents=True)

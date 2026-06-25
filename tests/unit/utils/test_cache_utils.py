@@ -1,7 +1,6 @@
 """Tests for cache_utils.py filesystem permission helpers."""
 import os
 import stat
-import pytest
 
 from splent_cli.utils.cache_utils import make_feature_readonly, make_feature_writable
 

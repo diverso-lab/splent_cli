@@ -5,7 +5,6 @@ The manifest utility is pure I/O + logic — no CLI invocation needed.
 """
 
 import json
-from pathlib import Path
 import pytest
 
 from splent_cli.utils.manifest import (

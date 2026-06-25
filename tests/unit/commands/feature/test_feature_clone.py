@@ -1,5 +1,4 @@
 """Tests for feature:clone — path traversal validation and error handling."""
-import subprocess
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from splent_cli.commands.feature.feature_clone import (
@@ -73,15 +72,20 @@ class TestRepoNotFound:
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         runner = CliRunner(mix_stderr=False)
 
+        # The hardened clone shells out via the proc.run wrapper (check=False)
+        # and inspects the returncode; patch that wrapper and require_tool.
         with patch("splent_cli.utils.git_url._ssh_available", return_value=False), \
+             patch("splent_cli.commands.feature.feature_clone.require_tool"), \
              patch(
-                "splent_cli.commands.feature.feature_clone.subprocess.run"
+                "splent_cli.commands.feature.feature_clone.run"
              ) as mock_run, \
              patch(
                 "splent_cli.commands.feature.feature_clone.requests.get"
              ) as mock_get:
-            mock_run.side_effect = subprocess.CalledProcessError(
-                128, "git clone"
+            mock_run.return_value = MagicMock(
+                returncode=128,
+                stderr="fatal: repository not found",
+                stdout="",
             )
             mock_resp = MagicMock()
             mock_resp.raise_for_status.return_value = None

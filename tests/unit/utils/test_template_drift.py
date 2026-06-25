@@ -1,6 +1,4 @@
 """Tests for pure helper functions in template_drift.py."""
-import pytest
-from pathlib import Path
 
 from splent_cli.utils.template_drift import (
     _pascalcase,
@@ -125,8 +123,8 @@ class TestFileDiff:
         f.write_text("line1\n")
         result = file_diff(f, "line1\nline2\n")
         assert result is not None
-        added = [l for l in result if l.startswith("+") and not l.startswith("+++")]
-        assert any("line2" in l for l in added)
+        added = [line for line in result if line.startswith("+") and not line.startswith("+++")]
+        assert any("line2" in line for line in added)
 
 
 # ---------------------------------------------------------------------------

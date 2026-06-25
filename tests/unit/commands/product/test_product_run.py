@@ -5,7 +5,7 @@ product_run queries docker containers — we mock subprocess.run to control
 what docker ps -q and docker inspect return.
 """
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
 from splent_cli.commands.product.product_run import product_runc
@@ -50,12 +50,15 @@ class TestFlagValidation:
 
 class TestNoContainers:
     def test_runs_locally_when_no_containers(self, runner, product_workspace):
+        """Daemon up (docker info returns 0) but no matching containers → run locally."""
         def fake_run(cmd, **kwargs):
             if "ps" in cmd:
                 return _ps_result([])  # no containers
+            # docker info, docker exec, bash entrypoint, etc. → success
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run):
+        with patch("subprocess.run", side_effect=fake_run), \
+                patch("os.path.isfile", return_value=True):
             result = runner.invoke(product_runc, ["--dev"])
         assert result.exit_code == 0
         assert "locally" in result.output or "No containers" in result.output
@@ -77,7 +80,8 @@ class TestContainerFound:
                 return _inspect_result(["/workspace"])
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run):
+        with patch("subprocess.run", side_effect=fake_run), \
+                patch("os.path.isfile", return_value=True):
             result = runner.invoke(product_runc, ["--dev"])
 
         assert result.exit_code == 0
@@ -97,7 +101,8 @@ class TestContainerFound:
                 return _inspect_result(["/other"])  # not /workspace
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run):
+        with patch("subprocess.run", side_effect=fake_run), \
+                patch("os.path.isfile", return_value=True):
             result = runner.invoke(product_runc, ["--dev"])
 
         assert result.exit_code == 0
@@ -116,7 +121,8 @@ class TestContainerFound:
                 return _inspect_result(["/workspace"])
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run):
+        with patch("subprocess.run", side_effect=fake_run), \
+                patch("os.path.isfile", return_value=True):
             result = runner.invoke(product_runc, ["--dev"])
 
         assert result.exit_code == 0

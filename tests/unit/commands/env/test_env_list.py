@@ -86,7 +86,7 @@ class TestKeysOnly:
         make_env_file(workspace, "FOO=bar\nBAZ=qux\n")
         result = runner.invoke(env_list, ["--keys-only"])
         assert result.exit_code == 0
-        lines = [l for l in result.output.splitlines() if l.strip()]
+        lines = [line for line in result.output.splitlines() if line.strip()]
         assert "FOO" in lines
         assert "BAZ" in lines
         # Values should NOT appear
@@ -96,7 +96,7 @@ class TestKeysOnly:
     def test_keys_sorted(self, runner, workspace):
         make_env_file(workspace, "ZZZ=1\nAAA=2\nMMM=3\n")
         result = runner.invoke(env_list, ["--keys-only"])
-        lines = [l.strip() for l in result.output.splitlines() if l.strip()]
+        lines = [line.strip() for line in result.output.splitlines() if line.strip()]
         assert lines == sorted(lines)
 
 
@@ -183,13 +183,13 @@ class TestEnvFileParsing:
     def test_comments_ignored(self, runner, workspace):
         make_env_file(workspace, "# comment\nFOO=bar\n")
         result = runner.invoke(env_list, ["--keys-only"])
-        lines = [l.strip() for l in result.output.splitlines() if l.strip()]
+        lines = [line.strip() for line in result.output.splitlines() if line.strip()]
         assert lines == ["FOO"]
 
     def test_blank_lines_ignored(self, runner, workspace):
         make_env_file(workspace, "\n\nFOO=bar\n\n")
         result = runner.invoke(env_list, ["--keys-only"])
-        lines = [l.strip() for l in result.output.splitlines() if l.strip()]
+        lines = [line.strip() for line in result.output.splitlines() if line.strip()]
         assert lines == ["FOO"]
 
     def test_quoted_values_unquoted(self, runner, workspace):
