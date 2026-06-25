@@ -871,6 +871,34 @@ def feature_refinement(refiner_name):
     except Exception:
         pass
 
+    # ── Register the refinement in the active product ───────────────
+    # A refinement only takes effect once the feature is part of the product
+    # (migrations, composition, feature:xray). Add it now so the user does not
+    # have to remember a separate `feature:add`. Reuse the org convention of the
+    # existing product features; idempotent (feature:add is a no-op if present).
+    try:
+        from splent_cli.commands.feature.feature_add import feature_add
+
+        org = ns
+        product_pyproject = os.path.join(workspace, product, "pyproject.toml")
+        with open(product_pyproject, "rb") as f:
+            existing = read_features_from_data(tomllib.load(f))
+        for entry in existing:
+            if "/" in entry:
+                org = entry.split("/", 1)[0]
+                break
+
+        click.echo()
+        feature_add.callback(f"{org}/{refiner_name}", env_scope=None)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        click.secho(
+            f"  note: could not auto-add to product ({exc}). "
+            f"Run: splent feature:add {ns}/{refiner_name}",
+            fg="yellow",
+        )
+
     click.echo()
     click.secho("  done.", fg="green")
     click.echo()

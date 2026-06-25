@@ -10,6 +10,32 @@ from splent_cli.services import compose, context
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
+def _sync_splent_env(product_path: str, env: str) -> None:
+    """Write ``SPLENT_ENV=<env>`` into the product's ``docker/.env``.
+
+    Keeps the persisted environment in sync with the ``--dev``/``--prod`` flag so a
+    product that was previously deployed (which sets ``SPLENT_ENV=prod``) can return
+    to development with ``product:up --dev`` / ``product:derive --dev``. The container
+    is (re)created right after this, so it picks up the updated value.
+    """
+    env_path = os.path.join(product_path, "docker", ".env")
+    if not os.path.isfile(env_path):
+        return
+    lines = []
+    found = False
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip().startswith("SPLENT_ENV="):
+                lines.append(f"SPLENT_ENV={env}\n")
+                found = True
+            else:
+                lines.append(line)
+    if not found:
+        lines.append(f"SPLENT_ENV={env}\n")
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
 def _check_docker_running():
     """Exit with a clear message if the Docker daemon is not reachable."""
     result = subprocess.run(
@@ -181,6 +207,10 @@ def product_up(dev, prod):
     product = context.require_app()
     workspace = str(context.workspace())
     product_path = compose.product_path(product, workspace)
+
+    # Persist the resolved environment so a previously deployed (prod) product can
+    # cleanly return to dev — the container is recreated below with the new value.
+    _sync_splent_env(product_path, env)
 
     failed: list[str] = []
     started: list[str] = []
