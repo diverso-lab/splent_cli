@@ -172,7 +172,12 @@ def product_env(generate, merge, env_name, process_all):
             )
             raise SystemExit(1)
 
-        target_env = os.path.join(docker_dir, ".env")
+        # Each environment writes to its own file so a `--prod` merge never
+        # clobbers the development `.env` (which the dev containers read via
+        # env_file). dev → .env, prod → .env.deploy.
+        target_env = os.path.join(
+            docker_dir, ".env.deploy" if env_name == "prod" else ".env"
+        )
         if base_env != target_env:
             shutil.copyfile(base_env, target_env)
 

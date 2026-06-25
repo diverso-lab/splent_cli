@@ -478,16 +478,19 @@ def feature_xray(feature_ref, filter_cat, validate, full):
     if not bp_collisions:
         ok += 1
 
-    # 5. Commands: check for name collisions
-    all_commands: dict[str, list[str]] = {}
+    # 5. Commands: feature-contributed commands are namespaced under
+    # ``feature:<name> <cmd>``, so the same command name in two different
+    # features (e.g. the scaffold's example ``hello``) never actually collides.
+    # We only flag a real duplicate *within* a single feature.
+    cmd_collisions = {}
     for name, fdata in feature_data.items():
-        for cmd in fdata["contract"].get("provides", {}).get("commands", []):
-            all_commands.setdefault(cmd, []).append(name)
-
-    cmd_collisions = {c: fs for c, fs in all_commands.items() if len(fs) > 1}
+        cmds = fdata["contract"].get("provides", {}).get("commands", [])
+        dupes = {c for c in cmds if cmds.count(c) > 1}
+        for c in dupes:
+            cmd_collisions.setdefault(f"{name}:{c}", []).append(name)
     for cmd, features_list in cmd_collisions.items():
         click.secho(
-            f"  ❌ Command '{cmd}' — collision: {', '.join(features_list)}",
+            f"  ❌ Command '{cmd}' — duplicated within feature",
             fg="red",
         )
         fail += 1

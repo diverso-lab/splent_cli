@@ -260,17 +260,39 @@ def build_and_upload_pypi(path: str):
         raise SystemExit(1)
 
     click.echo("  pypi     uploading...")
+
+    # Expand dist/* ourselves: subprocess runs without a shell, so a literal
+    # "dist/*" would be passed verbatim to twine and never match any file.
+    import glob
+
+    dist_files = sorted(glob.glob(os.path.join(path, "dist", "*")))
+    if not dist_files:
+        click.secho("  error: no built artifacts found in dist/", fg="red")
+        raise SystemExit(1)
+
+    # twine reads TWINE_USERNAME / TWINE_PASSWORD from the environment. The CLI
+    # loads them from the workspace .env (load_dotenv), so they are already in
+    # os.environ — pass it through explicitly. --non-interactive makes twine fail
+    # loudly instead of blocking on a credentials prompt; --skip-existing keeps
+    # re-runs idempotent (a half-uploaded release can be retried safely).
     try:
         subprocess.run(
-            [sys.executable, "-m", "twine", "upload", "dist/*"],
+            [
+                sys.executable,
+                "-m",
+                "twine",
+                "upload",
+                "--non-interactive",
+                "--skip-existing",
+                *dist_files,
+            ],
             env=os.environ.copy(),
             check=True,
             cwd=path,
-            capture_output=True,
         )
     except subprocess.CalledProcessError as e:
         click.secho(
-            f"  error: PyPI upload failed: {e.stderr.strip() if e.stderr else ''}",
+            f"  error: PyPI upload failed (exit {e.returncode}).",
             fg="red",
         )
         click.secho(

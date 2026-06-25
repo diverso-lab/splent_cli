@@ -74,6 +74,31 @@ def _scan_feature_deps(
 ) -> set[str]:
     """Scan a feature's source for dependencies. Returns set of short_names."""
     deps = set()
+
+    # Refinement features declare the feature they refine in pyproject.toml
+    # ([tool.splent.refinement].refines). That is a hard dependency — the base
+    # feature must load first — so surface it as a constraint even when there is
+    # no Python import or FK between them.
+    pyproject_path = os.path.join(feature_path, "pyproject.toml")
+    if os.path.isfile(pyproject_path):
+        try:
+            import tomllib
+
+            with open(pyproject_path, "rb") as fh:
+                pydata = tomllib.load(fh)
+            refines = (
+                pydata.get("tool", {})
+                .get("splent", {})
+                .get("refinement", {})
+                .get("refines")
+            )
+            if refines and refines != feature_pkg and refines in all_packages:
+                short = pkg_to_short.get(refines)
+                if short:
+                    deps.add(short)
+        except Exception:
+            pass
+
     src_dir = os.path.join(feature_path, "src", "splent_io", feature_pkg)
     if not os.path.isdir(src_dir):
         return deps

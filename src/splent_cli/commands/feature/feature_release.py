@@ -237,10 +237,27 @@ def _extract_translations(translations_dir: Path) -> list[str]:
     return locales
 
 
+def _strip_docstrings_and_comments(text: str) -> str:
+    """Remove triple-quoted strings (docstrings) and ``#`` comments.
+
+    Signal inference scans for ``define_signal("...")`` / ``connect_signal("...")``
+    calls. The scaffolded ``signals.py`` ships *examples* of those calls inside a
+    module docstring; without stripping them the inferred contract would list
+    example signal names the feature never actually emits (e.g. ``item-created``),
+    causing spurious collisions in ``feature:xray --validate``.
+    """
+    # Drop triple-quoted blocks (both ''' and """).
+    text = re.sub(r'""".*?"""', "", text, flags=re.DOTALL)
+    text = re.sub(r"'''.*?'''", "", text, flags=re.DOTALL)
+    # Drop full-line and trailing comments.
+    text = re.sub(r"#.*", "", text)
+    return text
+
+
 def _extract_signals(signals_path: Path) -> tuple[list[str], list[str]]:
     if not signals_path.exists():
         return [], []
-    text = signals_path.read_text()
+    text = _strip_docstrings_and_comments(signals_path.read_text())
     provided = sorted(
         set(re.findall(r"""define_signal\s*\(\s*['"]([^'"]+)['"]""", text))
     )

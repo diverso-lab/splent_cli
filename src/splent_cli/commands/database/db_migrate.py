@@ -2,6 +2,7 @@ import os
 
 import click
 from flask_migrate import migrate as alembic_migrate
+from flask_migrate import revision as alembic_revision
 
 from splent_cli.utils.decorators import requires_db
 from splent_cli.services import context
@@ -54,14 +55,31 @@ def _is_empty_migration(path: str) -> bool:
 @click.option(
     "-m", "message", default=None, help="Migration message (defaults to feature name)."
 )
+@click.option(
+    "--empty",
+    is_flag=True,
+    help=(
+        "Generate a blank migration (no autogenerate) and keep it for manual "
+        "editing. Required for refinement features that add columns to a base "
+        "feature's table — Alembic cannot autodetect runtime-injected mixins."
+    ),
+)
 @context.requires_product
-def db_migrate(feature, message):
+def db_migrate(feature, message, empty):
     """
     Generate new migration files for features that have schema changes,
     then apply all pending migrations.
 
-    Empty migrations (no schema changes detected) are automatically removed.
+    Empty migrations (no schema changes detected) are automatically removed,
+    unless ``--empty`` is passed, in which case a blank migration is created
+    and kept so you can write ``upgrade()``/``downgrade()`` by hand.
     """
+    if empty and not feature:
+        click.echo(
+            click.style("❌ --empty requires a FEATURE argument.", fg="red")
+        )
+        raise SystemExit(1)
+
     if feature:
         dirs = {}
         mdir = MigrationManager.get_feature_migration_dir(feature)
@@ -108,7 +126,10 @@ def db_migrate(feature, message):
         alembic_logger.setLevel(logging.WARNING)
 
         try:
-            alembic_migrate(directory=mdir, message=message or feat)
+            if empty:
+                alembic_revision(directory=mdir, message=message or feat)
+            else:
+                alembic_migrate(directory=mdir, message=message or feat)
         except Exception as e:
             if os.getenv("SPLENT_DEBUG"):
                 click.secho(
@@ -118,6 +139,21 @@ def db_migrate(feature, message):
             alembic_logger.setLevel(prev_level)
 
         after = _count_versions(mdir)
+
+        # A blank migration requested with --empty is intentional: keep it so the
+        # user can fill in upgrade()/downgrade() by hand (e.g. refinement columns).
+        if empty:
+            if after > before:
+                click.echo(
+                    click.style(
+                        f"  📝 {feat}: blank migration generated — "
+                        f"edit upgrade()/downgrade() and run 'splent db:upgrade'",
+                        fg="cyan",
+                    )
+                )
+            else:
+                click.echo(click.style(f"  ✔ {feat}: up to date", fg="green"))
+            continue
 
         # If a new file was generated, check if it's empty (no real schema changes)
         if after > before:

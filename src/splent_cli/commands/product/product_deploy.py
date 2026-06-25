@@ -268,13 +268,17 @@ def product_deploy(down, ci):
             import time
 
             healthy = False
-            for attempt in range(15):
+            # The production web container is named ``<product>_web_deploy`` —
+            # NOT ``<product>_web`` (that is the dev container). A cold start runs
+            # migrations and compiles assets before gunicorn binds, so allow a
+            # generous window (~90s) before declaring the app unhealthy.
+            for attempt in range(45):
                 try:
                     result = subprocess.run(
                         [
                             "docker",
                             "exec",
-                            f"{product}_web",
+                            f"{product}_web_deploy",
                             "bash",
                             "-c",
                             "curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/",
