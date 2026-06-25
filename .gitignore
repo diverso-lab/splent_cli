@@ -7,3 +7,7 @@ build
 __pycache__/
 *.pyc
 *.pyo
+# Runtime / test artifacts
+*.log
+pre_restore_*.sql
+.coverage
