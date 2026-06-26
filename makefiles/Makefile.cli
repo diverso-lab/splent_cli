@@ -1,16 +1,10 @@
 .PHONY: cli preflight
 
-# Host-side pre-flight: Docker installed/running, Compose v2, gitconfig/ssh sanity.
-preflight:
+# Host-side pre-flight only: Docker installed/running, Compose v2, gitconfig/ssh
+# sanity. Does not touch the container.
+preflight: ## Run host pre-flight checks only (no container)
 	@bash scripts/preflight_cli.sh
 
-cli:
+cli: ## Enter the CLI container (full pre-flight; day-to-day shortcut)
 	@bash scripts/preflight_cli.sh splent_cli_container
-	@echo "🚀 Entering SPLENT CLI shell..."
-	@docker exec -it splent_cli_container bash -lc '\
-		uid=$$(id -u splent); \
-		gid=$$(id -g splent); \
-		sock_gid=$$(stat -c %g /var/run/docker.sock); \
-		exec setpriv --reuid "$$uid" --regid "$$gid" --groups "$$gid,$$sock_gid" \
-			env HOME=/home/splent USER=splent LOGNAME=splent \
-			bash --rcfile /home/splent/.bashrc -i'
+	@$(MAKE) enter

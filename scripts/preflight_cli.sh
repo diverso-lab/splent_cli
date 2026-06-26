@@ -23,7 +23,34 @@
 
 set -uo pipefail
 
-CONTAINER_NAME="${1:-}"
+# ----------------------------------------------------------------------------
+# Arg parsing
+#
+#   preflight_cli.sh                              # full host checks (1-4)
+#   preflight_cli.sh <container_name>             # host checks + container (5)
+#   preflight_cli.sh <container_name> --quiet     # same checks, but suppress the
+#                                                 # already-seen passing host
+#                                                 # checks; warnings/errors and
+#                                                 # container checks still print.
+#
+# --quiet only hides the green [✔] lines for host checks that a previous (full)
+# run already displayed. Every check STILL RUNS and any [⚠]/[✖] still prints.
+# ----------------------------------------------------------------------------
+CONTAINER_NAME=""
+QUIET=0
+for arg in "$@"; do
+    case "$arg" in
+        --quiet) QUIET=1 ;;
+        *)       CONTAINER_NAME="$arg" ;;
+    esac
+done
+
+# When set, ok() stays silent (used to mute the repeated host checks). warn()
+# and fail() ignore this on purpose — problems must always surface.
+SUPPRESS_OK="$QUIET"
+
+# Location of this script, so we can call its sibling env_tools.sh.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ----------------------------------------------------------------------------
 # Output helpers
@@ -35,14 +62,19 @@ else
     C_RESET=""; C_RED=""; C_GREEN=""; C_YELLOW=""; C_CYAN=""; C_BOLD=""
 fi
 
-ok()   { printf "  ${C_GREEN}[✔]${C_RESET} %b\n" "$1"; }
+ok()   { [ "${SUPPRESS_OK:-0}" = "1" ] && return 0; printf "  ${C_GREEN}[✔]${C_RESET} %b\n" "$1"; }
 warn() { printf "  ${C_YELLOW}[⚠]${C_RESET} %b\n" "$1"; }
 fail() { printf "  ${C_RED}[✖]${C_RESET} %b\n" "$1"; }
 hint() { printf "      ${C_CYAN}%b${C_RESET}\n" "$1"; }
 
 FAILED=0
 
-printf "\n${C_BOLD}🩺 SPLENT CLI pre-flight${C_RESET}\n\n"
+# In --quiet mode we validate silently: no banner, no per-check [✔] and no
+# success summary. Only warnings/failures break the silence (see warn/fail and
+# the summary block below).
+if [ "$QUIET" != "1" ]; then
+    printf "\n${C_BOLD}🩺 SPLENT CLI pre-flight${C_RESET}\n\n"
+fi
 
 # ----------------------------------------------------------------------------
 # 1. Docker installed
@@ -140,7 +172,23 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# 5. Container check (optional) — auto-start if stopped
+# 5. Workspace .env sanity (working dir, duplicates, dangling product, …)
+#
+# Delegated to env_tools.sh — the single source of truth for .env validation —
+# in --embed mode so its check lines blend into this pre-flight output. A hard
+# problem there (duplicate/malformed keys, missing .env) fails the pre-flight;
+# recoverable issues (stale host path, dangling SPLENT_APP) only warn.
+# ----------------------------------------------------------------------------
+if [ -x "${SCRIPT_DIR}/env_tools.sh" ] || [ -f "${SCRIPT_DIR}/env_tools.sh" ]; then
+    if [ "$QUIET" = "1" ]; then
+        bash "${SCRIPT_DIR}/env_tools.sh" check --embed --quiet || FAILED=1
+    else
+        bash "${SCRIPT_DIR}/env_tools.sh" check --embed || FAILED=1
+    fi
+fi
+
+# ----------------------------------------------------------------------------
+# 6. Container check (optional) — auto-start if stopped
 # ----------------------------------------------------------------------------
 if [ -n "$CONTAINER_NAME" ] && [ "$FAILED" -eq 0 ]; then
     state="$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)"
@@ -200,10 +248,14 @@ fi
 # ----------------------------------------------------------------------------
 # Summary
 # ----------------------------------------------------------------------------
-echo
 if [ "$FAILED" -ne 0 ]; then
+    echo
     printf "${C_RED}${C_BOLD}❌ Pre-flight failed — resolve the items above before continuing.${C_RESET}\n\n"
     exit 1
 fi
-printf "${C_GREEN}${C_BOLD}✅ Pre-flight passed.${C_RESET}\n\n"
+# In --quiet mode, stay silent on success — the validation still ran.
+if [ "$QUIET" != "1" ]; then
+    echo
+    printf "${C_GREEN}${C_BOLD}✅ Pre-flight passed.${C_RESET}\n\n"
+fi
 exit 0
