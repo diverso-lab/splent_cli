@@ -1,6 +1,7 @@
 """
 Tests for the clear:uploads command.
 """
+
 import pytest
 from unittest.mock import patch
 from click.testing import CliRunner
@@ -13,6 +14,13 @@ def runner():
     return CliRunner(mix_stderr=False)
 
 
+@pytest.fixture(autouse=True)
+def _selected_product(monkeypatch):
+    """clear:uploads is guarded by @requires_product, so a product must be
+    selected for the command body to run."""
+    monkeypatch.setenv("SPLENT_APP", "test_app")
+
+
 class TestClearUploads:
     def test_clears_files_in_uploads_dir(self, runner, tmp_path):
         uploads = tmp_path / "uploads"
@@ -20,7 +28,10 @@ class TestClearUploads:
         (uploads / "file1.txt").write_text("data")
         (uploads / "file2.txt").write_text("more data")
 
-        with patch("splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir", return_value=str(uploads)):
+        with patch(
+            "splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir",
+            return_value=str(uploads),
+        ):
             result = runner.invoke(clear_uploads, [])
 
         assert result.exit_code == 0
@@ -34,7 +45,10 @@ class TestClearUploads:
         subdir.mkdir()
         (subdir / "photo.jpg").write_bytes(b"\xff")
 
-        with patch("splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir", return_value=str(uploads)):
+        with patch(
+            "splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir",
+            return_value=str(uploads),
+        ):
             result = runner.invoke(clear_uploads, [])
 
         assert result.exit_code == 0
@@ -44,7 +58,10 @@ class TestClearUploads:
         uploads = tmp_path / "uploads"
         uploads.mkdir()
 
-        with patch("splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir", return_value=str(uploads)):
+        with patch(
+            "splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir",
+            return_value=str(uploads),
+        ):
             result = runner.invoke(clear_uploads, [])
 
         assert result.exit_code == 0
@@ -53,7 +70,10 @@ class TestClearUploads:
     def test_shows_warning_when_dir_missing(self, runner, tmp_path):
         missing = tmp_path / "uploads"
 
-        with patch("splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir", return_value=str(missing)):
+        with patch(
+            "splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir",
+            return_value=str(missing),
+        ):
             result = runner.invoke(clear_uploads, [])
 
         assert result.exit_code == 0
@@ -67,7 +87,10 @@ class TestClearUploads:
         def boom(path):
             raise PermissionError("denied")
 
-        with patch("splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir", return_value=str(uploads)):
+        with patch(
+            "splent_cli.commands.clear.clear_uploads.PathUtils.get_uploads_dir",
+            return_value=str(uploads),
+        ):
             with patch("os.remove", side_effect=boom):
                 result = runner.invoke(clear_uploads, [])
 

@@ -1,6 +1,7 @@
 """
 Tests for the clear:log command.
 """
+
 import pytest
 from unittest.mock import patch
 from click.testing import CliRunner
@@ -13,12 +14,22 @@ def runner():
     return CliRunner(mix_stderr=False)
 
 
+@pytest.fixture(autouse=True)
+def _selected_product(monkeypatch):
+    """clear:log is guarded by @requires_product, so a product must be
+    selected for the command body to run."""
+    monkeypatch.setenv("SPLENT_APP", "test_app")
+
+
 class TestClearLog:
     def test_removes_existing_log(self, runner, tmp_path):
         log_file = tmp_path / "app.log"
         log_file.write_text("old log content")
 
-        with patch("splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir", return_value=str(log_file)):
+        with patch(
+            "splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir",
+            return_value=str(log_file),
+        ):
             result = runner.invoke(clear_log, [])
 
         assert result.exit_code == 0
@@ -28,7 +39,10 @@ class TestClearLog:
     def test_shows_warning_when_log_missing(self, runner, tmp_path):
         missing = tmp_path / "app.log"
 
-        with patch("splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir", return_value=str(missing)):
+        with patch(
+            "splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir",
+            return_value=str(missing),
+        ):
             result = runner.invoke(clear_log, [])
 
         assert result.exit_code == 0
@@ -41,7 +55,10 @@ class TestClearLog:
         def boom(path):
             raise PermissionError("denied")
 
-        with patch("splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir", return_value=str(log_file)):
+        with patch(
+            "splent_cli.commands.clear.clear_log.PathUtils.get_app_log_dir",
+            return_value=str(log_file),
+        ):
             with patch("os.remove", side_effect=boom):
                 result = runner.invoke(clear_log, [])
 

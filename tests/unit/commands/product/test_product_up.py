@@ -4,6 +4,7 @@ Tests for the product:up command.
 Pattern: filesystem via product_workspace fixture + mock subprocess.run
 to avoid actually running docker compose.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -25,20 +26,26 @@ def _success_run(*args, **kwargs):
 # Flag validation
 # ---------------------------------------------------------------------------
 
+
 class TestFlagValidation:
     def test_rejects_both_dev_and_prod(self, runner, product_workspace):
         result = runner.invoke(product_up, ["--dev", "--prod"])
         assert result.exit_code == 1
         assert "both" in result.output.lower()
 
-    def test_no_env_flag_and_no_splent_env(self, runner, product_workspace, monkeypatch):
+    def test_no_env_flag_and_no_splent_env(
+        self, runner, product_workspace, monkeypatch
+    ):
         monkeypatch.delenv("SPLENT_ENV", raising=False)
         result = runner.invoke(product_up, [])
         assert result.exit_code == 1
         assert "No environment specified" in result.output
 
     def test_requires_splent_app(self, runner, workspace):
-        result = runner.invoke(product_up, ["--dev"])
+        # Mock the docker daemon check so the test exercises the SPLENT_APP
+        # guard regardless of whether docker is reachable in the environment.
+        with patch("splent_cli.commands.product.product_up.require_docker"):
+            result = runner.invoke(product_up, ["--dev"])
         assert result.exit_code == 1
         assert "SPLENT_APP" in result.output
 
@@ -46,6 +53,7 @@ class TestFlagValidation:
 # ---------------------------------------------------------------------------
 # Successful startup
 # ---------------------------------------------------------------------------
+
 
 class TestSuccessfulStartup:
     def test_starts_with_dev_flag(self, runner, product_workspace):
@@ -87,6 +95,7 @@ class TestSuccessfulStartup:
 # Features startup
 # ---------------------------------------------------------------------------
 
+
 class TestFeaturesStartup:
     def test_no_features_still_starts_product(self, runner, product_workspace):
         with patch("subprocess.run", side_effect=_success_run):
@@ -99,13 +108,17 @@ class TestFeaturesStartup:
         pyproject = tmp_path / "test_app" / "pyproject.toml"
         pyproject.write_text(
             '[project]\nname = "test_app"\nversion = "1.0.0"\n'
-            '[project.optional-dependencies]\n'
+            "[project.optional-dependencies]\n"
             'features = ["splent_io/splent_feature_auth@v1.0.0"]\n'
         )
         # Create feature cache docker dir
         feat_docker = (
-            tmp_path / ".splent_cache" / "features"
-            / "splent_io" / "splent_feature_auth@v1.0.0" / "docker"
+            tmp_path
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "splent_feature_auth@v1.0.0"
+            / "docker"
         )
         feat_docker.mkdir(parents=True)
         (feat_docker / "docker-compose.dev.yml").write_text("services: {}")
@@ -133,6 +146,7 @@ class TestFeaturesStartup:
 # Missing pyproject.toml (lines 47-48)
 # ---------------------------------------------------------------------------
 
+
 class TestMissingPyproject:
     def test_exits_when_pyproject_missing(self, runner, tmp_path, monkeypatch):
         """Product docker dir exists but pyproject.toml is absent → exit 1."""
@@ -145,7 +159,10 @@ class TestMissingPyproject:
         (docker_dir / "docker-compose.dev.yml").write_text("services: {}")
         # Intentionally no pyproject.toml
 
-        result = runner.invoke(product_up, ["--dev"])
+        # Mock the docker daemon check so the test exercises the pyproject
+        # guard regardless of whether docker is reachable in the environment.
+        with patch("splent_cli.commands.product.product_up.require_docker"):
+            result = runner.invoke(product_up, ["--dev"])
         assert result.exit_code == 1
         assert "pyproject.toml" in result.output
 
@@ -154,14 +171,17 @@ class TestMissingPyproject:
 # Missing compose file for a component
 # ---------------------------------------------------------------------------
 
+
 class TestMissingComposeFile:
-    def test_warns_but_continues_on_missing_file(self, runner, product_workspace, tmp_path, monkeypatch):
+    def test_warns_but_continues_on_missing_file(
+        self, runner, product_workspace, tmp_path, monkeypatch
+    ):
         """A missing docker-compose file shows a warning, doesn't crash."""
         # Add a feature with NO docker dir in cache
         pyproject = tmp_path / "test_app" / "pyproject.toml"
         pyproject.write_text(
             '[project]\nname = "test_app"\nversion = "1.0.0"\n'
-            '[project.optional-dependencies]\n'
+            "[project.optional-dependencies]\n"
             'features = ["splent_io/splent_feature_missing@v1.0.0"]\n'
         )
 
