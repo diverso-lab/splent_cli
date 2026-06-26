@@ -29,9 +29,7 @@ def _github_headers(token: str | None) -> dict:
     return h
 
 
-def _latest_remote_version(
-    org: str, repo: str, token: str | None
-) -> str | None:
+def _latest_remote_version(org: str, repo: str, token: str | None) -> str | None:
     """Return the latest tag from GitHub, or None if the repo has no tags."""
     headers = _github_headers(token)
     url = f"https://api.github.com/repos/{org}/{repo}/tags?per_page=1&page=1"
@@ -57,9 +55,7 @@ def _latest_remote_version(
         )
         return None
     except urllib.error.URLError as e:
-        click.secho(
-            f"  ⚠  Network error fetching {repo}: {e.reason}", fg="yellow"
-        )
+        click.secho(f"  ⚠  Network error fetching {repo}: {e.reason}", fg="yellow")
         return None
 
 
@@ -194,14 +190,10 @@ def feature_upgrade(feature_ref, yes):
         return
 
     if feature_ref:
-        name = (
-            feature_ref.split("/", 1)[1] if "/" in feature_ref else feature_ref
-        )
+        name = feature_ref.split("/", 1)[1] if "/" in feature_ref else feature_ref
         features = [f for f in features if f["name"] == name]
         if not features:
-            click.secho(
-                f"⚠️  '{name}' not declared in this product.", fg="yellow"
-            )
+            click.secho(f"⚠️  '{name}' not declared in this product.", fg="yellow")
             return
 
     # ── Resolve latest remote version for each feature ────────────────────────
@@ -221,9 +213,7 @@ def feature_upgrade(feature_ref, yes):
             continue
 
         try:
-            is_newer = Version(latest.lstrip("v")) > Version(
-                current.lstrip("v")
-            )
+            is_newer = Version(latest.lstrip("v")) > Version(current.lstrip("v"))
         except InvalidVersion:
             is_newer = latest != current
 
@@ -232,9 +222,7 @@ def feature_upgrade(feature_ref, yes):
 
     if not upgrades:
         click.echo()
-        click.secho(
-            "  ✅ All features are already at the latest version.", fg="green"
-        )
+        click.secho("  ✅ All features are already at the latest version.", fg="green")
         click.echo()
         return
 
@@ -243,9 +231,7 @@ def feature_upgrade(feature_ref, yes):
     for u in upgrades:
         cur_label = click.style(u["version"] or "editable", fg="red")
         new_label = click.style(u["latest"], fg="green")
-        click.echo(
-            f"    {u['ns_fs']}/{u['name']}    {cur_label} → {new_label}"
-        )
+        click.echo(f"    {u['ns_fs']}/{u['name']}    {cur_label} → {new_label}")
 
     click.echo()
     if not yes and not click.confirm("  Proceed with upgrade?"):
@@ -281,9 +267,7 @@ def feature_upgrade(feature_ref, yes):
                 u["latest"],
                 cache_root,
             )
-            click.secho(
-                f"  ✔  {u['ns_fs']}/{u['name']} → {u['latest']}", fg="green"
-            )
+            click.secho(f"  ✔  {u['ns_fs']}/{u['name']} → {u['latest']}", fg="green")
         except Exception as e:
             click.secho(f"  ✖  {u['ns_fs']}/{u['name']}: {e}", fg="red")
 

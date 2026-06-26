@@ -141,18 +141,14 @@ def clone(
         shutil.rmtree(dest, ignore_errors=True)
 
         stderr_lc = stderr.lower()
-        if _is_ref_not_found(stderr_lc) and not _is_access_or_network(
-            stderr_lc
-        ):
+        if _is_ref_not_found(stderr_lc) and not _is_access_or_network(stderr_lc):
             # The repo IS reachable over this transport; the ref simply doesn't
             # exist. Another transport would hit the same missing ref → stop.
             return CLONE_REF_NOT_FOUND, display_url, stderr
 
         # Access / network / unknown failure → try the next transport (HTTPS).
         if transport == "ssh":
-            click.secho(
-                "  SSH could not reach the repo — trying HTTPS…", fg="yellow"
-            )
+            click.secho("  SSH could not reach the repo — trying HTTPS…", fg="yellow")
 
     return CLONE_FAILED, "", last_stderr
 
@@ -195,9 +191,7 @@ def _ssh_available() -> bool:
             text=True,
             timeout=10,
         )
-        _ssh_available_cache = (
-            "successfully authenticated" in result.stderr.lower()
-        )
+        _ssh_available_cache = "successfully authenticated" in result.stderr.lower()
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         _ssh_available_cache = False
 
@@ -217,9 +211,7 @@ def build_git_url(namespace: str, repo: str) -> tuple[str, str]:
 
     token = os.getenv("GITHUB_TOKEN")
     if token:
-        click.secho(
-            "  SSH not available — using HTTPS with token.", fg="yellow"
-        )
+        click.secho("  SSH not available — using HTTPS with token.", fg="yellow")
         return https_url(namespace, repo)
 
     click.secho(

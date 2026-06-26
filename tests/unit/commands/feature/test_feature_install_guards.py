@@ -276,9 +276,7 @@ class TestMissingToolCleanMessage:
         assert "Traceback" not in (result.stderr or "")
         assert "FileNotFoundError" not in result.output
 
-    def test_missing_docker_clean_message_in_docker_step(
-        self, env, monkeypatch
-    ):
+    def test_missing_docker_clean_message_in_docker_step(self, env, monkeypatch):
         """If the feature ships a compose file, the docker step calls
         require_docker(); a missing docker binary yields a clean ClickException,
         not a traceback."""

@@ -19,9 +19,7 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 def _get_latest_tag(namespace, repo) -> str | None:
     """Fetch the highest semver tag from GitHub. Returns None if unreachable or no tags."""
-    api_url = (
-        f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
-    )
+    api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
     # Authenticate when a token is present so version resolution also works for
     # PRIVATE feature repos (an unauthenticated call 404s on those) and to raise
     # the API rate limit.
@@ -117,9 +115,7 @@ def feature_clone(full_name):
     # Local destination
     namespace_safe = normalize_namespace(namespace)
     workspace = str(context.workspace())
-    cache_dir = os.path.join(
-        workspace, ".splent_cache", "features", namespace_safe
-    )
+    cache_dir = os.path.join(workspace, ".splent_cache", "features", namespace_safe)
     os.makedirs(cache_dir, exist_ok=True)
 
     local_path = os.path.join(cache_dir, f"{repo}@{version}")
@@ -147,9 +143,7 @@ def feature_clone(full_name):
     # transport is decided per repo from the real clone result (see
     # git_url.clone), so a working SSH key that simply can't read THIS repo no
     # longer blocks the HTTPS path.
-    outcome, used_url, stderr = git_clone(
-        namespace, repo, local_path, ref=version
-    )
+    outcome, used_url, stderr = git_clone(namespace, repo, local_path, ref=version)
 
     # A genuinely missing tag/branch is the ONLY case where falling back to the
     # default branch is correct (the repo itself was reachable).
@@ -158,9 +152,7 @@ def feature_clone(full_name):
             f"⚠️ Version '{version}' not found. Cloning default branch instead.",
             fg="yellow",
         )
-        outcome, used_url, stderr = git_clone(
-            namespace, repo, local_path, ref=None
-        )
+        outcome, used_url, stderr = git_clone(namespace, repo, local_path, ref=None)
 
     if outcome != CLONE_SUCCESS:
         shutil.rmtree(local_path, ignore_errors=True)
@@ -183,8 +175,7 @@ def feature_clone(full_name):
     make_feature_readonly(local_path)
 
     click.secho(
-        f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully "
-        f"({used_url}).",
+        f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully ({used_url}).",
         fg="green",
     )
     click.secho(f"🔒 Cached (read-only) at: {local_path}", fg="blue")

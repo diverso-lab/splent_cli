@@ -70,9 +70,7 @@ class TestTokenNotExposedInURL:
 
 
 class TestRepoNotFound:
-    def test_shows_clean_error_when_repo_not_found(
-        self, tmp_path, monkeypatch
-    ):
+    def test_shows_clean_error_when_repo_not_found(self, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         runner = CliRunner(mix_stderr=False)
@@ -89,9 +87,7 @@ class TestRepoNotFound:
                 stderr="fatal: repository not found",
                 stdout="",
             )
-            result = runner.invoke(
-                feature_clone, ["splent-io/nonexistent@v1.0.0"]
-            )
+            result = runner.invoke(feature_clone, ["splent-io/nonexistent@v1.0.0"])
 
         assert result.exit_code == 1
         assert "not found" in result.output.lower() or "❌" in result.output
