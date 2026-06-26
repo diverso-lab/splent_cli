@@ -17,7 +17,7 @@ import urllib.request
 import click
 import requests
 
-from splent_cli.utils.proc import require_tool
+from splent_cli.utils.proc import require_tool, run
 
 
 # ── Environment validation ────────────────────────────────────────────
@@ -433,6 +433,104 @@ def semver_wizard(org: str, repo_name: str) -> str:
     return chosen
 
 
+# ── Pre-release gate (lint + tests) ───────────────────────────────────
+
+_RUFF_HINT = "Install it with: pip install ruff"
+
+
+def _lint_path(path: str) -> bool:
+    """Run ruff check + ruff format --check on `path`. True if clean.
+
+    Mirrors `splent lint` (the project's canonical lint = ruff, NOT black).
+    """
+    require_tool("ruff", _RUFF_HINT)
+    ok = True
+    check = run(
+        ["ruff", "check", path], check=False, capture=True, tool_hint=_RUFF_HINT
+    )
+    if check.returncode != 0:
+        ok = False
+        out = (check.stdout + check.stderr).strip()
+        if out:
+            click.secho(out, fg="red")
+    fmt = run(
+        ["ruff", "format", "--check", path],
+        check=False,
+        capture=True,
+        tool_hint=_RUFF_HINT,
+    )
+    if fmt.returncode != 0:
+        ok = False
+        out = (fmt.stdout + fmt.stderr).strip()
+        if out:
+            click.secho(out, fg="yellow")
+    return ok
+
+
+def _test_entity(kind: str, name: str, path: str) -> bool:
+    """Run the released entity's test suite. True if it passes.
+
+    Uses the project's own test runners so "passing tests" means the same here
+    as everywhere else:
+      - cli / framework: pytest in the package directory
+      - feature:         splent feature:test <name>
+      - product:         splent product:test
+    """
+    if kind in ("cli", "framework"):
+        result = run(
+            [sys.executable, "-m", "pytest", "tests", "-q"],
+            cwd=path,
+            check=False,
+        )
+    elif kind == "feature":
+        feature_name = name.split("/")[-1]
+        result = run(
+            [sys.executable, "-m", "splent_cli", "feature:test", feature_name],
+            check=False,
+        )
+    elif kind == "product":
+        result = run(
+            [sys.executable, "-m", "splent_cli", "product:test"],
+            check=False,
+        )
+    else:
+        return True
+    return result.returncode == 0
+
+
+def run_pre_release_checks(kind: str, name: str, path: str) -> None:
+    """Gate a release on lint + tests for the entity.
+
+    Aborts with SystemExit(1) on any failure. Always called BEFORE the first
+    irreversible step (version bump / commit / tag push / PyPI upload), so a
+    failure leaves the repo and remotes untouched.
+    """
+    click.echo()
+    click.secho("  Pre-release checks (lint + tests)", bold=True)
+
+    click.echo("  checks   ruff (lint + format)...")
+    if _lint_path(path):
+        click.secho("  checks   lint OK", fg="green")
+    else:
+        click.secho(
+            "  error: lint failed — fix it (try `splent lint --fix`) before "
+            "releasing, or re-run with --skip-checks.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+    click.echo("  checks   tests...")
+    if _test_entity(kind, name, path):
+        click.secho("  checks   tests OK", fg="green")
+    else:
+        click.secho(
+            f"  error: tests failed for {name} — fix them before releasing, "
+            "or re-run with --skip-checks.",
+            fg="red",
+        )
+        raise SystemExit(1)
+
+
 # ── Orchestrator ──────────────────────────────────────────────────────
 
 
@@ -441,7 +539,9 @@ def run_release_pipeline(
     path: str,
     version: str,
     *,
+    kind: str = "package",
     require_docker: bool = False,
+    skip_checks: bool = False,
     pre_commit_hook=None,
     post_pypi_hook=None,
 ):
@@ -478,6 +578,17 @@ def run_release_pipeline(
     click.echo()
     click.echo(click.style(f"  Releasing {name} {tag}", bold=True))
     click.echo()
+
+    # Gate: the entity must pass lint + tests BEFORE any irreversible step
+    # (version bump / commit / tag push / PyPI upload). Skippable for
+    # emergencies with --skip-checks.
+    if skip_checks:
+        click.secho(
+            "  ⚠ Skipping pre-release lint + tests (--skip-checks).",
+            fg="yellow",
+        )
+    else:
+        run_pre_release_checks(kind, name, path)
 
     update_version(pyproject, normalized)
 

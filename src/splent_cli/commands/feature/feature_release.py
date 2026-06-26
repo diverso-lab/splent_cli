@@ -555,8 +555,13 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
 @click.argument("feature_ref")
 @click.argument("version", required=False, default=None)
 @click.option("--attach", is_flag=True)
+@click.option(
+    "--skip-checks",
+    is_flag=True,
+    help="Skip the pre-release lint + tests gate (emergencies only).",
+)
 @context.requires_product
-def feature_release(feature_ref, version, attach):
+def feature_release(feature_ref, version, attach, skip_checks):
     workspace = str(context.workspace())
 
     feature_path, namespace, feature_name = resolve_feature_path(feature_ref, workspace)
@@ -583,6 +588,8 @@ def feature_release(feature_ref, version, attach):
         f"{namespace}/{feature_name}",
         feature_path,
         version,
+        kind="feature",
+        skip_checks=skip_checks,
         pre_commit_hook=_pre_commit,
         post_pypi_hook=_post_pypi,
     )

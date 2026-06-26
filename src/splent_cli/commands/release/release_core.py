@@ -21,14 +21,25 @@ def _wizard_from_remote(package_path: str) -> str:
     short_help="Release splent_cli: bump version, tag, publish to GitHub/PyPI.",
 )
 @click.argument("version", required=False, default=None)
-def release_cli(version: str | None):
+@click.option(
+    "--skip-checks",
+    is_flag=True,
+    help="Skip the pre-release lint + tests gate (emergencies only).",
+)
+def release_cli(version: str | None, skip_checks: bool):
     workspace = str(context.workspace())
     package_path = os.path.join(workspace, "splent_cli")
 
     if not version:
         version = _wizard_from_remote(package_path)
 
-    release.run_release_pipeline("splent_cli", package_path, version)
+    release.run_release_pipeline(
+        "splent_cli",
+        package_path,
+        version,
+        kind="cli",
+        skip_checks=skip_checks,
+    )
 
 
 @click.command(
@@ -36,11 +47,22 @@ def release_cli(version: str | None):
     short_help="Release splent_framework: bump version, tag, publish to GitHub/PyPI.",
 )
 @click.argument("version", required=False, default=None)
-def release_framework(version: str | None):
+@click.option(
+    "--skip-checks",
+    is_flag=True,
+    help="Skip the pre-release lint + tests gate (emergencies only).",
+)
+def release_framework(version: str | None, skip_checks: bool):
     workspace = str(context.workspace())
     package_path = os.path.join(workspace, "splent_framework")
 
     if not version:
         version = _wizard_from_remote(package_path)
 
-    release.run_release_pipeline("splent_framework", package_path, version)
+    release.run_release_pipeline(
+        "splent_framework",
+        package_path,
+        version,
+        kind="framework",
+        skip_checks=skip_checks,
+    )

@@ -90,8 +90,13 @@ def _release_docker_image(product: str, version: str, docker_dir: str):
 )
 @click.argument("version", required=False, default=None)
 @click.option("--product", default=None, help="Override SPLENT_APP.")
+@click.option(
+    "--skip-checks",
+    is_flag=True,
+    help="Skip the pre-release lint + tests gate (emergencies only).",
+)
 @context.requires_product
-def product_release(version, product):
+def product_release(version, product, skip_checks):
     product = product or os.getenv("SPLENT_APP")
     if not product:
         click.secho("  error: no product specified and SPLENT_APP not set", fg="red")
@@ -128,7 +133,9 @@ def product_release(version, product):
         product,
         product_path,
         version,
+        kind="product",
         require_docker=True,
+        skip_checks=skip_checks,
         post_pypi_hook=_docker_hook,
     )
 
