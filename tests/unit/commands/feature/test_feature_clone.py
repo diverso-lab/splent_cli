@@ -1,11 +1,12 @@
 """Tests for feature:clone — path traversal validation and error handling."""
+
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from splent_cli.commands.feature.feature_clone import (
     feature_clone,
     _validate_identifier_part,
-    _build_repo_url,
 )
+from splent_cli.utils.git_url import https_url, ssh_url, candidate_urls
 
 
 class TestPathTraversalValidation:
@@ -34,34 +35,38 @@ class TestPathTraversalValidation:
 
     def test_rejects_special_chars(self):
         import pytest
+
         with pytest.raises(SystemExit):
             _validate_identifier_part("../../evil", "namespace")
 
     def test_rejects_empty_string(self):
         import pytest
+
         with pytest.raises(SystemExit):
             _validate_identifier_part("", "namespace")
 
 
 class TestTokenNotExposedInURL:
-    def test_display_url_has_no_token_https(self, monkeypatch):
+    def test_https_display_url_has_no_token(self, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "secret_token_abc")
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=False):
-            _, display_url = _build_repo_url("myorg", "myrepo")
+        real_url, display_url = https_url("myorg", "myrepo")
         assert "secret_token_abc" not in display_url
         assert "github.com/myorg/myrepo" in display_url
-
-    def test_real_url_contains_token_https(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret_token_abc")
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=False):
-            real_url, _ = _build_repo_url("myorg", "myrepo")
         assert "secret_token_abc" in real_url
 
-    def test_ssh_both_urls_equal(self, monkeypatch):
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=True):
-            real_url, display_url = _build_repo_url("myorg", "myrepo")
-        assert real_url == display_url
-        assert "@github.com" in real_url
+    def test_ssh_url_format(self):
+        assert ssh_url("myorg", "myrepo") == "git@github.com:myorg/myrepo.git"
+
+    def test_candidate_urls_ssh_first_https_second(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "secret_token_abc")
+        cands = candidate_urls("myorg", "myrepo")
+        assert [c[2] for c in cands] == ["ssh", "https"]
+        # SSH candidate: real == display, no token.
+        assert cands[0][0] == "git@github.com:myorg/myrepo.git"
+        assert cands[0][0] == cands[0][1]
+        # HTTPS candidate: token only in the real URL, never in display.
+        assert "secret_token_abc" in cands[1][0]
+        assert "secret_token_abc" not in cands[1][1]
 
 
 class TestRepoNotFound:
@@ -72,35 +77,24 @@ class TestRepoNotFound:
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         runner = CliRunner(mix_stderr=False)
 
-        # The hardened clone shells out via the proc.run wrapper (check=False)
-        # and inspects the returncode; patch that wrapper and require_tool.
-        with patch("splent_cli.utils.git_url._ssh_available", return_value=False), \
-             patch("splent_cli.commands.feature.feature_clone.require_tool"), \
-             patch(
-                "splent_cli.commands.feature.feature_clone.run"
-             ) as mock_run, \
-             patch(
-                "splent_cli.commands.feature.feature_clone.requests.get"
-             ) as mock_get:
+        # The clone now runs through git_url.clone, which shells out via the
+        # proc.run wrapper (imported into git_url as `run`). Patch that and
+        # require_tool so a host without git doesn't short-circuit first.
+        with (
+            patch("splent_cli.commands.feature.feature_clone.require_tool"),
+            patch("splent_cli.utils.git_url.run") as mock_run,
+        ):
             mock_run.return_value = MagicMock(
                 returncode=128,
                 stderr="fatal: repository not found",
                 stdout="",
             )
-            mock_resp = MagicMock()
-            mock_resp.raise_for_status.return_value = None
-            mock_resp.json.return_value = []
-            mock_get.return_value = mock_resp
-
             result = runner.invoke(
                 feature_clone, ["splent-io/nonexistent@v1.0.0"]
             )
 
         assert result.exit_code == 1
-        assert (
-            "not found" in result.output.lower()
-            or "❌" in result.output
-        )
+        assert "not found" in result.output.lower() or "❌" in result.output
         # Crucially: no traceback
         assert "Traceback" not in result.output
         assert "CalledProcessError" not in result.output

@@ -1,13 +1,15 @@
 """Tests for feature:clone — partial clone dir is cleaned up on failure."""
+
 import os
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from splent_cli.commands.feature.feature_clone import feature_clone
 
-# feature_clone shells out via the proc.run wrapper (imported into the module
-# as `run`); patch that, not subprocess directly. require_tool is patched so the
-# absence of git on the test host doesn't short-circuit before the clone.
-_RUN = "splent_cli.commands.feature.feature_clone.run"
+# The clone now runs through git_url.clone, which shells out via the proc.run
+# wrapper (imported into git_url as `run`); patch that, not subprocess.
+# require_tool is patched so the absence of git on the test host doesn't
+# short-circuit before the clone.
+_RUN = "splent_cli.utils.git_url.run"
 _REQUIRE_TOOL = "splent_cli.commands.feature.feature_clone.require_tool"
 _SSH = "splent_cli.utils.git_url._ssh_available"
 
@@ -33,8 +35,10 @@ class TestFeatureCloneCleanup:
     def test_no_partial_dir_after_both_failures(self, workspace):
         """If both clone attempts fail, no partial directory remains."""
         runner = CliRunner(mix_stderr=False)
-        with patch(_SSH, return_value=False), patch(_REQUIRE_TOOL), patch(
-            _RUN, side_effect=_always_fail
+        with (
+            patch(_SSH, return_value=False),
+            patch(_REQUIRE_TOOL),
+            patch(_RUN, side_effect=_always_fail),
         ):
             result = runner.invoke(feature_clone, ["testns/myrepo@v1.0.0"])
 
@@ -47,8 +51,10 @@ class TestFeatureCloneCleanup:
     def test_error_message_on_clone_failure(self, workspace):
         """User gets a clear error message when clone fails."""
         runner = CliRunner(mix_stderr=False)
-        with patch(_SSH, return_value=False), patch(_REQUIRE_TOOL), patch(
-            _RUN, side_effect=_always_fail
+        with (
+            patch(_SSH, return_value=False),
+            patch(_REQUIRE_TOOL),
+            patch(_RUN, side_effect=_always_fail),
         ):
             result = runner.invoke(feature_clone, ["testns/myrepo@v1.0.0"])
 

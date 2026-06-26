@@ -71,10 +71,14 @@ def _get_contract_env(feature_pyproject: str) -> str | None:
     if not os.path.isfile(feature_pyproject):
         return None
     data = load_toml(feature_pyproject, what="feature pyproject.toml")
-    return data.get("tool", {}).get("splent", {}).get("contract", {}).get("env")
+    return (
+        data.get("tool", {}).get("splent", {}).get("contract", {}).get("env")
+    )
 
 
-def _check_dependencies(workspace, product, env_name, feature_pyproject, short):
+def _check_dependencies(
+    workspace, product, env_name, feature_pyproject, short
+):
     """Check if required features are present in the product. Returns list of missing."""
     required = _get_required_features(feature_pyproject)
     if not required:
@@ -84,9 +88,13 @@ def _check_dependencies(workspace, product, env_name, feature_pyproject, short):
     return missing
 
 
-def _get_available_versions(namespace: str, repo: str, limit: int = 10) -> list[str]:
+def _get_available_versions(
+    namespace: str, repo: str, limit: int = 10
+) -> list[str]:
     """Fetch semver tags from GitHub, sorted newest first."""
-    api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
+    api_url = (
+        f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
+    )
     try:
         r = requests.get(api_url, timeout=5)
         r.raise_for_status()
@@ -195,7 +203,8 @@ def feature_install(feature_identifier, env_scope, mode, version):
         # Resolve version
         if not version:
             click.echo(
-                click.style("  version  ", dim=True) + "fetching available versions..."
+                click.style("  version  ", dim=True)
+                + "fetching available versions..."
             )
             versions = _get_available_versions(namespace_github, feature_name)
             if not versions:
@@ -218,7 +227,9 @@ def feature_install(feature_identifier, env_scope, mode, version):
                 default=1,
             )
             version = versions[choice - 1]
-            click.echo(click.style("  version  ", dim=True) + f"selected {version}")
+            click.echo(
+                click.style("  version  ", dim=True) + f"selected {version}"
+            )
 
         # Clone to cache if not present
         cache_dir = os.path.join(
@@ -229,7 +240,9 @@ def feature_install(feature_identifier, env_scope, mode, version):
             f"{feature_name}@{version}",
         )
         if not os.path.isdir(cache_dir):
-            click.echo(click.style("  clone    ", dim=True) + f"{short}@{version}")
+            click.echo(
+                click.style("  clone    ", dim=True) + f"{short}@{version}"
+            )
             result = run(
                 [
                     "splent",
@@ -241,7 +254,8 @@ def feature_install(feature_identifier, env_scope, mode, version):
             )
             if result.returncode != 0:
                 click.secho(
-                    f"  Clone failed: {(result.stderr or '').strip()}", fg="red"
+                    f"  Clone failed: {(result.stderr or '').strip()}",
+                    fg="red",
                 )
                 raise SystemExit(1)
         else:
@@ -313,34 +327,31 @@ def feature_install(feature_identifier, env_scope, mode, version):
         feature_dir = os.path.join(workspace, feature_name)
         if not os.path.isdir(feature_dir):
             # Clone to workspace root as editable
-            click.echo(click.style("  clone    ", dim=True) + f"{short} (editable)")
+            click.echo(
+                click.style("  clone    ", dim=True) + f"{short} (editable)"
+            )
             from splent_cli.commands.feature.feature_clone import (
-                _build_repo_url,
                 _get_latest_tag,
             )
-
-            tag = _get_latest_tag(namespace_github, feature_name)
-            repo_url, _ = _build_repo_url(namespace_github, feature_name)
-            branch = tag or "main"
-            clone = run(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",
-                    "--branch",
-                    branch,
-                    "--quiet",
-                    repo_url,
-                    feature_dir,
-                ],
-                check=False,
-                capture=True,
+            from splent_cli.utils.git_url import (
+                clone as git_clone,
+                CLONE_SUCCESS,
+                CLONE_REF_NOT_FOUND,
             )
-            if clone.returncode != 0:
+
+            # SSH first, then HTTPS (per repo). ref=tag (None → default branch).
+            tag = _get_latest_tag(namespace_github, feature_name)
+            outcome, _used, err = git_clone(
+                namespace_github, feature_name, feature_dir, ref=tag
+            )
+            if outcome == CLONE_REF_NOT_FOUND:
+                outcome, _used, err = git_clone(
+                    namespace_github, feature_name, feature_dir, ref=None
+                )
+            if outcome != CLONE_SUCCESS:
                 click.secho(
-                    f"  Could not clone {namespace_github}/{feature_name}: "
-                    f"{(clone.stderr or '').strip()}",
+                    f"  Could not clone {namespace_github}/{feature_name} "
+                    f"(tried SSH and HTTPS): {err}",
                     fg="red",
                 )
                 raise SystemExit(1)
@@ -436,7 +447,8 @@ def feature_install(feature_identifier, env_scope, mode, version):
     # hot_reinstall already reloaded Flask in the web container.
     # Here we only start the feature's own Docker services (nginx, redis, etc.)
     clean_ref = compose.normalize_feature_ref(
-        f"{namespace_github}/{feature_name}" + (f"@{version}" if version else "")
+        f"{namespace_github}/{feature_name}"
+        + (f"@{version}" if version else "")
     )
     docker_dir_f = compose.feature_docker_dir(workspace, clean_ref)
     base_path = os.path.dirname(docker_dir_f)
@@ -445,7 +457,9 @@ def feature_install(feature_identifier, env_scope, mode, version):
     if compose_file:
         require_docker()
         proj = compose.project_name(f"{namespace_fs}/{feature_name}", env_name)
-        click.echo(click.style("  docker   ", dim=True) + f"starting {short} services")
+        click.echo(
+            click.style("  docker   ", dim=True) + f"starting {short} services"
+        )
         result = run(
             ["docker", "compose", "-p", proj, "-f", compose_file, "up", "-d"],
             cwd=docker_dir_f,
@@ -454,7 +468,8 @@ def feature_install(feature_identifier, env_scope, mode, version):
         )
         if result.returncode != 0:
             click.secho(
-                f"  Docker failed: {(result.stderr or '').strip()}", fg="yellow"
+                f"  Docker failed: {(result.stderr or '').strip()}",
+                fg="yellow",
             )
 
     click.echo()

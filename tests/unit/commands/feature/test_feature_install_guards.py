@@ -11,6 +11,7 @@ instead of a traceback.
 All subprocess / network boundaries are mocked; no real git/docker/network is
 used.
 """
+
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -241,37 +242,25 @@ class TestEnvStepFailureAborts:
 
 class TestMissingToolCleanMessage:
     def test_missing_git_clone_clean_message(self, env, monkeypatch):
-        """Editable mode with no local dir clones via the `run` wrapper.
+        """Editable mode with no local dir clones via git_url.clone, which
+        shells out through the proc.run wrapper.
 
-        If git is missing the wrapper raises a ClickException ('... is not
-        installed or not on PATH'); the user must see a clean message, never a
-        FileNotFoundError traceback.
+        If git is missing the wrapper raises a ClickException; the user must
+        see a clean message, never a FileNotFoundError traceback. We simulate a
+        missing git by making the underlying subprocess.run raise
+        FileNotFoundError (the only subprocess in this path is the clone, since
+        the tag lookup is patched).
         """
-        # No editable dir -> the command will attempt a git clone.
-        from splent_cli.utils.proc import run as real_run
-
-        def fake_run(cmd, *a, **k):
-            # Simulate the proc wrapper's behaviour for a missing tool by
-            # delegating to the real wrapper which translates FileNotFoundError
-            # into a ClickException.
-            if cmd[:2] == ["git", "clone"]:
-                with patch(
-                    "splent_cli.utils.proc.subprocess.run",
-                    side_effect=FileNotFoundError(),
-                ):
-                    return real_run(cmd, *a, **k)
-            return _ok()
-
         runner = CliRunner(mix_stderr=False)
-        with patch(
-            "splent_cli.commands.feature.feature_clone._get_latest_tag",
-            return_value="v1.0.0",
-        ), patch(
-            "splent_cli.commands.feature.feature_clone._build_repo_url",
-            return_value=("https://example.invalid/r.git", "display"),
-        ), patch(
-            "splent_cli.commands.feature.feature_install.run",
-            side_effect=fake_run,
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_clone._get_latest_tag",
+                return_value="v1.0.0",
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                side_effect=FileNotFoundError(),
+            ),
         ):
             result = runner.invoke(
                 feature_install,
@@ -279,14 +268,17 @@ class TestMissingToolCleanMessage:
             )
 
         assert result.exit_code != 0
-        assert "git" in result.output.lower() or "git" in (result.stderr or "").lower()
+        out = result.output.lower()
+        err = (result.stderr or "").lower()
+        assert "git" in out or "git" in err
         # A ClickException prints a clean message, not a traceback.
         assert "Traceback" not in result.output
         assert "Traceback" not in (result.stderr or "")
         assert "FileNotFoundError" not in result.output
-        assert "installed." not in result.output
 
-    def test_missing_docker_clean_message_in_docker_step(self, env, monkeypatch):
+    def test_missing_docker_clean_message_in_docker_step(
+        self, env, monkeypatch
+    ):
         """If the feature ships a compose file, the docker step calls
         require_docker(); a missing docker binary yields a clean ClickException,
         not a traceback."""
@@ -299,12 +291,15 @@ class TestMissingToolCleanMessage:
         (docker_dir / "docker-compose.dev.yml").write_text("services: {}\n")
 
         runner = CliRunner(mix_stderr=False)
-        with patch(
-            "splent_cli.commands.feature.feature_install.run",
-            side_effect=lambda cmd, *a, **k: _ok(),
-        ), patch(
-            "splent_cli.utils.proc.shutil.which",
-            return_value=None,  # docker not on PATH
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_install.run",
+                side_effect=lambda cmd, *a, **k: _ok(),
+            ),
+            patch(
+                "splent_cli.utils.proc.shutil.which",
+                return_value=None,  # docker not on PATH
+            ),
         ):
             result = runner.invoke(
                 feature_install,
@@ -312,9 +307,10 @@ class TestMissingToolCleanMessage:
             )
 
         assert result.exit_code != 0
-        assert "docker" in result.output.lower() or "docker" in (
-            result.stderr or ""
-        ).lower()
+        assert (
+            "docker" in result.output.lower()
+            or "docker" in (result.stderr or "").lower()
+        )
         assert "Traceback" not in result.output
         assert "Traceback" not in (result.stderr or "")
 

@@ -9,8 +9,10 @@ import click
 from packaging.version import Version, InvalidVersion
 
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import normalize_namespace, read_features_from_data
-from splent_cli.utils.proc import run
+from splent_cli.utils.feature_utils import (
+    normalize_namespace,
+    read_features_from_data,
+)
 
 
 # ── GitHub helpers ────────────────────────────────────────────────────────────
@@ -27,7 +29,9 @@ def _github_headers(token: str | None) -> dict:
     return h
 
 
-def _latest_remote_version(org: str, repo: str, token: str | None) -> str | None:
+def _latest_remote_version(
+    org: str, repo: str, token: str | None
+) -> str | None:
     """Return the latest tag from GitHub, or None if the repo has no tags."""
     headers = _github_headers(token)
     url = f"https://api.github.com/repos/{org}/{repo}/tags?per_page=1&page=1"
@@ -53,7 +57,9 @@ def _latest_remote_version(org: str, repo: str, token: str | None) -> str | None
         )
         return None
     except urllib.error.URLError as e:
-        click.secho(f"  ⚠  Network error fetching {repo}: {e.reason}", fg="yellow")
+        click.secho(
+            f"  ⚠  Network error fetching {repo}: {e.reason}", fg="yellow"
+        )
         return None
 
 
@@ -82,13 +88,22 @@ def _read_features(pyproject_path: Path) -> list[dict]:
         else:
             name, version = rest, None
         result.append(
-            {"name": name, "version": version, "ns_github": ns_github, "ns_fs": ns_fs}
+            {
+                "name": name,
+                "version": version,
+                "ns_github": ns_github,
+                "ns_fs": ns_fs,
+            }
         )
     return result
 
 
 def _update_pyproject(
-    pyproject_path: Path, ns_github: str, name: str, old_ver: str | None, new_ver: str
+    pyproject_path: Path,
+    ns_github: str,
+    name: str,
+    old_ver: str | None,
+    new_ver: str,
 ):
     content = pyproject_path.read_text()
     if old_ver:
@@ -109,16 +124,16 @@ def _clone_if_missing(ns_fs: str, name: str, version: str, cache_root: Path):
     if target.exists():
         return
     ns_github = ns_fs.replace("_", "-")
-    from splent_cli.utils.git_url import build_git_url
+    from splent_cli.utils.git_url import clone as git_clone, CLONE_SUCCESS
 
-    url, _ = build_git_url(ns_github, name)
     click.echo(f"  ⬇️  Cloning {ns_fs}/{name}@{version}...")
-    run(
-        ["git", "clone", "--branch", version, "--depth", "1", url, str(target)],
-        check=True,
-        capture=True,
-        tool_hint="Install git: https://git-scm.com/downloads",
-    )
+    # SSH first, then HTTPS. A pinned version that doesn't exist stays an error
+    # here — upgrade must not silently fall back to a different ref.
+    outcome, _used, err = git_clone(ns_github, name, str(target), ref=version)
+    if outcome != CLONE_SUCCESS:
+        raise click.ClickException(
+            f"Could not clone {ns_fs}/{name}@{version} (tried SSH and HTTPS). {err}".strip()
+        )
     from splent_cli.utils.cache_utils import make_feature_readonly
 
     make_feature_readonly(str(target))
@@ -179,10 +194,14 @@ def feature_upgrade(feature_ref, yes):
         return
 
     if feature_ref:
-        name = feature_ref.split("/", 1)[1] if "/" in feature_ref else feature_ref
+        name = (
+            feature_ref.split("/", 1)[1] if "/" in feature_ref else feature_ref
+        )
         features = [f for f in features if f["name"] == name]
         if not features:
-            click.secho(f"⚠️  '{name}' not declared in this product.", fg="yellow")
+            click.secho(
+                f"⚠️  '{name}' not declared in this product.", fg="yellow"
+            )
             return
 
     # ── Resolve latest remote version for each feature ────────────────────────
@@ -202,7 +221,9 @@ def feature_upgrade(feature_ref, yes):
             continue
 
         try:
-            is_newer = Version(latest.lstrip("v")) > Version(current.lstrip("v"))
+            is_newer = Version(latest.lstrip("v")) > Version(
+                current.lstrip("v")
+            )
         except InvalidVersion:
             is_newer = latest != current
 
@@ -211,7 +232,9 @@ def feature_upgrade(feature_ref, yes):
 
     if not upgrades:
         click.echo()
-        click.secho("  ✅ All features are already at the latest version.", fg="green")
+        click.secho(
+            "  ✅ All features are already at the latest version.", fg="green"
+        )
         click.echo()
         return
 
@@ -220,7 +243,9 @@ def feature_upgrade(feature_ref, yes):
     for u in upgrades:
         cur_label = click.style(u["version"] or "editable", fg="red")
         new_label = click.style(u["latest"], fg="green")
-        click.echo(f"    {u['ns_fs']}/{u['name']}    {cur_label} → {new_label}")
+        click.echo(
+            f"    {u['ns_fs']}/{u['name']}    {cur_label} → {new_label}"
+        )
 
     click.echo()
     if not yes and not click.confirm("  Proceed with upgrade?"):
@@ -242,7 +267,11 @@ def feature_upgrade(feature_ref, yes):
         try:
             _clone_if_missing(u["ns_fs"], u["name"], u["latest"], cache_root)
             _update_pyproject(
-                pyproject_path, u["ns_github"], u["name"], u["version"], u["latest"]
+                pyproject_path,
+                u["ns_github"],
+                u["name"],
+                u["version"],
+                u["latest"],
             )
             _update_symlink(
                 product_path,
@@ -252,13 +281,16 @@ def feature_upgrade(feature_ref, yes):
                 u["latest"],
                 cache_root,
             )
-            click.secho(f"  ✔  {u['ns_fs']}/{u['name']} → {u['latest']}", fg="green")
+            click.secho(
+                f"  ✔  {u['ns_fs']}/{u['name']} → {u['latest']}", fg="green"
+            )
         except Exception as e:
             click.secho(f"  ✖  {u['ns_fs']}/{u['name']}: {e}", fg="red")
 
     click.echo()
     click.secho(
-        "  Done. Run 'splent product:resolve' to reinstall pip dependencies.", fg="cyan"
+        "  Done. Run 'splent product:resolve' to reinstall pip dependencies.",
+        fg="cyan",
     )
     click.echo()
 

@@ -6,7 +6,7 @@ import click
 from splent_cli.services import context
 from splent_cli.utils.cache_utils import make_feature_readonly
 from splent_cli.utils.feature_utils import normalize_namespace
-from splent_cli.utils.proc import run, require_tool
+from splent_cli.utils.proc import require_tool
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
@@ -19,9 +19,18 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 
 def _get_latest_tag(namespace, repo) -> str | None:
     """Fetch the highest semver tag from GitHub. Returns None if unreachable or no tags."""
-    api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
+    api_url = (
+        f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
+    )
+    # Authenticate when a token is present so version resolution also works for
+    # PRIVATE feature repos (an unauthenticated call 404s on those) and to raise
+    # the API rate limit.
+    headers = {}
+    token = os.getenv("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        r = requests.get(api_url, timeout=5)
+        r = requests.get(api_url, headers=headers, timeout=5)
         r.raise_for_status()
         tags = r.json()
         if not tags:
@@ -40,16 +49,6 @@ def _get_latest_tag(namespace, repo) -> str | None:
         return versions[0][3]
     except (requests.RequestException, KeyError, IndexError, ValueError):
         return None
-
-
-def _build_repo_url(namespace, repo):
-    """Build the Git URL, trying SSH first with HTTPS fallback.
-
-    Returns a tuple (real_url, display_url) where display_url never contains a token.
-    """
-    from splent_cli.utils.git_url import build_git_url
-
-    return build_git_url(namespace, repo)
 
 
 def _parse_full_name(full_name: str):
@@ -115,13 +114,12 @@ def feature_clone(full_name):
             )
             raise SystemExit(1)
 
-    # Build Git URL based on your ownership
-    fork_url, display_url = _build_repo_url(namespace, repo)
-
     # Local destination
     namespace_safe = normalize_namespace(namespace)
     workspace = str(context.workspace())
-    cache_dir = os.path.join(workspace, ".splent_cache", "features", namespace_safe)
+    cache_dir = os.path.join(
+        workspace, ".splent_cache", "features", namespace_safe
+    )
     os.makedirs(cache_dir, exist_ok=True)
 
     local_path = os.path.join(cache_dir, f"{repo}@{version}")
@@ -137,98 +135,56 @@ def feature_clone(full_name):
         "Install Git from https://git-scm.com/downloads and make sure it is on your PATH.",
     )
 
-    click.secho(f"⬇️ Cloning {display_url}@{version}", fg="cyan")
-
-    # Try clone the specific tag/branch (suppress git noise). Capture output so
-    # we can tell WHY it failed instead of blindly assuming "version not found".
-    result = run(
-        [
-            "git",
-            "-c",
-            "advice.detachedHead=false",
-            "clone",
-            "--depth",
-            "1",
-            "--branch",
-            version,
-            "--quiet",
-            fork_url,
-            local_path,
-        ],
-        check=False,
-        capture=True,
+    from splent_cli.utils.git_url import (
+        clone as git_clone,
+        CLONE_SUCCESS,
+        CLONE_REF_NOT_FOUND,
     )
 
-    if result.returncode != 0:
-        shutil.rmtree(local_path, ignore_errors=True)
-        stderr = (result.stderr or result.stdout or "").strip()
-        stderr_lc = stderr.lower()
+    click.secho(f"⬇️ Cloning {namespace}/{repo}@{version}", fg="cyan")
 
-        # A genuinely missing ref is the ONLY case where falling back to main is
-        # correct. git reports it as e.g.:
-        #   "Remote branch <x> not found in upstream origin"
-        #   "Could not find remote branch <x> to clone"
-        ref_not_found = (
-            "remote branch" in stderr_lc and "not found" in stderr_lc
-        ) or "could not find remote branch" in stderr_lc
+    # Always try SSH first, then HTTPS (GITHUB_TOKEN if set, else anonymous). The
+    # transport is decided per repo from the real clone result (see
+    # git_url.clone), so a working SSH key that simply can't read THIS repo no
+    # longer blocks the HTTPS path.
+    outcome, used_url, stderr = git_clone(
+        namespace, repo, local_path, ref=version
+    )
 
-        # Auth / network / repo-access failures must NOT silently install main.
-        auth_or_network = any(
-            token in stderr_lc
-            for token in (
-                "authentication failed",
-                "permission denied",
-                "could not read from remote repository",
-                "repository not found",
-                "could not resolve host",
-                "connection timed out",
-                "connection refused",
-                "network is unreachable",
-                "failed to connect",
-                "ssl",
-                "tls",
-            )
+    # A genuinely missing tag/branch is the ONLY case where falling back to the
+    # default branch is correct (the repo itself was reachable).
+    if outcome == CLONE_REF_NOT_FOUND:
+        click.secho(
+            f"⚠️ Version '{version}' not found. Cloning default branch instead.",
+            fg="yellow",
+        )
+        outcome, used_url, stderr = git_clone(
+            namespace, repo, local_path, ref=None
         )
 
-        if ref_not_found and not auth_or_network:
-            click.secho(
-                f"⚠️ Version '{version}' not found. Cloning main instead.", fg="yellow"
-            )
-            fallback = run(
-                ["git", "clone", "--depth", "1", "--quiet", fork_url, local_path],
-                check=False,
-                capture=True,
-            )
-            if fallback.returncode != 0:
-                shutil.rmtree(local_path, ignore_errors=True)
-                detail = (fallback.stderr or fallback.stdout or "").strip()
-                click.secho(
-                    f"❌ Repository '{namespace}/{repo}' not found or not accessible.",
-                    fg="red",
-                )
-                if detail:
-                    click.secho(detail, fg="red")
-                raise SystemExit(1)
-        else:
-            # Network / auth / unknown git failure: do NOT fall back to main,
-            # which would silently install the wrong (unpinned) code.
-            click.secho(
-                f"❌ Failed to clone '{namespace}/{repo}@{version}'.", fg="red"
-            )
-            click.secho(
-                "This looks like a network, authentication, or repository-access "
-                "problem rather than a missing version. Check your connection and "
-                "credentials, then try again.",
-                fg="red",
-            )
-            if stderr:
-                click.secho(stderr, fg="red")
-            raise SystemExit(1)
+    if outcome != CLONE_SUCCESS:
+        shutil.rmtree(local_path, ignore_errors=True)
+        click.secho(
+            f"❌ Repository '{namespace}/{repo}' not found or not accessible "
+            "(tried SSH and HTTPS).",
+            fg="red",
+        )
+        click.secho(
+            "Check your network, that the repo exists, and that you have read "
+            "access — an SSH key authorised for the repo, or a GITHUB_TOKEN with "
+            "read scope in your .env.",
+            fg="red",
+        )
+        if stderr:
+            click.secho(stderr, fg="red")
+        raise SystemExit(1)
 
     # Lock files as read-only to prevent accidental edits on pinned features
     make_feature_readonly(local_path)
 
     click.secho(
-        f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully.", fg="green"
+        f"✅ Feature '{namespace}/{repo}@{version}' cloned successfully "
+        f"({used_url}).",
+        fg="green",
     )
     click.secho(f"🔒 Cached (read-only) at: {local_path}", fg="blue")
