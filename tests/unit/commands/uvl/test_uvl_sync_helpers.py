@@ -1,4 +1,5 @@
 """Tests for pure helper functions in uvl_sync.py."""
+
 import pytest
 
 from splent_cli.commands.product.product_auto_require import (
@@ -18,6 +19,7 @@ import click
 # ---------------------------------------------------------------------------
 # _build_req_graph
 # ---------------------------------------------------------------------------
+
 
 class TestBuildReqGraph:
     def test_simple_pair(self):
@@ -45,6 +47,7 @@ class TestBuildReqGraph:
 # ---------------------------------------------------------------------------
 # _closure_requires
 # ---------------------------------------------------------------------------
+
 
 class TestClosureRequires:
     def test_direct_dep(self):
@@ -90,6 +93,7 @@ class TestClosureRequires:
 # _parse_feature_metadata_from_uvl_text
 # ---------------------------------------------------------------------------
 
+
 class TestParseFeatureMetadataFromUvlText:
     def test_parses_org_and_package(self):
         text = "    auth {org 'splent-io' package 'splent_feature_auth'}\n"
@@ -130,6 +134,7 @@ class TestParseFeatureMetadataFromUvlText:
 # _dep_spec_from_meta
 # ---------------------------------------------------------------------------
 
+
 class TestDepSpecFromMeta:
     def test_with_org_and_package(self):
         meta = {"auth": {"org": "splent-io", "package": "splent_feature_auth"}}
@@ -159,6 +164,7 @@ class TestDepSpecFromMeta:
 # now lives in read_features_from_data, so we test that instead of dead code.
 # ---------------------------------------------------------------------------
 
+
 class TestReadFeaturesFromData:
     def test_reads_canonical_location(self):
         data = {"tool": {"splent": {"features": ["ns/feat_a@v1.0.0", "ns/feat_b"]}}}
@@ -167,9 +173,7 @@ class TestReadFeaturesFromData:
         assert "ns/feat_b" in items
 
     def test_reads_legacy_optional_dependencies(self):
-        data = {
-            "project": {"optional-dependencies": {"features": ["ns/feat_legacy"]}}
-        }
+        data = {"project": {"optional-dependencies": {"features": ["ns/feat_legacy"]}}}
         items = read_features_from_data(data)
         assert "ns/feat_legacy" in items
 
@@ -201,6 +205,7 @@ class TestReadFeaturesFromData:
 # append missing specs, dedup, preserve order. This mirrors product_auto_require
 # lines that build `new_features` from the current list + specs to add.
 # ---------------------------------------------------------------------------
+
 
 def _merge_features(current, to_add):
     """Mirror of the merge in product_auto_require.product_complete."""
@@ -248,6 +253,7 @@ class TestMergeFeatures:
 # via write_features_to_data + tomli_w, so we test the round-trip here.
 # ---------------------------------------------------------------------------
 
+
 class TestWriteFeaturesToData:
     def test_writes_to_canonical_location(self):
         data = {}
@@ -265,9 +271,7 @@ class TestWriteFeaturesToData:
         assert data["tool"]["splent"]["features"] == []
 
     def test_removes_legacy_location(self):
-        data = {
-            "project": {"optional-dependencies": {"features": ["old/feat"]}}
-        }
+        data = {"project": {"optional-dependencies": {"features": ["old/feat"]}}}
         write_features_to_data(data, ["new/feat"])
         assert "features" not in data["project"]["optional-dependencies"]
         assert read_features_from_data(data) == ["new/feat"]

@@ -11,7 +11,6 @@ The app-boot helper (get_app) is intentionally *not* available in the test
 environment, which exercises the graceful-degradation branches directly.
 """
 
-
 import pytest
 from click.testing import CliRunner
 
@@ -71,9 +70,7 @@ class TestCheckDepsGuards:
         assert "Cannot read pyproject.toml" in result.output
         _clean(result)
 
-    def test_no_uvl_configured_reports_fail(
-        self, runner, workspace, monkeypatch
-    ):
+    def test_no_uvl_configured_reports_fail(self, runner, workspace, monkeypatch):
         monkeypatch.setenv("SPLENT_APP", "test_app")
         product_dir = workspace / "test_app"
         product_dir.mkdir()
@@ -86,9 +83,7 @@ class TestCheckDepsGuards:
         assert "No UVL configured" in result.output
         _clean(result)
 
-    def test_uvl_file_missing_reports_fail(
-        self, runner, workspace, monkeypatch
-    ):
+    def test_uvl_file_missing_reports_fail(self, runner, workspace, monkeypatch):
         monkeypatch.setenv("SPLENT_APP", "test_app")
         product_dir = workspace / "test_app"
         product_dir.mkdir()
@@ -127,9 +122,7 @@ def _make_feature_src(workspace, pkg_name, py_content):
     _scan_feature_imports walks src/<org>/<feature_name>/.
     """
     org = "splent_io"
-    feat_root = (
-        workspace / "test_app" / "features" / org / pkg_name
-    )
+    feat_root = workspace / "test_app" / "features" / org / pkg_name
     src = feat_root / "src" / org / pkg_name
     src.mkdir(parents=True)
     (src / "code.py").write_text(py_content)
@@ -153,9 +146,7 @@ class TestCheckDepsBehavior:
             "splent_feature_profile",
             "from splent_io.splent_feature_auth import something\n",
         )
-        _make_feature_src(
-            workspace, "splent_feature_auth", "x = 1\n"
-        )
+        _make_feature_src(workspace, "splent_feature_auth", "x = 1\n")
         result = runner.invoke(check_deps)
         assert result.exit_code == 0
         assert "consistent with UVL" in result.output
@@ -176,9 +167,7 @@ class TestCheckDepsBehavior:
             "splent_feature_auth",
             "from splent_io.splent_feature_profile import x\n",
         )
-        _make_feature_src(
-            workspace, "splent_feature_profile", "y = 1\n"
-        )
+        _make_feature_src(workspace, "splent_feature_profile", "y = 1\n")
         result = runner.invoke(check_deps)
         assert result.exit_code == 1
         assert "violation" in result.output.lower()
@@ -199,9 +188,7 @@ class TestCheckProductGuards:
         assert "No product selected" in result.output
         _clean(result)
 
-    def test_missing_pyproject_reports_fail(
-        self, runner, workspace, monkeypatch
-    ):
+    def test_missing_pyproject_reports_fail(self, runner, workspace, monkeypatch):
         monkeypatch.setenv("SPLENT_APP", "test_app")
         (workspace / "test_app").mkdir()  # no pyproject.toml
         result = runner.invoke(check_product)
@@ -209,9 +196,7 @@ class TestCheckProductGuards:
         assert "pyproject.toml not found" in result.output
         _clean(result)
 
-    def test_no_features_declared_exits_ok(
-        self, runner, product_workspace
-    ):
+    def test_no_features_declared_exits_ok(self, runner, product_workspace):
         # product_workspace fixture writes an empty features list.
         result = runner.invoke(check_product)
         assert result.exit_code == 0

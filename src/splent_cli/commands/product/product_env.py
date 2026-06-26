@@ -29,7 +29,7 @@ def _parse_env_line(line: str):
         return None
 
     if stripped.startswith("export ") or stripped.startswith("export\t"):
-        stripped = stripped[len("export"):].lstrip()
+        stripped = stripped[len("export") :].lstrip()
 
     key, value = stripped.split("=", 1)
     key = key.strip()

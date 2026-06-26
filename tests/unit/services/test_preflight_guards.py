@@ -34,10 +34,7 @@ def _make_product(tmp_path, *, app="test_app", features=None):
     pyproject = product_dir / "pyproject.toml"
     feats = features or []
     feats_toml = ", ".join(f'"{f}"' for f in feats)
-    pyproject.write_text(
-        "[tool.splent]\n"
-        f"features = [{feats_toml}]\n"
-    )
+    pyproject.write_text(f"[tool.splent]\nfeatures = [{feats_toml}]\n")
     return product_dir
 
 
@@ -67,8 +64,9 @@ def test_sat_checker_crash_is_not_reported_as_pass(env):
     """If the SAT checker raises, run_preflight must return False (not True)."""
     run_preflight = _import_preflight()
 
-    with patch(SAT, side_effect=RuntimeError("solver exploded")), patch(
-        COMPAT, return_value=([], [], [])
+    with (
+        patch(SAT, side_effect=RuntimeError("solver exploded")),
+        patch(COMPAT, return_value=([], [], [])),
     ):
         result = run_preflight(interactive=False)
 
@@ -89,8 +87,9 @@ def test_sat_checker_crash_surfaces_message_not_traceback(env):
 
     from click.testing import CliRunner
 
-    with patch(SAT, side_effect=RuntimeError("solver exploded")), patch(
-        COMPAT, return_value=([], [], [])
+    with (
+        patch(SAT, side_effect=RuntimeError("solver exploded")),
+        patch(COMPAT, return_value=([], [], [])),
     ):
         res = CliRunner(mix_stderr=False).invoke(cmd, standalone_mode=False)
 
@@ -109,8 +108,9 @@ def test_contract_checker_crash_is_not_reported_as_pass(env):
     """
     run_preflight = _import_preflight()
 
-    with patch(SAT, return_value=(True, [], None, None)), patch(
-        COMPAT, side_effect=ValueError("contract parser exploded")
+    with (
+        patch(SAT, return_value=(True, [], None, None)),
+        patch(COMPAT, side_effect=ValueError("contract parser exploded")),
     ):
         result = run_preflight(interactive=False)
 
@@ -128,8 +128,9 @@ def test_contract_checker_crash_surfaces_clean_message(env):
         ok = run_preflight(interactive=True)
         raise SystemExit(0 if ok else 2)
 
-    with patch(SAT, return_value=(True, [], None, None)), patch(
-        COMPAT, side_effect=ValueError("contract parser exploded")
+    with (
+        patch(SAT, return_value=(True, [], None, None)),
+        patch(COMPAT, side_effect=ValueError("contract parser exploded")),
     ):
         res = CliRunner(mix_stderr=False).invoke(cmd, standalone_mode=False)
 
@@ -142,8 +143,9 @@ def test_contract_checker_crash_surfaces_clean_message(env):
 def test_both_checkers_crash_returns_false(env):
     run_preflight = _import_preflight()
 
-    with patch(SAT, side_effect=RuntimeError("boom")), patch(
-        COMPAT, side_effect=RuntimeError("bang")
+    with (
+        patch(SAT, side_effect=RuntimeError("boom")),
+        patch(COMPAT, side_effect=RuntimeError("bang")),
     ):
         assert run_preflight(interactive=False) is False
 
@@ -157,8 +159,9 @@ def test_clean_config_returns_true(env):
     """SAT satisfiable + no contract errors -> True."""
     run_preflight = _import_preflight()
 
-    with patch(SAT, return_value=(True, ["feat_a"], None, None)), patch(
-        COMPAT, return_value=([], [], [])
+    with (
+        patch(SAT, return_value=(True, ["feat_a"], None, None)),
+        patch(COMPAT, return_value=([], [], [])),
     ):
         assert run_preflight(interactive=False) is True
 
@@ -171,8 +174,9 @@ def test_clean_config_with_warnings_still_returns_true(env):
     errors = []
     warnings = [{"field": "x", "message": "heads up"}]
 
-    with patch(SAT, return_value=(True, [], None, None)), patch(
-        COMPAT, return_value=(findings, errors, warnings)
+    with (
+        patch(SAT, return_value=(True, [], None, None)),
+        patch(COMPAT, return_value=(findings, errors, warnings)),
     ):
         assert run_preflight(interactive=False) is True
 
@@ -181,8 +185,9 @@ def test_unsatisfiable_sat_returns_false(env):
     """A real (non-crash) unsatisfiable result is a normal failure -> False."""
     run_preflight = _import_preflight()
 
-    with patch(SAT, return_value=(False, [], None, None)), patch(
-        COMPAT, return_value=([], [], [])
+    with (
+        patch(SAT, return_value=(False, [], None, None)),
+        patch(COMPAT, return_value=([], [], [])),
     ):
         assert run_preflight(interactive=False) is False
 
@@ -193,8 +198,9 @@ def test_contract_errors_return_false(env):
 
     errors = [{"field": "db", "message": "incompatible engines"}]
 
-    with patch(SAT, return_value=(True, [], None, None)), patch(
-        COMPAT, return_value=([], errors, [])
+    with (
+        patch(SAT, return_value=(True, [], None, None)),
+        patch(COMPAT, return_value=([], errors, [])),
     ):
         assert run_preflight(interactive=False) is False
 
@@ -231,8 +237,9 @@ def test_build_mode_checks_feature_readiness(env):
     """
     run_preflight = _import_preflight()
 
-    with patch(SAT, return_value=(True, [], None, None)), patch(
-        COMPAT, return_value=([], [], [])
+    with (
+        patch(SAT, return_value=(True, [], None, None)),
+        patch(COMPAT, return_value=([], [], [])),
     ):
         # No features_prod in pyproject -> _check_features_ready returns True.
         assert run_preflight(interactive=False, build_mode=True) is True

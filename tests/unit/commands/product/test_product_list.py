@@ -1,6 +1,7 @@
 """
 Tests for the product:list command.
 """
+
 import tomli_w
 import pytest
 from click.testing import CliRunner
@@ -32,6 +33,7 @@ def _make_product(workspace, name, version="1.0.0", features=None):
 # _product_info() helper
 # ---------------------------------------------------------------------------
 
+
 class TestProductInfo:
     def test_returns_none_for_missing_pyproject(self, tmp_path):
         d = tmp_path / "app"
@@ -60,6 +62,7 @@ class TestProductInfo:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 class TestProductListCommand:
     def test_no_products_shows_info(self, runner, workspace):

@@ -5,6 +5,7 @@ values containing '#', blank/comment lines, and malformed/empty keys.
 These are driven both via the pure helper and via reading real tmp .env
 files line-by-line (the way the command consumes them).
 """
+
 from splent_cli.commands.product.product_env import _parse_env_line
 
 
@@ -142,12 +143,7 @@ class TestParseRealFile:
 
     def test_malformed_lines_do_not_create_wrong_pairs(self, tmp_path):
         env = tmp_path / ".env"
-        env.write_text(
-            "JUST_A_WORD\n"
-            "=novalue\n"
-            "bad key=val\n"
-            "GOOD=ok\n"
-        )
+        env.write_text("JUST_A_WORD\n=novalue\nbad key=val\nGOOD=ok\n")
         parsed = _parse_file(str(env))
         # Only the one valid pair survives; no spurious keys.
         assert parsed == {"GOOD": "ok"}

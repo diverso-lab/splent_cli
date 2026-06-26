@@ -73,7 +73,10 @@ def _check_migrations(name, product_path):
     if not migration_files:
         return True, "no migration files"
 
-    return True, f"{len(migration_files)} migration file(s) present (DB revision not verified)"
+    return (
+        True,
+        f"{len(migration_files)} migration file(s) present (DB revision not verified)",
+    )
 
 
 def check_feature_integrity(

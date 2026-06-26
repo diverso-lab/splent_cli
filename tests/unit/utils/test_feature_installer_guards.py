@@ -14,6 +14,7 @@ All subprocess / pip activity is mocked at the ``feature_installer.run`` boundar
 (the module imports ``run`` into its own namespace), so no real pip / network is
 touched. PathUtils.get_working_dir is patched to point at a pytest tmp_path.
 """
+
 import click
 
 import splent_cli.utils.feature_installer as fi
@@ -22,6 +23,7 @@ import splent_cli.utils.feature_installer as fi
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_feature(workspace, feature_dir, package_name):
     """Create <workspace>/<feature_dir>/pyproject.toml declaring package_name."""
@@ -46,6 +48,7 @@ class _FakeCompleted:
 # _workspace_root — resolved from PathUtils/WORKING_DIR, not hardcoded
 # ---------------------------------------------------------------------------
 
+
 class TestWorkspaceRoot:
     def test_uses_pathutils_working_dir(self, tmp_path, monkeypatch):
         monkeypatch.setattr(fi.PathUtils, "get_working_dir", lambda: str(tmp_path))
@@ -61,6 +64,7 @@ class TestWorkspaceRoot:
 # ---------------------------------------------------------------------------
 # get_package_name — pyproject parsing edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestGetPackageName:
     def test_returns_name(self, tmp_path):
@@ -88,6 +92,7 @@ class TestGetPackageName:
 # ---------------------------------------------------------------------------
 # ensure_editable_features_installed — features located relative to workspace
 # ---------------------------------------------------------------------------
+
 
 class TestFeaturesResolvedRelativeToWorkspace:
     def test_install_targets_configured_workspace(self, tmp_path, monkeypatch):
@@ -160,6 +165,7 @@ class TestFeaturesResolvedRelativeToWorkspace:
 # ---------------------------------------------------------------------------
 # ensure_editable_features_installed — per-feature failure does not abort loop
 # ---------------------------------------------------------------------------
+
 
 class TestPerFeatureFailureDoesNotAbort:
     def test_one_failure_does_not_stop_others(self, tmp_path, monkeypatch, capsys):
@@ -251,14 +257,13 @@ class TestPerFeatureFailureDoesNotAbort:
 # get_installed_packages — parsing of pip list --format=freeze
 # ---------------------------------------------------------------------------
 
+
 class TestGetInstalledPackages:
     def test_parses_freeze_output(self, monkeypatch):
         monkeypatch.setattr(
             fi,
             "run",
-            lambda cmd, **kw: _FakeCompleted(
-                0, stdout="click==8.1.7\npytest==7.4.0\n"
-            ),
+            lambda cmd, **kw: _FakeCompleted(0, stdout="click==8.1.7\npytest==7.4.0\n"),
         )
         pkgs = fi.get_installed_packages()
         assert pkgs == {"click", "pytest"}

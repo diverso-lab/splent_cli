@@ -1,6 +1,7 @@
 """
 Tests for the cache:prune command.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -25,7 +26,7 @@ def _make_product(workspace, name, features=None):
     features_list = "\n".join(f'  "{f}",' for f in (features or []))
     (product_dir / "pyproject.toml").write_text(
         f'[project]\nname = "{name}"\nversion = "1.0.0"\n\n'
-        f'[project.optional-dependencies]\nfeatures = [\n{features_list}\n]\n'
+        f"[project.optional-dependencies]\nfeatures = [\n{features_list}\n]\n"
     )
     return product_dir
 
@@ -33,6 +34,7 @@ def _make_product(workspace, name, features=None):
 # ---------------------------------------------------------------------------
 # Empty cache
 # ---------------------------------------------------------------------------
+
 
 class TestEmptyCache:
     def test_empty_cache_shows_info(self, runner, workspace):
@@ -44,6 +46,7 @@ class TestEmptyCache:
 # ---------------------------------------------------------------------------
 # Nothing to prune
 # ---------------------------------------------------------------------------
+
 
 class TestNothingToPrune:
     def test_all_referenced_nothing_pruned(self, runner, workspace):
@@ -58,6 +61,7 @@ class TestNothingToPrune:
 # ---------------------------------------------------------------------------
 # Orphan pruning
 # ---------------------------------------------------------------------------
+
 
 class TestOrphanPruning:
     def test_prunes_unreferenced_entry_with_yes(self, runner, workspace):
@@ -92,7 +96,9 @@ class TestOrphanPruning:
 
     def test_only_orphans_removed_referenced_kept(self, runner, workspace):
         orphan = _make_cache(workspace, "splent_io", "splent_feature_orphan", "v1.0.0")
-        referenced = _make_cache(workspace, "splent_io", "splent_feature_auth", "v1.0.0")
+        referenced = _make_cache(
+            workspace, "splent_io", "splent_feature_auth", "v1.0.0"
+        )
         _make_product(workspace, "test_app", ["splent_io/splent_feature_auth@v1.0.0"])
 
         result = runner.invoke(cache_prune, ["--yes"])
@@ -111,6 +117,7 @@ class TestOrphanPruning:
 # ---------------------------------------------------------------------------
 # Broken symlink cleanup
 # ---------------------------------------------------------------------------
+
 
 class TestBrokenSymlinks:
     def test_broken_symlinks_removed_after_prune(self, runner, workspace):

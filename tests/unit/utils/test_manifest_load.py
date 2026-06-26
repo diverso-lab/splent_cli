@@ -1,4 +1,5 @@
 """Tests for manifest._load — schema validation (features must be dict)."""
+
 import json
 from splent_cli.utils.manifest import read_manifest, MANIFEST_FILENAME
 

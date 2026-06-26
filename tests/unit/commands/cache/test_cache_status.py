@@ -4,6 +4,7 @@ Tests for the cache:status command.
 Pattern: real filesystem via tmp_path + monkeypatch WORKING_DIR.
 No subprocess mocking needed — this command only walks directories.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -19,6 +20,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # Empty cache
 # ---------------------------------------------------------------------------
+
 
 class TestEmptyCache:
     def test_no_cache_dir(self, runner, workspace):
@@ -36,6 +38,7 @@ class TestEmptyCache:
 # ---------------------------------------------------------------------------
 # Versioned features
 # ---------------------------------------------------------------------------
+
 
 class TestVersionedFeatures:
     def test_single_versioned_feature(self, runner, workspace):
@@ -66,6 +69,7 @@ class TestVersionedFeatures:
 # Editable features
 # ---------------------------------------------------------------------------
 
+
 class TestEditableFeatures:
     def test_editable_shown(self, runner, workspace):
         make_cache_entry(workspace, "splent_io", "splent_feature_notes")  # no version
@@ -86,6 +90,7 @@ class TestEditableFeatures:
 # Multiple namespaces
 # ---------------------------------------------------------------------------
 
+
 class TestMultipleNamespaces:
     def test_different_namespaces(self, runner, workspace):
         make_cache_entry(workspace, "splent_io", "splent_feature_auth", "v1.0.0")
@@ -99,6 +104,7 @@ class TestMultipleNamespaces:
 # ---------------------------------------------------------------------------
 # Non-directory entries in cache are skipped (lines 15, 18)
 # ---------------------------------------------------------------------------
+
 
 class TestNonDirectoryEntries:
     def test_skips_file_at_namespace_level(self, runner, workspace):
@@ -127,6 +133,7 @@ class TestNonDirectoryEntries:
 # ---------------------------------------------------------------------------
 # Summary line
 # ---------------------------------------------------------------------------
+
 
 class TestSummaryLine:
     def test_shows_counts(self, runner, workspace):

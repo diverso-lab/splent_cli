@@ -1,4 +1,5 @@
 """Tests for shared release helpers in services/release.py."""
+
 import pytest
 
 from splent_cli.services.release import (
@@ -11,6 +12,7 @@ from splent_cli.services.release import (
 # ---------------------------------------------------------------------------
 # validate_release_env
 # ---------------------------------------------------------------------------
+
 
 class TestValidateReleaseEnv:
     def test_passes_when_all_vars_set(self, monkeypatch):
@@ -71,6 +73,7 @@ class TestValidateReleaseEnv:
 # update_version
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateVersion:
     def test_replaces_double_quoted_version(self, tmp_path):
         p = tmp_path / "pyproject.toml"
@@ -86,18 +89,19 @@ class TestUpdateVersion:
 
     def test_preserves_rest_of_file(self, tmp_path):
         p = tmp_path / "pyproject.toml"
-        original = '[project]\nname = "mypkg"\nversion = "1.0.0"\n[tool.splent]\nfoo = "bar"\n'
+        original = (
+            '[project]\nname = "mypkg"\nversion = "1.0.0"\n[tool.splent]\nfoo = "bar"\n'
+        )
         p.write_text(original)
         update_version(str(p), "1.1.0")
         content = p.read_text()
-        assert '[tool.splent]' in content
+        assert "[tool.splent]" in content
         assert 'foo = "bar"' in content
 
     def test_updates_only_version_line(self, tmp_path):
         p = tmp_path / "pyproject.toml"
         p.write_text(
-            '[project]\nversion = "1.0.0"\n'
-            '[tool]\nother_version = "not-this"\n'
+            '[project]\nversion = "1.0.0"\n[tool]\nother_version = "not-this"\n'
         )
         update_version(str(p), "1.5.0")
         content = p.read_text()
@@ -107,6 +111,7 @@ class TestUpdateVersion:
 # ---------------------------------------------------------------------------
 # extract_repo
 # ---------------------------------------------------------------------------
+
 
 class TestExtractRepo:
     def test_https_url_with_token(self):

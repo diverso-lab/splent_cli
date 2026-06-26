@@ -1,4 +1,5 @@
 """Tests for cache_utils.py filesystem permission helpers."""
+
 import os
 import stat
 
@@ -17,7 +18,7 @@ def _make_feature_dir(tmp_path, files=None):
     """Create a minimal feature directory with given file names."""
     feat = tmp_path / "splent_feature_auth@v1.0.0"
     feat.mkdir()
-    for name in (files or ["module.py", "models.py"]):
+    for name in files or ["module.py", "models.py"]:
         (feat / name).write_text("# content")
     return feat
 

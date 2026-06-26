@@ -1,11 +1,14 @@
 """
 Tests for the cache:clear command.
 """
+
 import pytest
 from click.testing import CliRunner
 
 from splent_cli.commands.cache.cache_clear import cache_clear
-from splent_cli.services.compose import remove_broken_symlinks as _remove_broken_symlinks
+from splent_cli.services.compose import (
+    remove_broken_symlinks as _remove_broken_symlinks,
+)
 
 
 @pytest.fixture
@@ -13,7 +16,9 @@ def runner():
     return CliRunner(mix_stderr=False)
 
 
-def _make_cache(workspace, namespace="splent_io", name="splent_feature_auth", version="v1.0.0"):
+def _make_cache(
+    workspace, namespace="splent_io", name="splent_feature_auth", version="v1.0.0"
+):
     path = workspace / ".splent_cache" / "features" / namespace / f"{name}@{version}"
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -22,6 +27,7 @@ def _make_cache(workspace, namespace="splent_io", name="splent_feature_auth", ve
 # ---------------------------------------------------------------------------
 # _remove_broken_symlinks() helper
 # ---------------------------------------------------------------------------
+
 
 class TestRemoveBrokenSymlinks:
     def test_removes_broken_symlinks(self, tmp_path):
@@ -56,6 +62,7 @@ class TestRemoveBrokenSymlinks:
 # No cache directory
 # ---------------------------------------------------------------------------
 
+
 class TestNoCacheDirectory:
     def test_exits_0_with_warning_when_no_cache(self, runner, workspace):
         result = runner.invoke(cache_clear, ["--yes"])
@@ -66,6 +73,7 @@ class TestNoCacheDirectory:
 # ---------------------------------------------------------------------------
 # Clear entire cache (--yes)
 # ---------------------------------------------------------------------------
+
 
 class TestClearAll:
     def test_clears_entire_cache_with_yes(self, runner, workspace):
@@ -96,6 +104,7 @@ class TestClearAll:
 # --namespace
 # ---------------------------------------------------------------------------
 
+
 class TestNamespaceFilter:
     def test_clears_specific_namespace(self, runner, workspace):
         entry = _make_cache(workspace, namespace="splent_io")
@@ -115,17 +124,22 @@ class TestNamespaceFilter:
 # --feature
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureFilter:
     def test_clears_matching_feature_entries(self, runner, workspace):
         entry = _make_cache(workspace, name="splent_feature_auth", version="v1.0.0")
-        result = runner.invoke(cache_clear, ["--feature", "splent_feature_auth", "--yes"])
+        result = runner.invoke(
+            cache_clear, ["--feature", "splent_feature_auth", "--yes"]
+        )
         assert result.exit_code == 0
         assert "Cleared" in result.output
         assert not entry.exists()
 
     def test_missing_feature_exits_0(self, runner, workspace):
         _make_cache(workspace, name="splent_feature_auth")
-        result = runner.invoke(cache_clear, ["--feature", "splent_feature_missing", "--yes"])
+        result = runner.invoke(
+            cache_clear, ["--feature", "splent_feature_missing", "--yes"]
+        )
         assert result.exit_code == 0
         assert "No cache entries" in result.output
 
@@ -133,6 +147,7 @@ class TestFeatureFilter:
 # ---------------------------------------------------------------------------
 # Broken symlink cleanup reported
 # ---------------------------------------------------------------------------
+
 
 class TestBrokenSymlinkReport:
     def test_reports_removed_symlinks(self, runner, workspace):

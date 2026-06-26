@@ -16,6 +16,7 @@ from splent_cli.utils.template_drift import (
 # _pascalcase
 # ---------------------------------------------------------------------------
 
+
 class TestPascalcase:
     def test_single_word(self):
         assert _pascalcase("auth") == "Auth"
@@ -36,6 +37,7 @@ class TestPascalcase:
 # ---------------------------------------------------------------------------
 # product_ctx
 # ---------------------------------------------------------------------------
+
 
 class TestProductCtx:
     def test_contains_product_name(self):
@@ -80,6 +82,7 @@ class TestProductCtx:
 # feature_ctx
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureCtx:
     def test_contains_feature_name(self):
         ctx = feature_ctx("splent_io", "auth")
@@ -102,6 +105,7 @@ class TestFeatureCtx:
 # file_diff
 # ---------------------------------------------------------------------------
 
+
 class TestFileDiff:
     def test_no_diff_when_contents_match(self, tmp_path):
         f = tmp_path / "file.txt"
@@ -123,13 +127,18 @@ class TestFileDiff:
         f.write_text("line1\n")
         result = file_diff(f, "line1\nline2\n")
         assert result is not None
-        added = [line for line in result if line.startswith("+") and not line.startswith("+++")]
+        added = [
+            line
+            for line in result
+            if line.startswith("+") and not line.startswith("+++")
+        ]
         assert any("line2" in line for line in added)
 
 
 # ---------------------------------------------------------------------------
 # count_changed_lines
 # ---------------------------------------------------------------------------
+
 
 class TestCountChangedLines:
     def test_counts_added_lines(self):
@@ -162,6 +171,7 @@ class TestCountChangedLines:
 # get_stored_cli_version
 # ---------------------------------------------------------------------------
 
+
 class TestGetStoredCliVersion:
     def test_returns_version_when_present(self, tmp_path):
         p = tmp_path / "pyproject.toml"
@@ -186,6 +196,7 @@ class TestGetStoredCliVersion:
 # resolve_product_rel
 # ---------------------------------------------------------------------------
 
+
 class TestResolveProductRel:
     def test_replaces_name_placeholder(self):
         result = resolve_product_rel("docker/Dockerfile.{name}.dev", "myapp")
@@ -203,6 +214,7 @@ class TestResolveProductRel:
 # ---------------------------------------------------------------------------
 # resolve_feature_rel
 # ---------------------------------------------------------------------------
+
 
 class TestResolveFeatureRel:
     def test_replaces_org_and_name(self):

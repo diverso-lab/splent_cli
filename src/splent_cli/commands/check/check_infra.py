@@ -209,9 +209,7 @@ def check_infra():
     click.echo(click.style("  Networks", bold=True))
     required_networks: set[str] = set()
     for label, cf in compose_files:
-        result = _run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"]
-        )
+        result = _run(["docker", "compose", "-f", cf, "config", "--format", "json"])
         if result.returncode != 0:
             continue
         try:
@@ -242,9 +240,7 @@ def check_infra():
     build_count = 0
     for label, cf in compose_files:
         docker_dir = os.path.dirname(cf)
-        result = _run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"]
-        )
+        result = _run(["docker", "compose", "-f", cf, "config", "--format", "json"])
         if result.returncode != 0:
             continue
         try:
@@ -282,9 +278,7 @@ def check_infra():
     services_depended_on: dict[str, str] = {}  # depended_svc -> by_svc
 
     for label, cf in compose_files:
-        result = _run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"]
-        )
+        result = _run(["docker", "compose", "-f", cf, "config", "--format", "json"])
         if result.returncode != 0:
             continue
         try:
@@ -321,9 +315,7 @@ def check_infra():
     click.echo(click.style("  Volumes", bold=True))
     all_volumes: dict[str, list[str]] = {}  # vol_name -> [labels]
     for label, cf in compose_files:
-        result = _run(
-            ["docker", "compose", "-f", cf, "config", "--format", "json"]
-        )
+        result = _run(["docker", "compose", "-f", cf, "config", "--format", "json"])
         if result.returncode != 0:
             continue
         try:

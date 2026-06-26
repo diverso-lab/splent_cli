@@ -11,6 +11,7 @@ module name "splent_cli.commands.<...>", and importlib.import_module()s each.
 We avoid touching the real commands tree (and avoid importing real plugins)
 by pointing get_commands_path() at a tmp dir and stubbing import_module.
 """
+
 import types
 
 import click
@@ -45,9 +46,7 @@ def _install_loader(monkeypatch, commands_dir, import_side_effect):
     monkeypatch.setattr(
         command_loader.PathUtils, "get_commands_path", lambda: str(commands_dir)
     )
-    monkeypatch.setattr(
-        command_loader.importlib, "import_module", import_side_effect
-    )
+    monkeypatch.setattr(command_loader.importlib, "import_module", import_side_effect)
 
 
 @pytest.fixture
@@ -83,9 +82,7 @@ class TestBrokenModuleIsSkipped:
         assert "Traceback" not in err
         assert "ImportError" not in err
 
-    def test_broken_module_does_not_register_a_command(
-        self, tmp_path, monkeypatch
-    ):
+    def test_broken_module_does_not_register_a_command(self, tmp_path, monkeypatch):
         cmds = _make_commands_dir(tmp_path, ["broken.py"])
 
         def fake_import(module_name):
@@ -97,9 +94,7 @@ class TestBrokenModuleIsSkipped:
         command_loader.load_commands(group)
         assert group.commands == {}
 
-    def test_warning_emitted_without_splent_debug(
-        self, tmp_path, monkeypatch, capsys
-    ):
+    def test_warning_emitted_without_splent_debug(self, tmp_path, monkeypatch, capsys):
         # The warning must appear even when SPLENT_DEBUG is unset.
         monkeypatch.delenv("SPLENT_DEBUG", raising=False)
         cmds = _make_commands_dir(tmp_path, ["broken.py"])
@@ -162,9 +157,7 @@ class TestRestOfCliStillLoads:
 
 
 class TestHappyPath:
-    def test_registers_command_from_module_attribute(
-        self, tmp_path, monkeypatch
-    ):
+    def test_registers_command_from_module_attribute(self, tmp_path, monkeypatch):
         cmds = _make_commands_dir(tmp_path, ["good.py"])
 
         def fake_import(module_name):
@@ -176,9 +169,7 @@ class TestHappyPath:
         command_loader.load_commands(group)
         assert "ping" in group.commands
 
-    def test_prefers_explicit_cli_command_attribute(
-        self, tmp_path, monkeypatch
-    ):
+    def test_prefers_explicit_cli_command_attribute(self, tmp_path, monkeypatch):
         cmds = _make_commands_dir(tmp_path, ["good.py"])
 
         @click.command(name="explicit")

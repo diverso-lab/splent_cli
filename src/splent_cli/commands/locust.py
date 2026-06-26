@@ -179,9 +179,7 @@ def locust(module):
         try:
             client = docker.from_env()
         except docker.errors.DockerException as e:
-            raise click.ClickException(
-                f"Could not connect to the Docker daemon: {e}"
-            )
+            raise click.ClickException(f"Could not connect to the Docker daemon: {e}")
 
         try:
             web_container = client.containers.get("web_app_container")
@@ -247,9 +245,7 @@ def stop():
                 try:
                     os.kill(proc.pid, signal.SIGTERM)
                 except (ProcessLookupError, PermissionError) as e:
-                    click.secho(
-                        f"⚠️  Could not stop PID {proc.pid}: {e}", fg="yellow"
-                    )
+                    click.secho(f"⚠️  Could not stop PID {proc.pid}: {e}", fg="yellow")
 
     def stop_docker_locust():
         click.echo("Stopping Locust container if it is running...")

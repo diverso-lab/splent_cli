@@ -22,15 +22,25 @@ from splent_cli.utils.manifest import (
 # feature_key
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureKey:
     def test_editable_no_version(self):
-        assert feature_key("splent_io", "splent_feature_auth") == "splent_io/splent_feature_auth"
+        assert (
+            feature_key("splent_io", "splent_feature_auth")
+            == "splent_io/splent_feature_auth"
+        )
 
     def test_pinned_with_version(self):
-        assert feature_key("splent_io", "splent_feature_auth", "v1.1.1") == "splent_io/splent_feature_auth@v1.1.1"
+        assert (
+            feature_key("splent_io", "splent_feature_auth", "v1.1.1")
+            == "splent_io/splent_feature_auth@v1.1.1"
+        )
 
     def test_dash_namespace_normalised(self):
-        assert feature_key("splent-io", "splent_feature_auth") == "splent_io/splent_feature_auth"
+        assert (
+            feature_key("splent-io", "splent_feature_auth")
+            == "splent_io/splent_feature_auth"
+        )
 
     def test_version_none_gives_no_at(self):
         assert "@" not in feature_key("splent_io", "my_feature", None)
@@ -39,6 +49,7 @@ class TestFeatureKey:
 # ---------------------------------------------------------------------------
 # manifest_exists
 # ---------------------------------------------------------------------------
+
 
 class TestManifestExists:
     def test_false_when_no_file(self, tmp_path):
@@ -52,6 +63,7 @@ class TestManifestExists:
 # ---------------------------------------------------------------------------
 # read_manifest
 # ---------------------------------------------------------------------------
+
 
 class TestReadManifest:
     def test_returns_empty_scaffold_when_missing(self, tmp_path):
@@ -70,13 +82,19 @@ class TestReadManifest:
 # set_feature_state
 # ---------------------------------------------------------------------------
 
+
 class TestSetFeatureState:
     def _add(self, tmp_path, state="declared", version=None, mode="editable"):
         key = feature_key("splent_io", "my_feature", version)
         set_feature_state(
-            str(tmp_path), "my_product", key, state,
-            namespace="splent_io", name="my_feature",
-            version=version, mode=mode,
+            str(tmp_path),
+            "my_product",
+            key,
+            state,
+            namespace="splent_io",
+            name="my_feature",
+            version=version,
+            mode=mode,
         )
         return key
 
@@ -120,8 +138,12 @@ class TestSetFeatureState:
         first_declared_at = read_manifest(str(tmp_path))["features"][key]["declared_at"]
         # Advance to installed
         set_feature_state(
-            str(tmp_path), "my_product", key, "installed",
-            namespace="splent_io", name="my_feature",
+            str(tmp_path),
+            "my_product",
+            key,
+            "installed",
+            namespace="splent_io",
+            name="my_feature",
         )
         data = read_manifest(str(tmp_path))
         assert data["features"][key]["declared_at"] == first_declared_at
@@ -130,17 +152,33 @@ class TestSetFeatureState:
         key = feature_key("splent_io", "my_feature")
         with pytest.raises(ValueError, match="Unknown state"):
             set_feature_state(
-                str(tmp_path), "my_product", key, "flying",
-                namespace="splent_io", name="my_feature",
+                str(tmp_path),
+                "my_product",
+                key,
+                "flying",
+                namespace="splent_io",
+                name="my_feature",
             )
 
     def test_multiple_features_coexist(self, tmp_path):
         key_a = feature_key("splent_io", "feature_a")
         key_b = feature_key("splent_io", "feature_b")
-        set_feature_state(str(tmp_path), "prod", key_a, "declared",
-                          namespace="splent_io", name="feature_a")
-        set_feature_state(str(tmp_path), "prod", key_b, "active",
-                          namespace="splent_io", name="feature_b")
+        set_feature_state(
+            str(tmp_path),
+            "prod",
+            key_a,
+            "declared",
+            namespace="splent_io",
+            name="feature_a",
+        )
+        set_feature_state(
+            str(tmp_path),
+            "prod",
+            key_b,
+            "active",
+            namespace="splent_io",
+            name="feature_b",
+        )
         data = read_manifest(str(tmp_path))
         assert data["features"][key_a]["state"] == "declared"
         assert data["features"][key_b]["state"] == "active"
@@ -155,8 +193,12 @@ class TestSetFeatureState:
         for state in VALID_STATES:
             key = feature_key("splent_io", f"feature_{state}")
             set_feature_state(
-                str(tmp_path), "prod", key, state,
-                namespace="splent_io", name=f"feature_{state}",
+                str(tmp_path),
+                "prod",
+                key,
+                state,
+                namespace="splent_io",
+                name=f"feature_{state}",
             )
         data = read_manifest(str(tmp_path))
         for state in VALID_STATES:
@@ -168,11 +210,18 @@ class TestSetFeatureState:
 # remove_feature
 # ---------------------------------------------------------------------------
 
+
 class TestRemoveFeature:
     def test_removes_existing_entry(self, tmp_path):
         key = feature_key("splent_io", "my_feature")
-        set_feature_state(str(tmp_path), "prod", key, "declared",
-                          namespace="splent_io", name="my_feature")
+        set_feature_state(
+            str(tmp_path),
+            "prod",
+            key,
+            "declared",
+            namespace="splent_io",
+            name="my_feature",
+        )
         remove_feature(str(tmp_path), "prod", key)
         data = read_manifest(str(tmp_path))
         assert key not in data["features"]
@@ -186,8 +235,9 @@ class TestRemoveFeature:
         key_a = feature_key("splent_io", "keep_me")
         key_b = feature_key("splent_io", "remove_me")
         for k, n in [(key_a, "keep_me"), (key_b, "remove_me")]:
-            set_feature_state(str(tmp_path), "prod", k, "declared",
-                              namespace="splent_io", name=n)
+            set_feature_state(
+                str(tmp_path), "prod", k, "declared", namespace="splent_io", name=n
+            )
         remove_feature(str(tmp_path), "prod", key_b)
         data = read_manifest(str(tmp_path))
         assert key_a in data["features"]

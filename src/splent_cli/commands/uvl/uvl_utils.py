@@ -171,9 +171,7 @@ def list_all_features_from_uvl(uvl_path: str) -> tuple[list[str], str]:
     except click.ClickException:
         raise
     except Exception as exc:
-        raise click.ClickException(
-            f"Failed to parse UVL file '{uvl_path}': {exc}"
-        )
+        raise click.ClickException(f"Failed to parse UVL file '{uvl_path}': {exc}")
 
     root = get_root_feature(fm)
     root_name = getattr(root, "name", None)

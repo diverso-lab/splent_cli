@@ -1,4 +1,5 @@
 """Tests for release.bump — version format validation."""
+
 import pytest
 import click
 from splent_cli.services.release import bump

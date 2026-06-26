@@ -11,6 +11,7 @@ Focus:
 
 All subprocess / docker boundaries are mocked — no real docker / network.
 """
+
 import subprocess
 from unittest.mock import patch, MagicMock
 
@@ -41,17 +42,11 @@ def _deploy_workspace(tmp_path, monkeypatch):
     (docker_dir / ".env.deploy.example").write_text(
         "FLASK_APP=app\nMYSQL_DATABASE=splent\n"
     )
-    (docker_dir / ".env.deploy").write_text(
-        "FLASK_APP=app\nMYSQL_DATABASE=splent\n"
-    )
+    (docker_dir / ".env.deploy").write_text("FLASK_APP=app\nMYSQL_DATABASE=splent\n")
     # A compose file with an app port so the access-URL branch has something to
     # read; the deploy fails before it gets there in the failure tests.
     (docker_dir / "docker-compose.deploy.yml").write_text(
-        "services:\n"
-        "  web:\n"
-        "    image: test\n"
-        "    ports:\n"
-        '      - "8080:5000"\n'
+        'services:\n  web:\n    image: test\n    ports:\n      - "8080:5000"\n'
     )
     return docker_dir
 
@@ -60,27 +55,29 @@ def _deploy_workspace(tmp_path, monkeypatch):
 # Hardened: compose-up failure surfaces the captured error
 # ---------------------------------------------------------------------------
 
+
 class TestComposeUpFailureSurfacesError:
     def test_failure_dumps_captured_stderr(self, runner, tmp_path, monkeypatch):
         _deploy_workspace(tmp_path, monkeypatch)
 
-        error = subprocess.CalledProcessError(
-            1, ["docker", "compose", "up"]
-        )
+        error = subprocess.CalledProcessError(1, ["docker", "compose", "up"])
         error.stderr = "Error response from daemon: pull access denied for test"
         error.stdout = ""
 
-        with patch(
-            "splent_cli.commands.product.product_deploy.require_docker"
-        ), patch(
-            "splent_cli.commands.product.product_derive._extract_host_ports",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_derive._containers_using_port",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_deploy.subprocess.run",
-            side_effect=error,
+        with (
+            patch("splent_cli.commands.product.product_deploy.require_docker"),
+            patch(
+                "splent_cli.commands.product.product_derive._extract_host_ports",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_derive._containers_using_port",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_deploy.subprocess.run",
+                side_effect=error,
+            ),
         ):
             result = runner.invoke(product_deploy, [])
 
@@ -98,23 +95,24 @@ class TestComposeUpFailureSurfacesError:
     ):
         _deploy_workspace(tmp_path, monkeypatch)
 
-        error = subprocess.CalledProcessError(
-            1, ["docker", "compose", "up"]
-        )
+        error = subprocess.CalledProcessError(1, ["docker", "compose", "up"])
         error.stderr = ""
         error.stdout = "service web failed to build"
 
-        with patch(
-            "splent_cli.commands.product.product_deploy.require_docker"
-        ), patch(
-            "splent_cli.commands.product.product_derive._extract_host_ports",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_derive._containers_using_port",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_deploy.subprocess.run",
-            side_effect=error,
+        with (
+            patch("splent_cli.commands.product.product_deploy.require_docker"),
+            patch(
+                "splent_cli.commands.product.product_derive._extract_host_ports",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_derive._containers_using_port",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_deploy.subprocess.run",
+                side_effect=error,
+            ),
         ):
             result = runner.invoke(product_deploy, [])
 
@@ -122,9 +120,7 @@ class TestComposeUpFailureSurfacesError:
         assert "service web failed to build" in result.output
         assert "Traceback" not in result.output
 
-    def test_compose_up_uses_capture_output(
-        self, runner, tmp_path, monkeypatch
-    ):
+    def test_compose_up_uses_capture_output(self, runner, tmp_path, monkeypatch):
         """The up call must capture output, otherwise the error dump is empty."""
         _deploy_workspace(tmp_path, monkeypatch)
 
@@ -139,17 +135,20 @@ class TestComposeUpFailureSurfacesError:
                 captured_kwargs.update(kwargs)
             raise error
 
-        with patch(
-            "splent_cli.commands.product.product_deploy.require_docker"
-        ), patch(
-            "splent_cli.commands.product.product_derive._extract_host_ports",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_derive._containers_using_port",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_deploy.subprocess.run",
-            side_effect=fake_run,
+        with (
+            patch("splent_cli.commands.product.product_deploy.require_docker"),
+            patch(
+                "splent_cli.commands.product.product_derive._extract_host_ports",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_derive._containers_using_port",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_deploy.subprocess.run",
+                side_effect=fake_run,
+            ),
         ):
             result = runner.invoke(product_deploy, [])
 
@@ -163,14 +162,13 @@ class TestComposeUpFailureSurfacesError:
 # Hardened: docker missing -> clean message (no traceback)
 # ---------------------------------------------------------------------------
 
+
 class TestDockerMissing:
     def test_docker_missing_clean_message(self, runner, tmp_path, monkeypatch):
         _deploy_workspace(tmp_path, monkeypatch)
 
         # require_docker uses shutil.which via the proc helper; None => missing.
-        with patch(
-            "splent_cli.utils.proc.shutil.which", return_value=None
-        ):
+        with patch("splent_cli.utils.proc.shutil.which", return_value=None):
             result = runner.invoke(product_deploy, [])
 
         assert result.exit_code != 0
@@ -184,9 +182,7 @@ class TestDockerMissing:
         # --down only needs the compose file to exist (it does).
         assert (docker_dir / "docker-compose.deploy.yml").exists()
 
-        with patch(
-            "splent_cli.utils.proc.shutil.which", return_value=None
-        ):
+        with patch("splent_cli.utils.proc.shutil.which", return_value=None):
             result = runner.invoke(product_deploy, ["--down"])
 
         assert result.exit_code != 0
@@ -199,10 +195,9 @@ class TestDockerMissing:
 # Down: missing compose file
 # ---------------------------------------------------------------------------
 
+
 class TestDownMissingComposeFile:
-    def test_down_without_compose_exits_clean(
-        self, runner, tmp_path, monkeypatch
-    ):
+    def test_down_without_compose_exits_clean(self, runner, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
         (tmp_path / "test_app" / "docker").mkdir(parents=True)
@@ -217,6 +212,7 @@ class TestDownMissingComposeFile:
 # ---------------------------------------------------------------------------
 # Missing build artifacts
 # ---------------------------------------------------------------------------
+
 
 class TestMissingBuildArtifacts:
     def test_requires_splent_app(self, runner, tmp_path, monkeypatch):
@@ -239,9 +235,7 @@ class TestMissingBuildArtifacts:
         assert ".env.deploy.example not found" in result.output
         assert "product:build" in result.output
 
-    def test_missing_compose_tells_user_to_build(
-        self, runner, tmp_path, monkeypatch
-    ):
+    def test_missing_compose_tells_user_to_build(self, runner, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
         docker_dir = tmp_path / "test_app" / "docker"
@@ -259,10 +253,9 @@ class TestMissingBuildArtifacts:
 # Happy path
 # ---------------------------------------------------------------------------
 
+
 class TestHappyPath:
-    def test_successful_deploy_healthy_app(
-        self, runner, tmp_path, monkeypatch
-    ):
+    def test_successful_deploy_healthy_app(self, runner, tmp_path, monkeypatch):
         _deploy_workspace(tmp_path, monkeypatch)
 
         def fake_run(cmd, *args, **kwargs):
@@ -271,17 +264,20 @@ class TestHappyPath:
                 return MagicMock(returncode=0, stdout="200", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch(
-            "splent_cli.commands.product.product_deploy.require_docker"
-        ), patch(
-            "splent_cli.commands.product.product_derive._extract_host_ports",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_derive._containers_using_port",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.product.product_deploy.subprocess.run",
-            side_effect=fake_run,
+        with (
+            patch("splent_cli.commands.product.product_deploy.require_docker"),
+            patch(
+                "splent_cli.commands.product.product_derive._extract_host_ports",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_derive._containers_using_port",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.product.product_deploy.subprocess.run",
+                side_effect=fake_run,
+            ),
         ):
             result = runner.invoke(product_deploy, [])
 
@@ -293,11 +289,12 @@ class TestHappyPath:
     def test_successful_down(self, runner, tmp_path, monkeypatch):
         _deploy_workspace(tmp_path, monkeypatch)
 
-        with patch(
-            "splent_cli.commands.product.product_deploy.require_docker"
-        ), patch(
-            "splent_cli.commands.product.product_deploy.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="", stderr=""),
+        with (
+            patch("splent_cli.commands.product.product_deploy.require_docker"),
+            patch(
+                "splent_cli.commands.product.product_deploy.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
         ):
             result = runner.invoke(product_deploy, ["--down"])
 

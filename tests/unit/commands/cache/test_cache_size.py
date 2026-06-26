@@ -1,6 +1,7 @@
 """
 Tests for the cache:size command.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -23,6 +24,7 @@ def _make_cache_entry(workspace, namespace, dir_name, file_content=b"x" * 100):
 # _human() helper — pure logic
 # ---------------------------------------------------------------------------
 
+
 class TestHuman:
     def test_bytes(self):
         assert "B" in _human(500)
@@ -40,6 +42,7 @@ class TestHuman:
 # ---------------------------------------------------------------------------
 # _dir_size() helper
 # ---------------------------------------------------------------------------
+
 
 class TestDirSize:
     def test_returns_total_file_sizes(self, tmp_path):
@@ -60,6 +63,7 @@ class TestDirSize:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 class TestCacheSizeCommand:
     def test_empty_cache_shows_info(self, runner, workspace):

@@ -142,8 +142,7 @@ def _get_service_names(docker_dir, env):
             data = yaml.safe_load(f) or {}
     except (yaml.YAMLError, OSError) as e:
         click.secho(
-            f"  Could not parse compose file {compose_file}:\n"
-            f"    {e}",
+            f"  Could not parse compose file {compose_file}:\n    {e}",
             fg="yellow",
         )
         return []

@@ -15,6 +15,7 @@ re-applies feature migrations.  The hardened behavior we lock in here:
 Everything below mocks at the boundary: the db engine, current_app, the
 migration manager and alembic upgrade.  No real database / docker / network.
 """
+
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
@@ -27,6 +28,7 @@ from splent_cli.commands.database.db_reset import db_reset
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_engine(begin_side_effect=None, conn=None):
     """Build a fake SQLAlchemy engine whose .begin() is a context manager.
@@ -68,6 +70,7 @@ def _no_traceback(text: str):
 # Hardened: drop failures
 # ---------------------------------------------------------------------------
 
+
 class TestDropFailureGuards:
     def test_connection_failure_during_drop_reports_partial_state(self, monkeypatch):
         """engine.begin() raising (connection lost) → clean partial-state msg + exit 1."""
@@ -79,8 +82,10 @@ class TestDropFailureGuards:
         db_mock = _patches(engine)
 
         runner = CliRunner(mix_stderr=False)
-        with patch.object(db_reset_mod, "db", db_mock), \
-             patch.object(db_reset_mod, "current_app", MagicMock()):
+        with (
+            patch.object(db_reset_mod, "db", db_mock),
+            patch.object(db_reset_mod, "current_app", MagicMock()),
+        ):
             result = runner.invoke(db_reset, ["--yes"])
 
         assert result.exit_code != 0
@@ -112,9 +117,11 @@ class TestDropFailureGuards:
         fake_meta.sorted_tables = [fake_table]
 
         runner = CliRunner(mix_stderr=False)
-        with patch.object(db_reset_mod, "db", db_mock), \
-             patch.object(db_reset_mod, "current_app", MagicMock()), \
-             patch.object(db_reset_mod, "MetaData", return_value=fake_meta):
+        with (
+            patch.object(db_reset_mod, "db", db_mock),
+            patch.object(db_reset_mod, "current_app", MagicMock()),
+            patch.object(db_reset_mod, "MetaData", return_value=fake_meta),
+        ):
             result = runner.invoke(db_reset, ["--yes"])
 
         assert result.exit_code != 0
@@ -148,9 +155,11 @@ class TestDropFailureGuards:
         fake_meta.sorted_tables = []  # nothing to drop → STEP 1 succeeds
 
         runner = CliRunner(mix_stderr=False)
-        with patch.object(db_reset_mod, "db", db_mock), \
-             patch.object(db_reset_mod, "current_app", MagicMock()), \
-             patch.object(db_reset_mod, "MetaData", return_value=fake_meta):
+        with (
+            patch.object(db_reset_mod, "db", db_mock),
+            patch.object(db_reset_mod, "current_app", MagicMock()),
+            patch.object(db_reset_mod, "MetaData", return_value=fake_meta),
+        ):
             result = runner.invoke(db_reset, ["--yes"])
 
         assert result.exit_code != 0
@@ -164,6 +173,7 @@ class TestDropFailureGuards:
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
+
 
 class TestSuccessPath:
     def _run_success(self, monkeypatch, dirs):
@@ -185,15 +195,17 @@ class TestSuccessPath:
         mm.get_current_feature_revision.return_value = "abc123"
 
         runner = CliRunner(mix_stderr=False)
-        with patch.object(db_reset_mod, "db", db_mock), \
-             patch.object(db_reset_mod, "current_app", MagicMock()), \
-             patch.object(db_reset_mod, "MetaData", return_value=fake_meta), \
-             patch.object(db_reset_mod, "MigrationManager", mm), \
-             patch.object(db_reset_mod, "alembic_upgrade", MagicMock()), \
-             patch.object(db_reset_mod, "get_features_from_pyproject", return_value=[]), \
-             patch.object(db_reset_mod, "advance_state", MagicMock()), \
-             patch.object(db_reset_mod, "PathUtils", MagicMock()), \
-             patch.object(db_reset_mod, "clear_uploads", MagicMock()):
+        with (
+            patch.object(db_reset_mod, "db", db_mock),
+            patch.object(db_reset_mod, "current_app", MagicMock()),
+            patch.object(db_reset_mod, "MetaData", return_value=fake_meta),
+            patch.object(db_reset_mod, "MigrationManager", mm),
+            patch.object(db_reset_mod, "alembic_upgrade", MagicMock()),
+            patch.object(db_reset_mod, "get_features_from_pyproject", return_value=[]),
+            patch.object(db_reset_mod, "advance_state", MagicMock()),
+            patch.object(db_reset_mod, "PathUtils", MagicMock()),
+            patch.object(db_reset_mod, "clear_uploads", MagicMock()),
+        ):
             result = runner.invoke(db_reset, ["--yes"])
         return result, conn
 
@@ -228,6 +240,7 @@ class TestSuccessPath:
 # Confirmation guard
 # ---------------------------------------------------------------------------
 
+
 class TestConfirmationGuard:
     def test_aborts_without_yes_when_declined(self, monkeypatch):
         """Declining the destructive confirmation must NOT drop anything."""
@@ -237,8 +250,10 @@ class TestConfirmationGuard:
         db_mock = _patches(engine)
 
         runner = CliRunner(mix_stderr=False)
-        with patch.object(db_reset_mod, "db", db_mock), \
-             patch.object(db_reset_mod, "current_app", MagicMock()):
+        with (
+            patch.object(db_reset_mod, "db", db_mock),
+            patch.object(db_reset_mod, "current_app", MagicMock()),
+        ):
             result = runner.invoke(db_reset, [], input="n\n")
 
         assert result.exit_code != 0  # click abort

@@ -55,7 +55,9 @@ def product_clean(env_dev, env_prod, yes):
     product = context.require_app()
 
     click.secho(f"\n⚠️  This will completely wipe {product} ({env}):", fg="yellow")
-    click.echo("  - Stop all Docker containers and DELETE ALL VOLUMES/DATA (irreversible)")
+    click.echo(
+        "  - Stop all Docker containers and DELETE ALL VOLUMES/DATA (irreversible)"
+    )
     click.echo("  - Reset the database and regenerate migrations")
     click.echo("  - Clear uploads and application log")
     click.echo()

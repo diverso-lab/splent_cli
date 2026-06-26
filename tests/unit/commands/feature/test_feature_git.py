@@ -1,6 +1,7 @@
 """
 Tests for the feature:git command.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -16,6 +17,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # _find_feature_root() — pure filesystem helper
 # ---------------------------------------------------------------------------
+
 
 class TestFindFeatureRoot:
     def test_finds_in_product_symlinks(self, tmp_path):
@@ -34,7 +36,13 @@ class TestFindFeatureRoot:
 
     def test_finds_in_cache(self, tmp_path):
         pkg = "splent_feature_auth"
-        cache_dir = tmp_path / ".splent_cache" / "features" / "splent_io" / "splent_feature_auth@v1.0.0"
+        cache_dir = (
+            tmp_path
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "splent_feature_auth@v1.0.0"
+        )
         cache_dir.mkdir(parents=True)
 
         result = _find_feature_root(pkg, tmp_path, "test_app")
@@ -57,6 +65,7 @@ class TestFindFeatureRoot:
 # CLI: validation
 # ---------------------------------------------------------------------------
 
+
 class TestValidation:
     def test_requires_splent_app(self, runner, workspace):
         result = runner.invoke(feature_git, ["auth", "status"])
@@ -78,10 +87,17 @@ class TestValidation:
 # CLI: successful git execution
 # ---------------------------------------------------------------------------
 
+
 class TestSuccessfulExecution:
     def test_runs_git_in_feature_dir(self, runner, product_workspace):
         # Create feature in cache
-        cache_dir = product_workspace / ".splent_cache" / "features" / "splent_io" / "splent_feature_auth"
+        cache_dir = (
+            product_workspace
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "splent_feature_auth"
+        )
         cache_dir.mkdir(parents=True)
 
         with patch("subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
@@ -93,7 +109,13 @@ class TestSuccessfulExecution:
         assert "status" in call_args
 
     def test_exits_with_git_returncode(self, runner, product_workspace):
-        cache_dir = product_workspace / ".splent_cache" / "features" / "splent_io" / "splent_feature_auth"
+        cache_dir = (
+            product_workspace
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "splent_feature_auth"
+        )
         cache_dir.mkdir(parents=True)
 
         with patch("subprocess.run", return_value=MagicMock(returncode=1)):
@@ -102,7 +124,13 @@ class TestSuccessfulExecution:
         assert result.exit_code == 1
 
     def test_passes_extra_git_args(self, runner, product_workspace):
-        cache_dir = product_workspace / ".splent_cache" / "features" / "splent_io" / "splent_feature_auth"
+        cache_dir = (
+            product_workspace
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "splent_feature_auth"
+        )
         cache_dir.mkdir(parents=True)
 
         with patch("subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:

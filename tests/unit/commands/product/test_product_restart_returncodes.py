@@ -13,6 +13,7 @@ All docker/git/process boundaries are mocked:
 - the proc helper ``run`` (pip install + app start) and the directly-imported
   ``subprocess.run`` (feature restarts + pkill + pip list) are stubbed.
 """
+
 import click
 import pytest
 from unittest.mock import patch, MagicMock
@@ -71,6 +72,7 @@ def _patch_boundaries(detect_return):
 # Hardened: failing pip install -e returncode aborts the restart
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureInstallFailureSurfaced:
     def test_failing_pip_install_aborts_with_exit_1(self, runner, product_workspace):
         """One feature whose `pip install -e` returns non-zero → abort."""
@@ -87,12 +89,15 @@ class TestFeatureInstallFailureSurfaced:
         for p in patchers:
             p.start()
         try:
-            with patch(
-                "splent_cli.commands.product.product_restart.run",
-                side_effect=fake_run,
-            ), patch(
-                "splent_cli.commands.product.product_restart.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            with (
+                patch(
+                    "splent_cli.commands.product.product_restart.run",
+                    side_effect=fake_run,
+                ),
+                patch(
+                    "splent_cli.commands.product.product_restart.subprocess.run",
+                    return_value=MagicMock(returncode=0, stdout="", stderr=""),
+                ),
             ):
                 result = runner.invoke(product_restart, ["--dev"])
         finally:
@@ -107,7 +112,9 @@ class TestFeatureInstallFailureSurfaced:
         assert "Traceback" not in result.output
         assert "CalledProcessError" not in result.output
 
-    def test_failing_pip_install_never_reaches_app_start(self, runner, product_workspace):
+    def test_failing_pip_install_never_reaches_app_start(
+        self, runner, product_workspace
+    ):
         """If install fails, the app-start `docker exec -d ... bash` is never run."""
         to_install = [("splent_feature_auth", "/workspace/splent_feature_auth", True)]
 
@@ -124,12 +131,15 @@ class TestFeatureInstallFailureSurfaced:
         for p in patchers:
             p.start()
         try:
-            with patch(
-                "splent_cli.commands.product.product_restart.run",
-                side_effect=fake_run,
-            ), patch(
-                "splent_cli.commands.product.product_restart.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            with (
+                patch(
+                    "splent_cli.commands.product.product_restart.run",
+                    side_effect=fake_run,
+                ),
+                patch(
+                    "splent_cli.commands.product.product_restart.subprocess.run",
+                    return_value=MagicMock(returncode=0, stdout="", stderr=""),
+                ),
             ):
                 result = runner.invoke(product_restart, ["--dev"])
         finally:
@@ -144,27 +154,29 @@ class TestFeatureInstallFailureSurfaced:
 # Hardened: failing app-start returncode is surfaced
 # ---------------------------------------------------------------------------
 
+
 class TestAppStartFailureSurfaced:
     def test_failing_app_start_exits_1_and_no_success(self, runner, product_workspace):
         """No features to install, but the detached app-start exits non-zero."""
 
         def fake_run(cmd, *a, **k):
             if "-d" in cmd:  # detached app-start exec
-                return MagicMock(
-                    returncode=2, stdout="", stderr="no such container"
-                )
+                return MagicMock(returncode=2, stdout="", stderr="no such container")
             return MagicMock(returncode=0, stdout="", stderr="")
 
         patchers = _patch_boundaries([])  # nothing to install
         for p in patchers:
             p.start()
         try:
-            with patch(
-                "splent_cli.commands.product.product_restart.run",
-                side_effect=fake_run,
-            ), patch(
-                "splent_cli.commands.product.product_restart.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            with (
+                patch(
+                    "splent_cli.commands.product.product_restart.run",
+                    side_effect=fake_run,
+                ),
+                patch(
+                    "splent_cli.commands.product.product_restart.subprocess.run",
+                    return_value=MagicMock(returncode=0, stdout="", stderr=""),
+                ),
             ):
                 result = runner.invoke(product_restart, ["--dev"])
         finally:
@@ -188,12 +200,15 @@ class TestAppStartFailureSurfaced:
         for p in patchers:
             p.start()
         try:
-            with patch(
-                "splent_cli.commands.product.product_restart.run",
-                side_effect=fake_run,
-            ), patch(
-                "splent_cli.commands.product.product_restart.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            with (
+                patch(
+                    "splent_cli.commands.product.product_restart.run",
+                    side_effect=fake_run,
+                ),
+                patch(
+                    "splent_cli.commands.product.product_restart.subprocess.run",
+                    return_value=MagicMock(returncode=0, stdout="", stderr=""),
+                ),
             ):
                 result = runner.invoke(product_restart, ["--full", "--dev"])
         finally:
@@ -209,6 +224,7 @@ class TestAppStartFailureSurfaced:
 # Happy paths
 # ---------------------------------------------------------------------------
 
+
 class TestHappyPath:
     def test_no_changes_restart_succeeds(self, runner, product_workspace):
         """Nothing to install + app starts cleanly → exit 0, green done."""
@@ -220,12 +236,15 @@ class TestHappyPath:
         for p in patchers:
             p.start()
         try:
-            with patch(
-                "splent_cli.commands.product.product_restart.run",
-                side_effect=fake_run,
-            ), patch(
-                "splent_cli.commands.product.product_restart.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            with (
+                patch(
+                    "splent_cli.commands.product.product_restart.run",
+                    side_effect=fake_run,
+                ),
+                patch(
+                    "splent_cli.commands.product.product_restart.subprocess.run",
+                    return_value=MagicMock(returncode=0, stdout="", stderr=""),
+                ),
             ):
                 result = runner.invoke(product_restart, ["--dev"])
         finally:
@@ -247,12 +266,15 @@ class TestHappyPath:
         for p in patchers:
             p.start()
         try:
-            with patch(
-                "splent_cli.commands.product.product_restart.run",
-                side_effect=fake_run,
-            ), patch(
-                "splent_cli.commands.product.product_restart.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            with (
+                patch(
+                    "splent_cli.commands.product.product_restart.run",
+                    side_effect=fake_run,
+                ),
+                patch(
+                    "splent_cli.commands.product.product_restart.subprocess.run",
+                    return_value=MagicMock(returncode=0, stdout="", stderr=""),
+                ),
             ):
                 result = runner.invoke(product_restart, ["--dev"])
         finally:
@@ -270,24 +292,28 @@ class TestHappyPath:
             return MagicMock(returncode=0, stdout="", stderr="")
 
         # _detect_changes returns features, but --full must not invoke install.
-        detect = MagicMock(
-            return_value=[("splent_feature_auth", "/w/x", True)]
-        )
-        with patch(
-            "splent_cli.commands.product.product_restart.compose.find_main_container",
-            return_value="fake_container_id",
-        ), patch(
-            "splent_cli.commands.product.product_resolve.product_sync",
-            _noop_sync,
-        ), patch(
-            "splent_cli.commands.product.product_restart._detect_changes",
-            detect,
-        ), patch(
-            "splent_cli.commands.product.product_restart.run",
-            side_effect=fake_run,
-        ), patch(
-            "splent_cli.commands.product.product_restart.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="", stderr=""),
+        detect = MagicMock(return_value=[("splent_feature_auth", "/w/x", True)])
+        with (
+            patch(
+                "splent_cli.commands.product.product_restart.compose.find_main_container",
+                return_value="fake_container_id",
+            ),
+            patch(
+                "splent_cli.commands.product.product_resolve.product_sync",
+                _noop_sync,
+            ),
+            patch(
+                "splent_cli.commands.product.product_restart._detect_changes",
+                detect,
+            ),
+            patch(
+                "splent_cli.commands.product.product_restart.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "splent_cli.commands.product.product_restart.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
         ):
             result = runner.invoke(product_restart, ["--full", "--dev"])
 
@@ -299,6 +325,7 @@ class TestHappyPath:
 # ---------------------------------------------------------------------------
 # Guard: no running container
 # ---------------------------------------------------------------------------
+
 
 class TestNoContainer:
     def test_no_running_container_exits_1(self, runner, product_workspace):

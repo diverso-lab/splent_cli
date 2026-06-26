@@ -1,4 +1,5 @@
 """Tests for pure helper functions in env_set.py."""
+
 from click.testing import CliRunner
 
 from splent_cli.commands.env.env_set import (
@@ -12,6 +13,7 @@ from splent_cli.commands.env.env_set import (
 # ---------------------------------------------------------------------------
 # load_env
 # ---------------------------------------------------------------------------
+
 
 class TestLoadEnv:
     def test_returns_empty_when_no_env_file(self, workspace):
@@ -50,6 +52,7 @@ class TestLoadEnv:
 # write_env
 # ---------------------------------------------------------------------------
 
+
 class TestWriteEnv:
     def test_writes_key_value_pairs(self, workspace):
         write_env({"KEY": "val", "OTHER": "thing"})
@@ -79,6 +82,7 @@ class TestWriteEnv:
 # set_var
 # ---------------------------------------------------------------------------
 
+
 class TestSetVar:
     def test_sets_new_variable(self, workspace):
         (workspace / ".env").write_text("EXISTING=yes\n")
@@ -107,6 +111,7 @@ class TestSetVar:
 # ---------------------------------------------------------------------------
 # env:set command group — basic invocation
 # ---------------------------------------------------------------------------
+
 
 class TestEnvSetGroup:
     def test_help_text_shown(self, workspace):

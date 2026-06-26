@@ -4,6 +4,7 @@ db:dump shells out via splent_cli.utils.proc.run, which calls subprocess.run.
 We patch subprocess at that real boundary (splent_cli.utils.proc.subprocess)
 so these tests exercise the actual command/env that would reach the OS.
 """
+
 import os
 import subprocess
 from unittest.mock import patch, MagicMock
@@ -12,9 +13,7 @@ from splent_cli.commands.database.db_dump import db_dump
 
 
 class TestDbDumpCleanup:
-    def test_removes_partial_file_on_failure(
-        self, tmp_path, monkeypatch
-    ):
+    def test_removes_partial_file_on_failure(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SPLENT_APP", "test_app")
         monkeypatch.setenv("MARIADB_HOSTNAME", "localhost")
         monkeypatch.setenv("MARIADB_USER", "root")
@@ -23,9 +22,7 @@ class TestDbDumpCleanup:
 
         runner = CliRunner(mix_stderr=False)
         with runner.isolated_filesystem():
-            with patch(
-                "splent_cli.utils.proc.subprocess.run"
-            ) as mock_run:
+            with patch("splent_cli.utils.proc.subprocess.run") as mock_run:
                 # Simulate mysqldump partially writing the temp file, then
                 # failing. The final target file must NOT be created, and no
                 # stray temp file may be left behind.
@@ -33,9 +30,7 @@ class TestDbDumpCleanup:
                     fname = kwargs.get("stdout")
                     if fname and hasattr(fname, "write"):
                         fname.write(b"partial data")
-                    raise subprocess.CalledProcessError(
-                        1, "mysqldump"
-                    )
+                    raise subprocess.CalledProcessError(1, "mysqldump")
 
                 mock_run.side_effect = side_effect
 
@@ -46,11 +41,7 @@ class TestDbDumpCleanup:
                 # Safety: no partial FINAL file is left behind.
                 assert not os.path.exists("test_dump.sql")
                 # Safety: no stray temp file is left behind either.
-                leftovers = [
-                    f
-                    for f in os.listdir(".")
-                    if f.startswith(".db_dump_")
-                ]
+                leftovers = [f for f in os.listdir(".") if f.startswith(".db_dump_")]
                 assert leftovers == []
 
     def test_success_creates_file(self, tmp_path, monkeypatch):
@@ -62,9 +53,8 @@ class TestDbDumpCleanup:
 
         runner = CliRunner(mix_stderr=False)
         with runner.isolated_filesystem():
-            with patch(
-                "splent_cli.utils.proc.subprocess.run"
-            ) as mock_run:
+            with patch("splent_cli.utils.proc.subprocess.run") as mock_run:
+
                 def side_effect(*args, **kwargs):
                     out = kwargs.get("stdout")
                     if out and hasattr(out, "write"):
@@ -82,18 +72,12 @@ class TestDbDumpCleanup:
                 # temp file), and no temp file is left behind.
                 with open("test_dump.sql", "rb") as fh:
                     assert fh.read() == b"-- dump contents"
-                leftovers = [
-                    f
-                    for f in os.listdir(".")
-                    if f.startswith(".db_dump_")
-                ]
+                leftovers = [f for f in os.listdir(".") if f.startswith(".db_dump_")]
                 assert leftovers == []
 
 
 class TestDbDumpCredentialsNotInArgs:
-    def test_password_not_in_process_args_list(
-        self, tmp_path, monkeypatch
-    ):
+    def test_password_not_in_process_args_list(self, tmp_path, monkeypatch):
         """Password must never appear in argv (would leak via ps)."""
         monkeypatch.setenv("SPLENT_APP", "test_app")
         monkeypatch.setenv("MARIADB_HOSTNAME", "localhost")
@@ -106,9 +90,8 @@ class TestDbDumpCredentialsNotInArgs:
         captured_env = {}
 
         with runner.isolated_filesystem():
-            with patch(
-                "splent_cli.utils.proc.subprocess.run"
-            ) as mock_run:
+            with patch("splent_cli.utils.proc.subprocess.run") as mock_run:
+
                 def capture(*args, **kwargs):
                     if args:
                         captured_args.extend(args[0])
@@ -122,8 +105,6 @@ class TestDbDumpCredentialsNotInArgs:
                 runner.invoke(db_dump, ["test.sql"])
 
         # Security guarantee: the password is passed via MYSQL_PWD, never argv.
-        password_in_args = any(
-            "supersecret" in str(a) for a in captured_args
-        )
+        password_in_args = any("supersecret" in str(a) for a in captured_args)
         assert password_in_args is False
         assert captured_env.get("MYSQL_PWD") == "supersecret"

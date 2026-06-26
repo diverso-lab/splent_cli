@@ -1,6 +1,7 @@
 """
 Tests for the product:shell command.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -18,6 +19,7 @@ def runner():
 # _find_main_container() helper
 # ---------------------------------------------------------------------------
 
+
 class TestFindMainContainer:
     def test_returns_container_with_workspace_mount(self, tmp_path):
         def fake_run(cmd, **kwargs):
@@ -25,6 +27,7 @@ class TestFindMainContainer:
                 return MagicMock(returncode=0, stdout="abc123\n")
             if "inspect" in cmd:
                 return MagicMock(returncode=0, stdout="/workspace /other")
+
         with patch("subprocess.run", side_effect=fake_run):
             result = _find_main_container("proj", "file.yml", str(tmp_path))
         assert result == "abc123"
@@ -35,6 +38,7 @@ class TestFindMainContainer:
                 return MagicMock(returncode=0, stdout="abc123\ndef456\n")
             if "inspect" in cmd:
                 return MagicMock(returncode=0, stdout="/other")
+
         with patch("subprocess.run", side_effect=fake_run):
             result = _find_main_container("proj", "file.yml", str(tmp_path))
         assert result == "abc123"
@@ -48,6 +52,7 @@ class TestFindMainContainer:
 # ---------------------------------------------------------------------------
 # Flag validation
 # ---------------------------------------------------------------------------
+
 
 class TestFlagValidation:
     def test_rejects_both_dev_and_prod(self, runner, product_workspace):
@@ -65,6 +70,7 @@ class TestFlagValidation:
 # No compose file
 # ---------------------------------------------------------------------------
 
+
 class TestNoComposeFile:
     def test_exits_when_no_compose_file(self, runner, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
@@ -80,6 +86,7 @@ class TestNoComposeFile:
 # No running containers
 # ---------------------------------------------------------------------------
 
+
 class TestNoRunningContainers:
     def test_exits_when_no_containers(self, runner, product_workspace):
         with patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="")):
@@ -91,6 +98,7 @@ class TestNoRunningContainers:
 # ---------------------------------------------------------------------------
 # --service flag: exec by service name
 # ---------------------------------------------------------------------------
+
 
 class TestServiceFlag:
     def test_service_uses_compose_exec(self, runner, product_workspace):
@@ -113,6 +121,7 @@ class TestServiceFlag:
 # ---------------------------------------------------------------------------
 # Container found → exec
 # ---------------------------------------------------------------------------
+
 
 class TestContainerFound:
     def test_opens_shell_in_container(self, runner, product_workspace):

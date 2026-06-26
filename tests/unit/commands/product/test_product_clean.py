@@ -1,6 +1,7 @@
 """
 Tests for the product:clean command.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -21,6 +22,7 @@ def _success_run(*args, **kwargs):
 # Flag validation
 # ---------------------------------------------------------------------------
 
+
 class TestFlagValidation:
     def test_rejects_both_dev_and_prod(self, runner, product_workspace):
         result = runner.invoke(product_clean, ["--dev", "--prod", "--yes"])
@@ -36,6 +38,7 @@ class TestFlagValidation:
 # ---------------------------------------------------------------------------
 # Confirmation prompt
 # ---------------------------------------------------------------------------
+
 
 class TestConfirmation:
     def test_yes_flag_skips_confirmation(self, runner, product_workspace):
@@ -60,6 +63,7 @@ class TestConfirmation:
 # ---------------------------------------------------------------------------
 # Subprocess calls
 # ---------------------------------------------------------------------------
+
 
 class TestSubprocessCalls:
     def test_calls_db_reset(self, runner, product_workspace):
@@ -94,6 +98,7 @@ class TestSubprocessCalls:
 # ---------------------------------------------------------------------------
 # Environment selection
 # ---------------------------------------------------------------------------
+
 
 class TestEnvironmentSelection:
     def test_defaults_to_dev(self, runner, product_workspace):

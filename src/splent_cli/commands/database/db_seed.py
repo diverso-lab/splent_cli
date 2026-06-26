@@ -179,9 +179,7 @@ def db_seed(reset, yes, module):
             break
         except Exception as e:
             click.echo(
-                click.style(
-                    f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red"
-                )
+                click.style(f"❌ Error in {seeder.__class__.__name__}: {e}", fg="red")
             )
             success = False
             break

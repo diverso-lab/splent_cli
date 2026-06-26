@@ -11,6 +11,7 @@ How this works
 The key trick: set WORKING_DIR to str(tmp_path) and the context.workspace() service
 picks it up automatically. No Docker, no real filesystem, no env vars leak between tests.
 """
+
 import pytest
 from click.testing import CliRunner
 from pathlib import Path
@@ -19,6 +20,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Core fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def runner():
@@ -62,7 +64,7 @@ def product_workspace(tmp_path, monkeypatch):
 
     (product_dir / "pyproject.toml").write_text(
         '[project]\nname = "test_app"\nversion = "1.0.0"\n'
-        '[project.optional-dependencies]\nfeatures = []\n'
+        "[project.optional-dependencies]\nfeatures = []\n"
     )
     (docker_dir / "docker-compose.dev.yml").write_text("services: {}")
     (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
@@ -76,6 +78,7 @@ def product_workspace(tmp_path, monkeypatch):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_env_file(workspace_path: Path, content: str) -> Path:
     """Write a .env file into workspace_path and return its path."""
     env_file = workspace_path / ".env"
@@ -83,7 +86,9 @@ def make_env_file(workspace_path: Path, content: str) -> Path:
     return env_file
 
 
-def make_cache_entry(workspace_path: Path, namespace: str, name: str, version: str | None = None) -> Path:
+def make_cache_entry(
+    workspace_path: Path, namespace: str, name: str, version: str | None = None
+) -> Path:
     """
     Create a feature cache directory entry.
 

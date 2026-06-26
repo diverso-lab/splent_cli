@@ -11,6 +11,7 @@ Covered hardened behaviors (first), then a couple of happy-path cases:
 No real docker / git / network / templates: the Jinja render + raw-copy helpers
 are stubbed to drop empty files, and os.chown is patched at the boundary.
 """
+
 from unittest.mock import patch
 
 import pytest
@@ -79,6 +80,7 @@ def _assert_clean_stderr(result):
 # Hardened: chown is guarded (non-fatal)
 # ---------------------------------------------------------------------------
 
+
 class TestChownGuard:
     def test_permission_error_on_chown_is_non_fatal(self, runner, workspace):
         """os.chown raising PermissionError must NOT crash the command."""
@@ -109,9 +111,7 @@ class TestChownGuard:
     def test_chown_targets_uid_gid_1000(self, runner, workspace):
         """When chown succeeds it is invoked with uid/gid 1000 on the tree."""
         spl = _make_spl(workspace)
-        result, chown = _invoke_create(
-            runner, "myprod", spl, chown_side_effect=None
-        )
+        result, chown = _invoke_create(runner, "myprod", spl, chown_side_effect=None)
 
         assert result.exit_code == 0, result.stderr
         assert chown.called
@@ -124,6 +124,7 @@ class TestChownGuard:
 # ---------------------------------------------------------------------------
 # Hardened: existing product must fail loudly (non-zero) without --force
 # ---------------------------------------------------------------------------
+
 
 class TestAlreadyExistsGuard:
     def test_existing_product_exits_nonzero(self, runner, workspace):
@@ -159,6 +160,7 @@ class TestAlreadyExistsGuard:
 # ---------------------------------------------------------------------------
 # Core happy path
 # ---------------------------------------------------------------------------
+
 
 class TestHappyPath:
     def test_creates_product_tree(self, runner, workspace):

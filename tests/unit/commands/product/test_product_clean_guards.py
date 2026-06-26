@@ -53,11 +53,13 @@ def _down_fails(cmd, **kwargs):
 # Hardened behavior 1: destructive op requires confirmation + warns about data
 # ---------------------------------------------------------------------------
 
+
 class TestDestructiveConfirmation:
     def test_warns_volumes_and_data_deleted(self, runner, product_workspace):
         """The confirmation screen must spell out that volumes/data are wiped."""
-        with patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok), patch(
-            "splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok),
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
         ):
             result = runner.invoke(product_clean, ["--dev"], input="n\n")
         combined = result.output.lower()
@@ -66,8 +68,9 @@ class TestDestructiveConfirmation:
 
     def test_no_yes_and_decline_aborts_before_docker(self, runner, product_workspace):
         """Declining the prompt must stop BEFORE any docker call runs."""
-        with patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok) as mock_run, patch(
-            "splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok) as mock_run,
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
         ):
             result = runner.invoke(product_clean, ["--dev"], input="n\n")
         assert result.exit_code == 0
@@ -77,8 +80,9 @@ class TestDestructiveConfirmation:
 
     def test_prompt_required_without_yes(self, runner, product_workspace):
         """With no --yes and no input, click should not silently proceed."""
-        with patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok), patch(
-            "splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok),
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
         ):
             # Empty stdin → click.confirm gets EOF → aborts (non-success / no clean).
             result = runner.invoke(product_clean, ["--dev"])
@@ -89,20 +93,23 @@ class TestDestructiveConfirmation:
 # Hardened behavior 2: a failed `down -v` is SURFACED, not reported as stopped
 # ---------------------------------------------------------------------------
 
+
 class TestDownFailureSurfaced:
     def test_failure_does_not_claim_stopped(self, runner, product_workspace):
         """A non-zero `down -v` must NOT print the success 'stopped' message."""
-        with patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=_down_fails
-        ), patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"):
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_down_fails),
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
+        ):
             result = runner.invoke(product_clean, ["--dev", "--yes"])
         assert "stopped and volumes removed" not in result.output
 
     def test_failure_emits_warning_with_exit_code(self, runner, product_workspace):
         """A failed destructive op must surface a warning mentioning the failure."""
-        with patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=_down_fails
-        ), patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"):
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_down_fails),
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
+        ):
             result = runner.invoke(product_clean, ["--dev", "--yes"])
         out = result.output.lower()
         assert "failed" in out
@@ -110,9 +117,10 @@ class TestDownFailureSurfaced:
 
     def test_no_traceback_on_down_failure(self, runner, product_workspace):
         """Failure is handled cleanly: no raw traceback leaks to the user."""
-        with patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=_down_fails
-        ), patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"):
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_down_fails),
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
+        ):
             result = runner.invoke(product_clean, ["--dev", "--yes"])
         assert "Traceback" not in result.output
         assert "Traceback" not in (result.stderr or "")
@@ -123,6 +131,7 @@ class TestDownFailureSurfaced:
 # Hardened behavior 3: stderr is NOT swallowed on the destructive op
 # ---------------------------------------------------------------------------
 
+
 class TestStderrNotSwallowed:
     def test_down_call_does_not_capture_output(self, runner, product_workspace):
         """`down -v` must let stderr stream through (no capture_output=True).
@@ -131,10 +140,9 @@ class TestStderrNotSwallowed:
         We assert the actual subprocess invocation for the destructive command
         did not request output capture.
         """
-        with patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=_ok
-        ) as mock_run, patch(
-            "splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok) as mock_run,
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
         ):
             runner.invoke(product_clean, ["--dev", "--yes"])
 
@@ -149,10 +157,9 @@ class TestStderrNotSwallowed:
 
     def test_down_invocation_uses_down_v(self, runner, product_workspace):
         """Sanity: the destructive command really is `down -v`."""
-        with patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=_ok
-        ) as mock_run, patch(
-            "splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok) as mock_run,
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
         ):
             runner.invoke(product_clean, ["--dev", "--yes"])
         down_calls = [
@@ -169,12 +176,14 @@ class TestStderrNotSwallowed:
 # Hardened behavior 4: docker availability is checked before wiping
 # ---------------------------------------------------------------------------
 
+
 class TestRequiresDocker:
     def test_aborts_cleanly_when_docker_missing(self, runner, product_workspace):
         """If docker is not on PATH, fail with a clean message (no traceback)."""
-        with patch(
-            "splent_cli.utils.proc.shutil.which", return_value=None
-        ), patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok) as mock_run:
+        with (
+            patch("splent_cli.utils.proc.shutil.which", return_value=None),
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok) as mock_run,
+        ):
             result = runner.invoke(product_clean, ["--dev", "--yes"])
         assert result.exit_code != 0
         assert "Traceback" not in (result.stderr or "")
@@ -189,15 +198,18 @@ class TestRequiresDocker:
         def which_ok_info_fail(cmd, **kwargs):
             if "info" in cmd:
                 return MagicMock(
-                    returncode=1, stdout="", stderr="Cannot connect to the Docker daemon"
+                    returncode=1,
+                    stdout="",
+                    stderr="Cannot connect to the Docker daemon",
                 )
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch(
-            "splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=which_ok_info_fail
-        ) as mock_run:
+        with (
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
+            patch(
+                "splent_cli.utils.proc.subprocess.run", side_effect=which_ok_info_fail
+            ) as mock_run,
+        ):
             result = runner.invoke(product_clean, ["--dev", "--yes"])
         assert result.exit_code != 0
         assert "Traceback" not in (result.stderr or "")
@@ -214,11 +226,13 @@ class TestRequiresDocker:
 # Core happy-path
 # ---------------------------------------------------------------------------
 
+
 class TestHappyPath:
     def test_full_clean_succeeds(self, runner, product_workspace):
-        with patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=_ok
-        ), patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"):
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok),
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
+        ):
             result = runner.invoke(product_clean, ["--dev", "--yes"])
         assert result.exit_code == 0
         assert "stopped and volumes removed" in result.output
@@ -227,10 +241,9 @@ class TestHappyPath:
     def test_both_env_flags_rejected_before_any_subprocess(
         self, runner, product_workspace
     ):
-        with patch(
-            "splent_cli.utils.proc.subprocess.run", side_effect=_ok
-        ) as mock_run, patch(
-            "splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"
+        with (
+            patch("splent_cli.utils.proc.subprocess.run", side_effect=_ok) as mock_run,
+            patch("splent_cli.utils.proc.shutil.which", return_value="/usr/bin/docker"),
         ):
             result = runner.invoke(product_clean, ["--dev", "--prod", "--yes"])
         assert result.exit_code == 1

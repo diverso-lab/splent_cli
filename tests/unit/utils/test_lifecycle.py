@@ -1,6 +1,7 @@
 """
 Tests for the feature lifecycle state machine.
 """
+
 import pytest
 
 from splent_cli.utils.lifecycle import (
@@ -20,6 +21,7 @@ from splent_cli.utils.manifest import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def product(tmp_path):
     """A minimal product directory with manifest support."""
@@ -31,8 +33,14 @@ def product(tmp_path):
 def _set(product_path, state, name="splent_feature_auth", version="v1.2.2"):
     key = feature_key("splent_io", name, version)
     set_feature_state(
-        str(product_path), "test_app", key, state,
-        namespace="splent_io", name=name, version=version, mode="pinned",
+        str(product_path),
+        "test_app",
+        key,
+        state,
+        namespace="splent_io",
+        name=name,
+        version=version,
+        mode="pinned",
     )
     return key
 
@@ -41,8 +49,8 @@ def _set(product_path, state, name="splent_feature_auth", version="v1.2.2"):
 # Tests: state_rank
 # ---------------------------------------------------------------------------
 
-class TestStateRank:
 
+class TestStateRank:
     def test_declared_is_lowest(self):
         assert state_rank("declared") == 0
 
@@ -69,28 +77,36 @@ class TestStateRank:
 # Tests: require_state
 # ---------------------------------------------------------------------------
 
-class TestRequireState:
 
+class TestRequireState:
     def test_passes_when_no_state_tracked(self, product):
         """Untracked features should not block commands."""
         key = feature_key("splent_io", "splent_feature_auth", "v1.2.2")
-        result = require_state(str(product), key, min_state="installed", command="db:migrate")
+        result = require_state(
+            str(product), key, min_state="installed", command="db:migrate"
+        )
         assert result is None
 
     def test_passes_when_state_is_sufficient(self, product):
         key = _set(product, "installed")
-        result = require_state(str(product), key, min_state="installed", command="db:migrate")
+        result = require_state(
+            str(product), key, min_state="installed", command="db:migrate"
+        )
         assert result == "installed"
 
     def test_passes_when_state_exceeds_minimum(self, product):
         key = _set(product, "migrated")
-        result = require_state(str(product), key, min_state="installed", command="db:migrate")
+        result = require_state(
+            str(product), key, min_state="installed", command="db:migrate"
+        )
         assert result == "migrated"
 
     def test_blocks_when_state_is_insufficient(self, product):
         key = _set(product, "declared")
         with pytest.raises(SystemExit):
-            require_state(str(product), key, min_state="installed", command="db:migrate")
+            require_state(
+                str(product), key, min_state="installed", command="db:migrate"
+            )
 
     def test_blocks_when_state_is_in_blocked_set(self, product):
         key = _set(product, "migrated")
@@ -114,23 +130,31 @@ class TestRequireState:
 # Tests: advance_state
 # ---------------------------------------------------------------------------
 
-class TestAdvanceState:
 
+class TestAdvanceState:
     def test_advances_from_declared_to_installed(self, product):
         key = _set(product, "declared")
         advance_state(
-            str(product), "test_app", key,
-            to="installed", namespace="splent_io",
-            name="splent_feature_auth", version="v1.2.2",
+            str(product),
+            "test_app",
+            key,
+            to="installed",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.2.2",
         )
         assert get_feature_state(str(product), key) == "installed"
 
     def test_advances_from_installed_to_migrated(self, product):
         key = _set(product, "installed")
         advance_state(
-            str(product), "test_app", key,
-            to="migrated", namespace="splent_io",
-            name="splent_feature_auth", version="v1.2.2",
+            str(product),
+            "test_app",
+            key,
+            to="migrated",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.2.2",
         )
         assert get_feature_state(str(product), key) == "migrated"
 
@@ -138,9 +162,13 @@ class TestAdvanceState:
         """advance_state blocks regression to states not in the allow-list."""
         key = _set(product, "active")
         advance_state(
-            str(product), "test_app", key,
-            to="migrated", namespace="splent_io",
-            name="splent_feature_auth", version="v1.2.2",
+            str(product),
+            "test_app",
+            key,
+            to="migrated",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.2.2",
         )
         # Should still be "active" — migrated is not an allowed regression target
         assert get_feature_state(str(product), key) == "active"
@@ -149,9 +177,13 @@ class TestAdvanceState:
         """Rollback to installed is allowed (db:rollback sets this)."""
         key = _set(product, "active")
         advance_state(
-            str(product), "test_app", key,
-            to="installed", namespace="splent_io",
-            name="splent_feature_auth", version="v1.2.2",
+            str(product),
+            "test_app",
+            key,
+            to="installed",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.2.2",
         )
         assert get_feature_state(str(product), key) == "installed"
 
@@ -159,27 +191,39 @@ class TestAdvanceState:
         """Rollback to declared is allowed (explicit regression)."""
         key = _set(product, "installed")
         advance_state(
-            str(product), "test_app", key,
-            to="declared", namespace="splent_io",
-            name="splent_feature_auth", version="v1.2.2",
+            str(product),
+            "test_app",
+            key,
+            to="declared",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.2.2",
         )
         assert get_feature_state(str(product), key) == "declared"
 
     def test_allows_regression_to_disabled(self, product):
         key = _set(product, "active")
         advance_state(
-            str(product), "test_app", key,
-            to="disabled", namespace="splent_io",
-            name="splent_feature_auth", version="v1.2.2",
+            str(product),
+            "test_app",
+            key,
+            to="disabled",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.2.2",
         )
         assert get_feature_state(str(product), key) == "disabled"
 
     def test_creates_entry_if_not_tracked(self, product):
         key = feature_key("splent_io", "splent_feature_new", "v1.0.0")
         advance_state(
-            str(product), "test_app", key,
-            to="installed", namespace="splent_io",
-            name="splent_feature_new", version="v1.0.0",
+            str(product),
+            "test_app",
+            key,
+            to="installed",
+            namespace="splent_io",
+            name="splent_feature_new",
+            version="v1.0.0",
         )
         assert get_feature_state(str(product), key) == "installed"
 
@@ -188,8 +232,8 @@ class TestAdvanceState:
 # Tests: resolve_feature_key_from_entry
 # ---------------------------------------------------------------------------
 
-class TestResolveFeatureKeyFromEntry:
 
+class TestResolveFeatureKeyFromEntry:
     def test_full_entry(self):
         key, ns, name, ver = resolve_feature_key_from_entry(
             "splent-io/splent_feature_auth@v1.2.2"
@@ -214,7 +258,5 @@ class TestResolveFeatureKeyFromEntry:
         assert key == "splent_io/splent_feature_auth"
 
     def test_dot_org(self):
-        key, ns, name, ver = resolve_feature_key_from_entry(
-            "my.org/my_feature@v2.0.0"
-        )
+        key, ns, name, ver = resolve_feature_key_from_entry("my.org/my_feature@v2.0.0")
         assert ns == "my_org"

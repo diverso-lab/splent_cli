@@ -4,6 +4,7 @@ Tests for the env:list command.
 Pattern: real .env file via tmp_path + monkeypatch os.environ for in-env checks.
 No subprocess needed — this command only reads files and the process environment.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -19,6 +20,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # Missing .env file
 # ---------------------------------------------------------------------------
+
 
 class TestMissingEnvFile:
     def test_exits_when_no_env_file(self, runner, workspace):
@@ -72,14 +74,15 @@ class TestBasicOutput:
         make_env_file(workspace, ENV_CONTENT)
         result = runner.invoke(env_list, [])
         assert result.exit_code == 0
-        assert "SPLENT" in result.output   # category header
-        assert "GitHub" in result.output   # category header
+        assert "SPLENT" in result.output  # category header
+        assert "GitHub" in result.output  # category header
         assert "Database" in result.output  # category header
 
 
 # ---------------------------------------------------------------------------
 # --keys-only flag
 # ---------------------------------------------------------------------------
+
 
 class TestKeysOnly:
     def test_prints_one_key_per_line(self, runner, workspace):
@@ -103,6 +106,7 @@ class TestKeysOnly:
 # ---------------------------------------------------------------------------
 # Filter argument
 # ---------------------------------------------------------------------------
+
 
 class TestFilter:
     def test_filter_by_prefix(self, runner, workspace):
@@ -131,6 +135,7 @@ class TestFilter:
 # --unset flag
 # ---------------------------------------------------------------------------
 
+
 class TestUnset:
     def test_shows_only_unset_vars(self, runner, workspace, monkeypatch):
         make_env_file(workspace, "LOADED_KEY=foo\nMISSING_KEY=bar\n")
@@ -155,6 +160,7 @@ class TestUnset:
 # Status indicators (✔ · ≠)
 # ---------------------------------------------------------------------------
 
+
 class TestStatusIndicators:
     def test_check_when_var_matches(self, runner, workspace, monkeypatch):
         make_env_file(workspace, "MY_VAR=hello\n")
@@ -178,6 +184,7 @@ class TestStatusIndicators:
 # ---------------------------------------------------------------------------
 # Comments and blank lines in .env are ignored
 # ---------------------------------------------------------------------------
+
 
 class TestEnvFileParsing:
     def test_comments_ignored(self, runner, workspace):

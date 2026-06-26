@@ -63,8 +63,11 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 
-[tool.black]
-line-length = 79
+# Canonical formatter/linter is Ruff (`splent lint` runs `ruff check` +
+# `ruff format`). Ruff's default line length (88) is the project standard;
+# set explicitly here so it is unambiguous.
+[tool.ruff]
+line-length = 88
 
 [project.urls]
 Homepage = "https://github.com/diverso-lab/splent_cli"

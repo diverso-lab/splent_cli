@@ -62,7 +62,9 @@ def product_runc(env_dev, env_prod):
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
-        click.secho("  Failed to query running containers via 'docker compose ps'.", fg="red")
+        click.secho(
+            "  Failed to query running containers via 'docker compose ps'.", fg="red"
+        )
         if detail:
             click.secho(f"  {detail}", fg="red")
         raise SystemExit(result.returncode)

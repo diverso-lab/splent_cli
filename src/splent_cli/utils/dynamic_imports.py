@@ -48,9 +48,7 @@ def install_features_if_needed():
         if not os.path.exists(pyproject_feature):
             continue
 
-        feature_toml = load_toml(
-            pyproject_feature, what=f"{feature}/pyproject.toml"
-        )
+        feature_toml = load_toml(pyproject_feature, what=f"{feature}/pyproject.toml")
         name = feature_toml.get("project", {}).get("name")
         if not name:
             click.secho(

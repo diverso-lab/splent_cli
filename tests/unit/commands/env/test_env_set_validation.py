@@ -1,4 +1,5 @@
 """Tests for env:set — value validation."""
+
 import pytest
 from splent_cli.commands.env.env_set import _validate_env_value
 import click

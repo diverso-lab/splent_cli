@@ -4,6 +4,7 @@ Tests for the product:build command.
 product:build is pure filesystem: reads env files + docker-compose YAML,
 merges them, and writes output files. No subprocess calls.
 """
+
 import yaml
 import pytest
 from click.testing import CliRunner
@@ -25,6 +26,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # Unit tests for pure helpers
 # ---------------------------------------------------------------------------
+
 
 class TestLoadEnvFile:
     def test_returns_empty_for_missing_file(self, tmp_path):
@@ -106,6 +108,7 @@ class TestMergeCompose:
 # Integration: full CLI command
 # ---------------------------------------------------------------------------
 
+
 class TestProductBuildCommand:
     def test_exits_when_no_docker_dir(self, runner, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
@@ -122,7 +125,9 @@ class TestProductBuildCommand:
 
     def test_creates_env_deploy_example(self, runner, product_workspace):
         docker_dir = product_workspace / "test_app" / "docker"
-        (docker_dir / ".env.prod.example").write_text("API_KEY=secret\nDB_HOST=localhost\n")
+        (docker_dir / ".env.prod.example").write_text(
+            "API_KEY=secret\nDB_HOST=localhost\n"
+        )
         (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
 
         result = runner.invoke(product_build, ["--skip-preflight"])
@@ -171,7 +176,9 @@ class TestProductBuildCommand:
         feat_docker = product_workspace / "splent_feature_auth" / "docker"
         feat_docker.mkdir(parents=True)
         (feat_docker / ".env.example").write_text("AUTH_SECRET=abc\n")
-        (feat_docker / "docker-compose.prod.yml").write_text("services:\n  auth:\n    image: auth\n")
+        (feat_docker / "docker-compose.prod.yml").write_text(
+            "services:\n  auth:\n    image: auth\n"
+        )
 
         result = runner.invoke(product_build, ["--skip-preflight"], input="y\n")
         assert result.exit_code == 0

@@ -4,6 +4,7 @@ Tests for splent_cli.services.context
 These functions have no external dependencies — just os.getenv and click.
 Test them directly (not through a command) for clarity.
 """
+
 import pytest
 from pathlib import Path
 from click.testing import CliRunner
@@ -15,6 +16,7 @@ from splent_cli.services import context
 # ---------------------------------------------------------------------------
 # context.workspace()
 # ---------------------------------------------------------------------------
+
 
 class TestWorkspace:
     def test_default_is_workspace(self, monkeypatch):
@@ -33,6 +35,7 @@ class TestWorkspace:
 # ---------------------------------------------------------------------------
 # context.require_app()
 # ---------------------------------------------------------------------------
+
 
 class TestRequireApp:
     def test_returns_app_name(self, monkeypatch):
@@ -63,6 +66,7 @@ class TestRequireApp:
 # ---------------------------------------------------------------------------
 # context.resolve_env()
 # ---------------------------------------------------------------------------
+
 
 class TestResolveEnv:
     def test_prod_flag_wins(self, monkeypatch):

@@ -142,9 +142,13 @@ class TestFrameworkImportError:
         # Setting the module to None in sys.modules makes the in-function
         # `from splent_framework.managers.migration_manager import ...`
         # raise ImportError, simulating an out-of-date framework.
-        with app_patch, ws_patch, patch.dict(
-            sys.modules,
-            {"splent_framework.managers.migration_manager": None},
+        with (
+            app_patch,
+            ws_patch,
+            patch.dict(
+                sys.modules,
+                {"splent_framework.managers.migration_manager": None},
+            ),
         ):
             result = runner.invoke(feature_status, [])
 

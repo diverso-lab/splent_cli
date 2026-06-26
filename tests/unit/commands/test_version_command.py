@@ -1,4 +1,5 @@
 """Tests for the version command and its pure helpers."""
+
 import json
 import pytest
 from click.testing import CliRunner
@@ -19,6 +20,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # _fingerprint
 # ---------------------------------------------------------------------------
+
 
 class TestFingerprint:
     def test_returns_8_char_hex(self):
@@ -43,6 +45,7 @@ class TestFingerprint:
 # ---------------------------------------------------------------------------
 # _parse_feature_ref
 # ---------------------------------------------------------------------------
+
 
 class TestParseFeatureRef:
     def test_namespaced_versioned(self):
@@ -70,9 +73,12 @@ class TestParseFeatureRef:
 # _feature_location
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureLocation:
     def test_returns_cache_when_versioned_dir_exists(self, tmp_path):
-        cache_dir = tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1.0.0"
+        cache_dir = (
+            tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1.0.0"
+        )
         cache_dir.mkdir(parents=True)
         result = _feature_location(str(tmp_path), "splent_io/auth@v1.0.0")
         assert result == "cache"
@@ -97,13 +103,17 @@ class TestFeatureLocation:
         assert result == "missing"
 
     def test_handles_dashed_namespace(self, tmp_path):
-        cache_dir = tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1.0.0"
+        cache_dir = (
+            tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1.0.0"
+        )
         cache_dir.mkdir(parents=True)
         result = _feature_location(str(tmp_path), "splent-io/auth@v1.0.0")
         assert result == "cache"
 
     def test_no_namespace_defaults_to_splent_io(self, tmp_path):
-        cache_dir = tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1.0.0"
+        cache_dir = (
+            tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1.0.0"
+        )
         cache_dir.mkdir(parents=True)
         result = _feature_location(str(tmp_path), "auth@v1.0.0")
         assert result == "cache"
@@ -112,6 +122,7 @@ class TestFeatureLocation:
 # ---------------------------------------------------------------------------
 # version command
 # ---------------------------------------------------------------------------
+
 
 class TestVersionCommand:
     def test_shows_cli_label(self, runner, workspace):
@@ -167,7 +178,9 @@ class TestVersionCommand:
         assert payload["features"][0]["name"] == "auth"
         assert payload["features"][0]["version"] == "v1.0.0"
 
-    def test_json_feature_location_missing_when_not_cached(self, runner, product_workspace):
+    def test_json_feature_location_missing_when_not_cached(
+        self, runner, product_workspace
+    ):
         (product_workspace / "test_app" / "pyproject.toml").write_text(
             '[project]\nname = "test_app"\nversion = "1.0.0"\n'
             '[project.optional-dependencies]\nfeatures = ["splent_io/auth@v1.0.0"]\n'

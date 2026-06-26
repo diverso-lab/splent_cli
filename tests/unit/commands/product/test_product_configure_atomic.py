@@ -23,6 +23,7 @@ boundary so no network / pip / flamapy / filesystem-catalog is needed:
     patched — the command imports ``run`` locally, so patching the source
     module attribute takes effect.
 """
+
 import os
 import tempfile
 import tomllib
@@ -85,9 +86,7 @@ def _patch_flow(monkeypatch, model, *, selected, pip_run):
     Returns nothing; installs all patches via monkeypatch.
     """
     monkeypatch.setattr(pc, "_load_spl_model", lambda catalog_dir, spl: model)
-    monkeypatch.setattr(
-        pc, "_configure_subtree", lambda *a, **k: None
-    )
+    monkeypatch.setattr(pc, "_configure_subtree", lambda *a, **k: None)
     # propagate(selected, model, mandatory, excluded=None) -> (selected, excluded)
     monkeypatch.setattr(
         pc,
@@ -105,6 +104,7 @@ def _patch_flow(monkeypatch, model, *, selected, pip_run):
         "list_all_features_from_uvl",
         lambda path: (["Auth"], "MyProduct"),
     )
+
     # Return a REAL throwaway file path: the command does os.remove() on it.
     def _fake_csvconf(universe, sel):
         fd, p = tempfile.mkstemp(suffix=".csvconf")
@@ -118,9 +118,7 @@ def _patch_flow(monkeypatch, model, *, selected, pip_run):
 
     fake_fma = MagicMock()
     fake_fma.satisfiable_configuration.return_value = True
-    monkeypatch.setattr(
-        ffm, "FLAMAFeatureModel", lambda path: fake_fma
-    )
+    monkeypatch.setattr(ffm, "FLAMAFeatureModel", lambda path: fake_fma)
 
     # The pip index versions shell-out, imported locally from proc.
     monkeypatch.setattr("splent_cli.utils.proc.run", pip_run)
@@ -158,9 +156,7 @@ class TestAtomicWriteWithBackup:
         assert "splent-io/splent_feature_auth@v1.2.3" in features
         assert "stale/old@v0.0.1" not in features
         # No partial/temp file left in the product dir.
-        leftovers = [
-            n for n in os.listdir(product_path) if n.endswith(".tmp")
-        ]
+        leftovers = [n for n in os.listdir(product_path) if n.endswith(".tmp")]
         assert leftovers == []
 
     def test_backup_file_created_with_original_content(
@@ -186,9 +182,7 @@ class TestAtomicWriteWithBackup:
         # Backup holds the ORIGINAL (pre-write) content.
         assert bak.read_bytes() == original_bytes
 
-    def test_cancel_leaves_pyproject_untouched(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_cancel_leaves_pyproject_untouched(self, tmp_path, monkeypatch, runner):
         workspace, product_path, pyproject = _setup_product(tmp_path)
         monkeypatch.setenv("WORKING_DIR", str(workspace))
         monkeypatch.setenv("SPLENT_APP", "test_app")
@@ -217,18 +211,14 @@ class TestAtomicWriteWithBackup:
 
 
 class TestVersionResolutionFailureWarns:
-    def test_warns_when_pip_index_returns_nothing(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_warns_when_pip_index_returns_nothing(self, tmp_path, monkeypatch, runner):
         workspace, product_path, pyproject = _setup_product(tmp_path)
         monkeypatch.setenv("WORKING_DIR", str(workspace))
         monkeypatch.setenv("SPLENT_APP", "test_app")
 
         model = _make_model()
         # No cache dir at all → must fall through to pip, which returns nothing.
-        pip_run = MagicMock(
-            return_value=MagicMock(returncode=1, stdout="", stderr="")
-        )
+        pip_run = MagicMock(return_value=MagicMock(returncode=1, stdout="", stderr=""))
         _patch_flow(monkeypatch, model, selected={"Auth"}, pip_run=pip_run)
 
         result = runner.invoke(product_configure, input="y\n")
@@ -242,9 +232,7 @@ class TestVersionResolutionFailureWarns:
         # No traceback leaked.
         assert "Traceback" not in result.output
 
-    def test_pip_used_only_when_cache_misses(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_pip_used_only_when_cache_misses(self, tmp_path, monkeypatch, runner):
         workspace, product_path, pyproject = _setup_product(tmp_path)
         monkeypatch.setenv("WORKING_DIR", str(workspace))
         monkeypatch.setenv("SPLENT_APP", "test_app")
@@ -267,8 +255,7 @@ class TestVersionResolutionFailureWarns:
         with open(pyproject, "rb") as f:
             data = tomllib.load(f)
         assert (
-            "splent-io/splent_feature_auth@v3.4.5"
-            in data["tool"]["splent"]["features"]
+            "splent-io/splent_feature_auth@v3.4.5" in data["tool"]["splent"]["features"]
         )
 
 
@@ -278,9 +265,7 @@ class TestVersionResolutionFailureWarns:
 
 
 class TestPreApplyGuards:
-    def test_missing_product_pyproject_clean_error(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_missing_product_pyproject_clean_error(self, tmp_path, monkeypatch, runner):
         # Workspace exists but the product dir / pyproject does not.
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "ghost_app")
@@ -289,9 +274,7 @@ class TestPreApplyGuards:
         assert "Product not found" in result.stderr
         assert "Traceback" not in result.stderr
 
-    def test_no_spl_configured_clean_error(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_no_spl_configured_clean_error(self, tmp_path, monkeypatch, runner):
         product_path = tmp_path / "test_app"
         product_path.mkdir()
         (product_path / "pyproject.toml").write_bytes(

@@ -18,6 +18,7 @@ def runner():
 
 def _write_pyproject(product_path, features: list[str]):
     import tomli_w
+
     data = {
         "project": {
             "name": "test_product",
@@ -34,14 +35,25 @@ class TestFeatureStatusWithManifest:
         product_path.mkdir()
         key = feature_key("splent_io", "splent_feature_auth", "v1.1.1")
         set_feature_state(
-            str(product_path), "test_product", key, "declared",
-            namespace="splent_io", name="splent_feature_auth", version="v1.1.1",
+            str(product_path),
+            "test_product",
+            key,
+            "declared",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.1.1",
             mode="pinned",
         )
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, [])
         assert result.exit_code == 0
         assert "test_product" in result.output
@@ -52,14 +64,25 @@ class TestFeatureStatusWithManifest:
         _write_pyproject(product_path, ["splent_io/splent_feature_auth@v1.1.1"])
         key = feature_key("splent_io", "splent_feature_auth", "v1.1.1")
         set_feature_state(
-            str(product_path), "test_product", key, "active",
-            namespace="splent_io", name="splent_feature_auth", version="v1.1.1",
+            str(product_path),
+            "test_product",
+            key,
+            "active",
+            namespace="splent_io",
+            name="splent_feature_auth",
+            version="v1.1.1",
             mode="pinned",
         )
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, [])
         assert "splent_feature_auth" in result.output
 
@@ -69,14 +92,25 @@ class TestFeatureStatusWithManifest:
         _write_pyproject(product_path, ["splent_io/splent_feature_redis@v1.1.0"])
         key = feature_key("splent_io", "splent_feature_redis", "v1.1.0")
         set_feature_state(
-            str(product_path), "test_product", key, "installed",
-            namespace="splent_io", name="splent_feature_redis", version="v1.1.0",
+            str(product_path),
+            "test_product",
+            key,
+            "installed",
+            namespace="splent_io",
+            name="splent_feature_redis",
+            version="v1.1.0",
             mode="pinned",
         )
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, [])
         assert "installed" in result.output
 
@@ -85,13 +119,23 @@ class TestFeatureStatusWithManifest:
         product_path.mkdir()
         key = feature_key("splent_io", "my_feature")
         set_feature_state(
-            str(product_path), "test_product", key, "declared",
-            namespace="splent_io", name="my_feature",
+            str(product_path),
+            "test_product",
+            key,
+            "declared",
+            namespace="splent_io",
+            name="my_feature",
         )
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, ["--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -104,10 +148,16 @@ class TestFeatureStatusWithManifest:
         (product_path / "splent.manifest.json").write_text(
             '{"schema_version": "1", "features": {}, "product": "test_product"}'
         )
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, [])
         assert "No features" in result.output
 
@@ -117,10 +167,16 @@ class TestFeatureStatusFallback:
         product_path = workspace / "test_product"
         product_path.mkdir()
         _write_pyproject(product_path, ["splent_feature_auth@v1.1.1"])
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, [])
         assert result.exit_code == 0
         assert "splent.manifest.json" in result.output
@@ -131,10 +187,16 @@ class TestFeatureStatusFallback:
         _write_pyproject(
             product_path, ["splent_feature_auth@v1.1.1", "splent_feature_public@v1.1.0"]
         )
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, [])
         assert "splent_feature_auth" in result.output
         assert "splent_feature_public" in result.output
@@ -143,9 +205,15 @@ class TestFeatureStatusFallback:
         product_path = workspace / "test_product"
         product_path.mkdir()
         _write_pyproject(product_path, ["my_feature"])
-        with patch("splent_cli.commands.feature.feature_status.context.require_app",
-                   return_value="test_product"), \
-             patch("splent_cli.commands.feature.feature_status.context.workspace",
-                   return_value=workspace):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_status.context.require_app",
+                return_value="test_product",
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_status.context.workspace",
+                return_value=workspace,
+            ),
+        ):
             result = runner.invoke(feature_status, [])
         assert "declared" in result.output

@@ -3,6 +3,7 @@ Tests for the check:pypi command.
 
 All HTTP calls are mocked.
 """
+
 import urllib.error
 import pytest
 from unittest.mock import patch, MagicMock
@@ -23,6 +24,7 @@ def _http_error(code):
 # ---------------------------------------------------------------------------
 # Missing credentials
 # ---------------------------------------------------------------------------
+
 
 class TestMissingCredentials:
     def test_exits_when_no_username(self, runner, monkeypatch):
@@ -45,6 +47,7 @@ class TestMissingCredentials:
 # ---------------------------------------------------------------------------
 # Valid credentials (PyPI returns 400 = expected for empty upload)
 # ---------------------------------------------------------------------------
+
 
 class TestValidCredentials:
     def test_exits_0_on_400(self, runner, monkeypatch):
@@ -72,6 +75,7 @@ class TestValidCredentials:
 # Invalid credentials
 # ---------------------------------------------------------------------------
 
+
 class TestInvalidCredentials:
     def test_exits_1_on_401(self, runner, monkeypatch):
         monkeypatch.setenv("TWINE_USERNAME", "myuser")
@@ -93,7 +97,9 @@ class TestInvalidCredentials:
         monkeypatch.setenv("TWINE_USERNAME", "myuser")
         monkeypatch.setenv("TWINE_PASSWORD", "some_pass")
 
-        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("unreachable")):
+        with patch(
+            "urllib.request.urlopen", side_effect=urllib.error.URLError("unreachable")
+        ):
             result = runner.invoke(check_pypi, [])
         assert result.exit_code == 1
 
@@ -102,6 +108,7 @@ class TestInvalidCredentials:
 # Token format check
 # ---------------------------------------------------------------------------
 
+
 class TestTokenFormat:
     def test_warns_if_token_user_without_pypi_prefix(self, runner, monkeypatch):
         monkeypatch.setenv("TWINE_USERNAME", "__token__")
@@ -109,7 +116,11 @@ class TestTokenFormat:
 
         with patch("urllib.request.urlopen", side_effect=_http_error(400)):
             result = runner.invoke(check_pypi, [])
-        assert "pypi-" in result.output or "invalid" in result.output.lower() or "may be" in result.output
+        assert (
+            "pypi-" in result.output
+            or "invalid" in result.output.lower()
+            or "may be" in result.output
+        )
 
     def test_correct_token_format_acknowledged(self, runner, monkeypatch):
         monkeypatch.setenv("TWINE_USERNAME", "__token__")
@@ -123,6 +134,7 @@ class TestTokenFormat:
 # ---------------------------------------------------------------------------
 # --test flag (TestPyPI)
 # ---------------------------------------------------------------------------
+
 
 class TestTestPyPI:
     def test_uses_testpypi_url(self, runner, monkeypatch):

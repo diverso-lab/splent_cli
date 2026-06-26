@@ -63,7 +63,9 @@ def backup_file(path: str | os.PathLike, suffix: str = ".bak") -> Path | None:
     return bak
 
 
-def atomic_write(path: str | os.PathLike, content: str, *, encoding: str = "utf-8") -> None:
+def atomic_write(
+    path: str | os.PathLike, content: str, *, encoding: str = "utf-8"
+) -> None:
     """Write ``content`` to ``path`` atomically (temp file in the same dir +
     ``os.replace``), so a failure never leaves a half-written/truncated file.
 

@@ -13,6 +13,7 @@ Plus core happy-path: successful fork invokes clone with the right full_name.
 All network calls are mocked at the requests boundary; the downstream
 feature_clone invocation is patched so no real git/network runs.
 """
+
 import requests
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -55,12 +56,13 @@ class TestForkPostErrors:
         monkeypatch.setenv("GITHUB_USER", "octocat")
         runner = CliRunner(mix_stderr=False)
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            side_effect=requests.ConnectionError("boom"),
-        ), patch(
-            "splent_cli.commands.feature.feature_fork.requests.get"
-        ) as mock_get:
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                side_effect=requests.ConnectionError("boom"),
+            ),
+            patch("splent_cli.commands.feature.feature_fork.requests.get") as mock_get,
+        ):
             result = runner.invoke(feature_fork, ["splent_feature_auth"])
 
         # Network failure surfaced cleanly, no hang/traceback.
@@ -83,10 +85,13 @@ class TestForkPostErrors:
         resp.status_code = 403
         resp.text = "rate limit exceeded"
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            return_value=resp,
-        ), patch("splent_cli.commands.feature.feature_fork.requests.get"):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                return_value=resp,
+            ),
+            patch("splent_cli.commands.feature.feature_fork.requests.get"),
+        ):
             result = runner.invoke(feature_fork, ["splent_feature_auth"])
 
         assert result.exit_code == 2
@@ -103,10 +108,13 @@ class TestForkPostErrors:
         resp.status_code = 404
         resp.text = "Not Found"
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            return_value=resp,
-        ), patch("splent_cli.commands.feature.feature_fork.requests.get"):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                return_value=resp,
+            ),
+            patch("splent_cli.commands.feature.feature_fork.requests.get"),
+        ):
             result = runner.invoke(feature_fork, ["nope"])
 
         assert result.exit_code == 2
@@ -128,10 +136,13 @@ class TestForkPostBadBody:
         resp.json.return_value = {}
         resp.text = "{}"
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            return_value=resp,
-        ), patch("splent_cli.commands.feature.feature_fork.requests.get"):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                return_value=resp,
+            ),
+            patch("splent_cli.commands.feature.feature_fork.requests.get"),
+        ):
             result = runner.invoke(feature_fork, ["splent_feature_auth"])
 
         assert result.exit_code == 2
@@ -151,10 +162,13 @@ class TestForkPostBadBody:
         resp.json.side_effect = ValueError("no json")
         resp.text = "<html>oops</html>"
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            return_value=resp,
-        ), patch("splent_cli.commands.feature.feature_fork.requests.get"):
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                return_value=resp,
+            ),
+            patch("splent_cli.commands.feature.feature_fork.requests.get"),
+        ):
             result = runner.invoke(feature_fork, ["splent_feature_auth"])
 
         assert result.exit_code == 2
@@ -176,23 +190,23 @@ class TestPollHandlesErrors:
         )
         runner = CliRunner(mix_stderr=False)
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            return_value=_ok_post_response(),
-        ), patch(
-            "splent_cli.commands.feature.feature_fork.requests.get",
-            side_effect=requests.ConnectionError("flaky"),
-        ), patch(
-            "splent_cli.commands.feature.feature_fork.feature_clone"
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                return_value=_ok_post_response(),
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.get",
+                side_effect=requests.ConnectionError("flaky"),
+            ),
+            patch("splent_cli.commands.feature.feature_fork.feature_clone"),
         ):
             result = runner.invoke(feature_fork, ["splent_feature_auth"])
 
         # Polling errors must not crash the command.
         assert result.exit_code == 0
         assert "Traceback" not in result.output
-        assert "ConnectionError" not in result.output.replace(
-            "Waiting for GitHub", ""
-        )
+        assert "ConnectionError" not in result.output.replace("Waiting for GitHub", "")
         # The "may still be processing" fallthrough message is shown.
         assert "still" in result.output.lower() or "Waiting" in result.output
 
@@ -204,15 +218,19 @@ class TestForkHappyPath:
         monkeypatch.setenv("GITHUB_USER", "octocat")
         runner = CliRunner(mix_stderr=False)
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            return_value=_ok_post_response(),
-        ), patch(
-            "splent_cli.commands.feature.feature_fork.requests.get",
-            return_value=_ok_get_response(),
-        ), patch(
-            "splent_cli.commands.feature.feature_fork.feature_clone"
-        ) as mock_clone:
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                return_value=_ok_post_response(),
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.get",
+                return_value=_ok_get_response(),
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_fork.feature_clone"
+            ) as mock_clone,
+        ):
             result = runner.invoke(
                 feature_fork, ["splent_feature_auth", "--version", "v2.0.0"]
             )
@@ -223,9 +241,7 @@ class TestForkHappyPath:
         # clone invoked with the forked full_name@version
         assert mock_clone.called
         called_kwargs = mock_clone.call_args.kwargs
-        assert called_kwargs.get("full_name") == (
-            "octocat/splent_feature_auth@v2.0.0"
-        )
+        assert called_kwargs.get("full_name") == ("octocat/splent_feature_auth@v2.0.0")
 
     def test_token_never_in_argv_or_output(self, tmp_path, monkeypatch):
         """The GITHUB_TOKEN secret must not leak into command output."""
@@ -234,14 +250,16 @@ class TestForkHappyPath:
         monkeypatch.setenv("GITHUB_USER", "octocat")
         runner = CliRunner(mix_stderr=False)
 
-        with patch(
-            "splent_cli.commands.feature.feature_fork.requests.post",
-            return_value=_ok_post_response(),
-        ), patch(
-            "splent_cli.commands.feature.feature_fork.requests.get",
-            return_value=_ok_get_response(),
-        ), patch(
-            "splent_cli.commands.feature.feature_fork.feature_clone"
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.post",
+                return_value=_ok_post_response(),
+            ),
+            patch(
+                "splent_cli.commands.feature.feature_fork.requests.get",
+                return_value=_ok_get_response(),
+            ),
+            patch("splent_cli.commands.feature.feature_fork.feature_clone"),
         ):
             result = runner.invoke(feature_fork, ["splent_feature_auth"])
 

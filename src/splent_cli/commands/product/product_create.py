@@ -263,13 +263,7 @@ def make_product(name, spl_name, features_file, force):
     gid = 1000
     do_chown = sys.platform.startswith("linux")
     dir_mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
-    file_mode = (
-        stat.S_IRUSR
-        | stat.S_IWUSR
-        | stat.S_IRGRP
-        | stat.S_IWGRP
-        | stat.S_IROTH
-    )
+    file_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH
 
     def _maybe_chown(path):
         if not do_chown:

@@ -21,6 +21,7 @@ from splent_cli.commands.feature.feature_release import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _src(tmp_path, org="splent_io", name="my_feature"):
     """Create the expected src/<org>/<name>/ layout and return the src dir."""
     d = tmp_path / "src" / org / name
@@ -31,6 +32,7 @@ def _src(tmp_path, org="splent_io", name="my_feature"):
 # ---------------------------------------------------------------------------
 # _extract_routes
 # ---------------------------------------------------------------------------
+
 
 class TestExtractRoutes:
     def test_single_route(self, tmp_path):
@@ -69,6 +71,7 @@ class TestExtractRoutes:
 # _extract_blueprints
 # ---------------------------------------------------------------------------
 
+
 class TestExtractBlueprints:
     def test_base_blueprint(self, tmp_path):
         f = tmp_path / "__init__.py"
@@ -83,8 +86,7 @@ class TestExtractBlueprints:
     def test_multiple_blueprints(self, tmp_path):
         f = tmp_path / "__init__.py"
         f.write_text(
-            "a_bp = BaseBlueprint('a', __name__)\n"
-            "b_bp = BaseBlueprint('b', __name__)\n"
+            "a_bp = BaseBlueprint('a', __name__)\nb_bp = BaseBlueprint('b', __name__)\n"
         )
         assert _extract_blueprints(f) == ["a_bp", "b_bp"]
 
@@ -96,6 +98,7 @@ class TestExtractBlueprints:
 # _extract_models
 # ---------------------------------------------------------------------------
 
+
 class TestExtractModels:
     def test_single_model(self, tmp_path):
         f = tmp_path / "models.py"
@@ -104,18 +107,12 @@ class TestExtractModels:
 
     def test_multiple_models(self, tmp_path):
         f = tmp_path / "models.py"
-        f.write_text(
-            "class User(db.Model): pass\n"
-            "class Profile(db.Model): pass\n"
-        )
+        f.write_text("class User(db.Model): pass\nclass Profile(db.Model): pass\n")
         assert _extract_models(f) == ["Profile", "User"]
 
     def test_non_model_classes_excluded(self, tmp_path):
         f = tmp_path / "models.py"
-        f.write_text(
-            "class Helper:\n    pass\n"
-            "class Token(db.Model):\n    pass\n"
-        )
+        f.write_text("class Helper:\n    pass\nclass Token(db.Model):\n    pass\n")
         assert _extract_models(f) == ["Token"]
 
     def test_missing_file_returns_empty(self, tmp_path):
@@ -125,6 +122,7 @@ class TestExtractModels:
 # ---------------------------------------------------------------------------
 # _scan_dependencies
 # ---------------------------------------------------------------------------
+
 
 class TestScanDependencies:
     def test_detects_inter_feature_import(self, tmp_path):
@@ -176,6 +174,7 @@ class TestScanDependencies:
 # infer_contract (integration)
 # ---------------------------------------------------------------------------
 
+
 class TestInferContract:
     def _setup_feature(self, tmp_path, org="splent_io", name="splent_feature_demo"):
         """Create a minimal feature layout and return the feature root."""
@@ -188,9 +187,7 @@ class TestInferContract:
             "def init_feature(app): pass\n"
             "def inject_context_vars(app): return {}\n"
         )
-        (src / "routes.py").write_text(
-            "@demo_bp.route('/demo')\ndef index(): pass\n"
-        )
+        (src / "routes.py").write_text("@demo_bp.route('/demo')\ndef index(): pass\n")
         (src / "models.py").write_text(
             "class DemoItem(db.Model):\n    id = db.Column(db.Integer)\n"
         )
@@ -236,18 +233,19 @@ class TestInferContract:
 # write_contract
 # ---------------------------------------------------------------------------
 
+
 class TestWriteContract:
     def _base_pyproject(self, tmp_path, with_contract=False):
         text = (
-            "[project]\nname = \"splent_feature_x\"\nversion = \"1.0.0\"\n"
-            "\n[tool.setuptools]\npackage-dir = { \"\" = \"src\" }\n"
+            '[project]\nname = "splent_feature_x"\nversion = "1.0.0"\n'
+            '\n[tool.setuptools]\npackage-dir = { "" = "src" }\n'
         )
         if with_contract:
             text += (
                 "\n[tool.splent.contract]\n"
-                "description = \"existing description\"\n"
+                'description = "existing description"\n'
                 "\n[tool.splent.contract.provides]\n"
-                "routes = [\"/old\"]\n"
+                'routes = ["/old"]\n'
             )
         path = tmp_path / "pyproject.toml"
         path.write_text(text)
@@ -276,7 +274,9 @@ class TestWriteContract:
         path = self._base_pyproject(tmp_path, with_contract=True)
         write_contract(path, self._sample_contract(), "splent_feature_x")
         data = tomllib.loads(Path(path).read_text())
-        assert data["tool"]["splent"]["contract"]["description"] == "existing description"
+        assert (
+            data["tool"]["splent"]["contract"]["description"] == "existing description"
+        )
 
     def test_replaces_old_contract(self, tmp_path):
         path = self._base_pyproject(tmp_path, with_contract=True)
@@ -303,9 +303,15 @@ class TestWriteContract:
     def test_empty_lists_written_as_empty(self, tmp_path):
         path = self._base_pyproject(tmp_path)
         contract = {
-            "routes": [], "blueprints": [], "models": [], "commands": [],
-            "hooks": [], "services": [], "docker": [],
-            "requires_features": [], "env_vars": [],
+            "routes": [],
+            "blueprints": [],
+            "models": [],
+            "commands": [],
+            "hooks": [],
+            "services": [],
+            "docker": [],
+            "requires_features": [],
+            "env_vars": [],
         }
         write_contract(path, contract, "splent_feature_demo")
         data = tomllib.loads(Path(path).read_text())

@@ -1,6 +1,7 @@
 """
 Tests for the product:logs command.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -16,6 +17,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # Flag validation
 # ---------------------------------------------------------------------------
+
 
 class TestFlagValidation:
     def test_rejects_both_dev_and_prod(self, runner, product_workspace):
@@ -33,6 +35,7 @@ class TestFlagValidation:
 # No compose file
 # ---------------------------------------------------------------------------
 
+
 class TestNoComposeFile:
     def test_exits_when_no_compose_file(self, runner, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
@@ -47,6 +50,7 @@ class TestNoComposeFile:
 # ---------------------------------------------------------------------------
 # Successful invocation
 # ---------------------------------------------------------------------------
+
 
 class TestSuccessfulInvocation:
     def test_runs_without_error(self, runner, product_workspace):
@@ -98,6 +102,7 @@ class TestSuccessfulInvocation:
 # ---------------------------------------------------------------------------
 # KeyboardInterrupt is silently swallowed
 # ---------------------------------------------------------------------------
+
 
 class TestKeyboardInterrupt:
     def test_keyboard_interrupt_exits_cleanly(self, runner, product_workspace):

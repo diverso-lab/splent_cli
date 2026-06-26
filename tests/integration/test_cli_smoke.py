@@ -10,6 +10,7 @@ No docker / git / network / database are required. The ``version`` command
 reads versions from pyproject.toml files inside a temporary WORKING_DIR, so
 we point it at a minimal workspace built under tmp_path.
 """
+
 import json
 
 import click
@@ -21,6 +22,7 @@ from splent_cli.utils.command_loader import load_commands
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_cli_workspace(tmp_path, cli_version="9.9.9"):
     """Create a minimal workspace with splent_cli/pyproject.toml under tmp_path.
@@ -40,6 +42,7 @@ def _make_cli_workspace(tmp_path, cli_version="9.9.9"):
 # ---------------------------------------------------------------------------
 # Group / command-tree integrity
 # ---------------------------------------------------------------------------
+
 
 def test_cli_is_splentcli_group():
     """The exported ``cli`` object is the hardened SPLENTCLI Group."""
@@ -75,6 +78,7 @@ def test_load_commands_is_idempotent_on_fresh_group():
 # ---------------------------------------------------------------------------
 # --help smoke
 # ---------------------------------------------------------------------------
+
 
 def test_help_exits_zero_and_lists_groups(runner):
     """``splent --help`` renders grouped help cleanly and exits 0."""
@@ -112,6 +116,7 @@ def test_no_args_shows_usage(runner):
 # version --json smoke
 # ---------------------------------------------------------------------------
 
+
 def test_version_json_returns_parseable_json(runner, tmp_path, monkeypatch):
     """``splent version --json`` emits valid JSON to stdout (no product set)."""
     _make_cli_workspace(tmp_path, cli_version="9.9.9")
@@ -145,7 +150,15 @@ def test_version_json_stdout_is_pure_json(runner, tmp_path, monkeypatch):
 
     payload = json.loads(result.output)  # raises if anything else is on stdout
     assert set(
-        ["cli", "framework", "python", "compatible", "product", "features", "fingerprint"]
+        [
+            "cli",
+            "framework",
+            "python",
+            "compatible",
+            "product",
+            "features",
+            "fingerprint",
+        ]
     ).issubset(payload.keys())
 
 

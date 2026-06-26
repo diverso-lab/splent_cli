@@ -14,6 +14,7 @@ on its own (the command catches it), so it does not need patching.
 
 No docker / git / network: everything is filesystem + monkeypatched env.
 """
+
 import os
 import tomllib
 from glob import glob
@@ -163,7 +164,9 @@ class TestRewriteIsAtomicAndValid:
 
         assert result.exit_code == 0, result.output
         # atomic_write writes ".<name>.*.tmp" then os.replace; nothing should remain.
-        leftovers = glob(os.path.join(os.path.dirname(refiner_pp), ".pyproject.toml*.tmp"))
+        leftovers = glob(
+            os.path.join(os.path.dirname(refiner_pp), ".pyproject.toml*.tmp")
+        )
         assert leftovers == [], f"atomic write left temp files: {leftovers}"
 
     def test_success_message_and_no_traceback(self, tmp_path, monkeypatch):
@@ -215,7 +218,9 @@ class TestMalformedInputPyproject:
             assert f.read() == broken
         # And no stray backup/temp artifacts from a write that never happened.
         assert not os.path.isfile(refiner_pp + ".bak")
-        leftovers = glob(os.path.join(os.path.dirname(refiner_pp), ".pyproject.toml*.tmp"))
+        leftovers = glob(
+            os.path.join(os.path.dirname(refiner_pp), ".pyproject.toml*.tmp")
+        )
         assert leftovers == []
 
 

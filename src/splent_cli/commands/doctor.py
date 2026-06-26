@@ -68,7 +68,9 @@ def _check_workspace_precondition():
     wd = os.getenv("WORKING_DIR")
     workspace = wd or os.getcwd()
     if not wd:
-        problems.append("WORKING_DIR is not set (falling back to the current directory)")
+        problems.append(
+            "WORKING_DIR is not set (falling back to the current directory)"
+        )
     elif not os.path.isdir(wd):
         problems.append(f"WORKING_DIR points to a missing directory: {wd}")
 

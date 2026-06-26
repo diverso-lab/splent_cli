@@ -121,9 +121,7 @@ def feature_env(feature_name, generate, env_name):
         try:
             shutil.copy(selected, env_file)
         except OSError as exc:
-            click.echo(
-                f"❌ Failed to create {env_file} from {selected}: {exc}"
-            )
+            click.echo(f"❌ Failed to create {env_file} from {selected}: {exc}")
             raise SystemExit(1)
         click.echo(
             f"📄 Created {feature_entry}/docker/.env from {os.path.basename(selected)}"

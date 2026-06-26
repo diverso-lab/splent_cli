@@ -1,4 +1,5 @@
 """Tests for the check:features command."""
+
 import os
 import pytest
 from click.testing import CliRunner
@@ -22,9 +23,14 @@ def _add_feature_to_pyproject(product_workspace, feature_spec):
 def _make_feature_cache(workspace, org_safe, name, version):
     """Create a minimal cache entry with proper src/ structure."""
     d = (
-        workspace / ".splent_cache" / "features"
-        / org_safe / f"{name}@{version}"
-        / "src" / org_safe / name
+        workspace
+        / ".splent_cache"
+        / "features"
+        / org_safe
+        / f"{name}@{version}"
+        / "src"
+        / org_safe
+        / name
     )
     d.mkdir(parents=True)
     return d
@@ -34,13 +40,16 @@ def _make_feature_symlink(product_workspace, org_safe, name, version, target):
     link_dir = product_workspace / "test_app" / "features" / org_safe
     link_dir.mkdir(parents=True, exist_ok=True)
     link = link_dir / f"{name}@{version}"
-    link.symlink_to(os.path.relpath(str(target.parent.parent.parent.parent), str(link_dir)))
+    link.symlink_to(
+        os.path.relpath(str(target.parent.parent.parent.parent), str(link_dir))
+    )
     return link
 
 
 # ---------------------------------------------------------------------------
 # _pkg_installed helper
 # ---------------------------------------------------------------------------
+
 
 class TestPkgInstalled:
     def test_installed_package_returns_true(self):
@@ -53,6 +62,7 @@ class TestPkgInstalled:
 # ---------------------------------------------------------------------------
 # Command: no SPLENT_APP
 # ---------------------------------------------------------------------------
+
 
 class TestCheckFeaturesNoApp:
     def test_exits_when_no_splent_app(self, runner, workspace):
@@ -71,6 +81,7 @@ class TestCheckFeaturesNoApp:
 # No features declared
 # ---------------------------------------------------------------------------
 
+
 class TestCheckFeaturesNoFeatures:
     def test_warns_and_exits_ok_when_no_features(self, runner, product_workspace):
         result = runner.invoke(check_features)
@@ -82,6 +93,7 @@ class TestCheckFeaturesNoFeatures:
 # Feature cache/dir checks
 # ---------------------------------------------------------------------------
 
+
 class TestCheckFeaturesWithFeature:
     def test_fails_when_cache_entry_missing(self, runner, product_workspace):
         _add_feature_to_pyproject(product_workspace, "splent_io/auth@v1.0.0")
@@ -92,8 +104,11 @@ class TestCheckFeaturesWithFeature:
     def test_fails_when_src_structure_missing(self, runner, product_workspace):
         # Create cache dir but without src/ substructure
         cache_dir = (
-            product_workspace / ".splent_cache" / "features"
-            / "splent_io" / "auth@v1.0.0"
+            product_workspace
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "auth@v1.0.0"
         )
         cache_dir.mkdir(parents=True)
         _add_feature_to_pyproject(product_workspace, "splent_io/auth@v1.0.0")
@@ -125,7 +140,13 @@ class TestCheckFeaturesWithFeature:
         link_dir = product_workspace / "test_app" / "features" / "splent_io"
         link_dir.mkdir(parents=True)
         link = link_dir / "auth@v1.0.0"
-        cache_entry = product_workspace / ".splent_cache" / "features" / "splent_io" / "auth@v1.0.0"
+        cache_entry = (
+            product_workspace
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "auth@v1.0.0"
+        )
         link.symlink_to(os.path.relpath(str(cache_entry), str(link_dir)))
         _add_feature_to_pyproject(product_workspace, "splent_io/auth@v1.0.0")
         result = runner.invoke(check_features)

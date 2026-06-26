@@ -1,4 +1,5 @@
 """Tests for product:select — SystemExit on missing product, .env update."""
+
 from click.testing import CliRunner
 from splent_cli.commands.product.product_select import select_app
 
@@ -9,8 +10,7 @@ class TestProductSelect:
         result = runner.invoke(select_app, ["nonexistent_app"])
         assert result.exit_code == 1
         assert (
-            "not found" in result.output.lower()
-            or "nonexistent_app" in result.output
+            "not found" in result.output.lower() or "nonexistent_app" in result.output
         )
 
     def test_creates_env_entry_when_product_exists(self, workspace):

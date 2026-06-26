@@ -187,9 +187,7 @@ features
 
 
 class TestWriteConstraintsHardening:
-    def test_backup_then_restore_on_failed_validation(
-        self, workspace, monkeypatch
-    ):
+    def test_backup_then_restore_on_failed_validation(self, workspace, monkeypatch):
         """If post-write re-parse does not find the new constraint, the original
         file is restored from backup and the error is surfaced (not swallowed)."""
         uvl_path = _make_uvl(workspace, WELL_FORMED_UVL)
@@ -200,9 +198,7 @@ class TestWriteConstraintsHardening:
         # return no constraints, simulating a corrupted/unexpected write.
         import splent_cli.commands.spl.spl_add_constraints as mod
 
-        monkeypatch.setattr(
-            mod, "_parse_uvl", lambda p: ({}, [], "")
-        )
+        monkeypatch.setattr(mod, "_parse_uvl", lambda p: ({}, [], ""))
 
         with pytest.raises(Exception) as exc:
             _write_constraints(str(uvl_path), raw, ["tags => notes"])

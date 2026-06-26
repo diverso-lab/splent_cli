@@ -72,7 +72,9 @@ def linter(fix, targets):
         label = f"{'Fixing' if fix else 'Checking'} {directory}"
         click.echo(click.style(f"🔍 {label}...\n", fg="yellow"))
 
-        result = run(lint_cmd + [directory], check=False, capture=True, tool_hint=_RUFF_HINT)
+        result = run(
+            lint_cmd + [directory], check=False, capture=True, tool_hint=_RUFF_HINT
+        )
 
         output = (result.stdout + result.stderr).strip()
         if result.returncode != 0:

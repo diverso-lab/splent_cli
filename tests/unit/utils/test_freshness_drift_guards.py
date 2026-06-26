@@ -10,6 +10,7 @@ Focus (hardened behaviors):
 - template_drift.product_ctx: WORKING_DIR resolution degrades gracefully when
   unset / when the pyproject path is unreadable.
 """
+
 import os
 
 import pytest
@@ -27,6 +28,7 @@ from splent_cli.utils.template_drift import file_diff, product_ctx
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_feature(tmp_path, with_pyproject=True):
     """Create a minimal feature_dir layout: <feature>/pyproject.toml + src/."""
     feature_dir = tmp_path / "myfeat"
@@ -40,6 +42,7 @@ def _make_feature(tmp_path, with_pyproject=True):
 # ---------------------------------------------------------------------------
 # contract_freshness — broken symlink / missing file during walk (HARDENED)
 # ---------------------------------------------------------------------------
+
 
 class TestNewestSourceMtimeGuards:
     def test_broken_symlink_in_src_is_skipped_not_crash(self, tmp_path):
@@ -138,6 +141,7 @@ class TestIsContractStaleGuards:
 # template_drift.file_diff — read_text OSError handled (HARDENED)
 # ---------------------------------------------------------------------------
 
+
 class TestFileDiffOSErrorGuards:
     def test_oserror_on_read_returns_none(self, tmp_path, monkeypatch):
         from pathlib import Path
@@ -175,6 +179,7 @@ class TestFileDiffOSErrorGuards:
 # template_drift.product_ctx — WORKING_DIR resolution degrades gracefully
 # ---------------------------------------------------------------------------
 
+
 class TestProductCtxWorkingDirDegrades:
     def test_unset_working_dir_does_not_crash(self, monkeypatch):
         # No WORKING_DIR -> path is relative/garbage and pyproject open fails;
@@ -195,9 +200,7 @@ class TestProductCtxWorkingDirDegrades:
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         prod = tmp_path / "myapp"
         prod.mkdir()
-        (prod / "pyproject.toml").write_bytes(
-            b'[tool.splent]\nspl = "my_spl"\n'
-        )
+        (prod / "pyproject.toml").write_bytes(b'[tool.splent]\nspl = "my_spl"\n')
         ctx = product_ctx("myapp")
         assert ctx["spl_name"] == "my_spl"
 

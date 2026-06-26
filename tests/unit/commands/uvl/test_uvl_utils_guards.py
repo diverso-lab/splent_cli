@@ -12,6 +12,7 @@ Focus: the safety behaviors added during hardening —
 These tests never touch real flamapy / disk parsing — the flamapy import and
 the transformation are mocked at the boundary.
 """
+
 import builtins
 
 import click
@@ -29,6 +30,7 @@ from splent_cli.commands.uvl.uvl_utils import (
 # ---------------------------------------------------------------------------
 # _require_flamapy — friendly message when the optional extra is missing
 # ---------------------------------------------------------------------------
+
 
 def _block_flamapy_import(monkeypatch):
     """Make `import flamapy` raise ModuleNotFoundError, others normal."""
@@ -69,6 +71,7 @@ class TestRequireFlamapyMissing:
 # list_all_features_from_uvl — malformed UVL names the file, no opaque traceback
 # ---------------------------------------------------------------------------
 
+
 class _FakeDM:
     """Stand-in for DiscoverMetamodels whose transformation blows up."""
 
@@ -80,13 +83,9 @@ class _FakeDM:
 
 
 class TestMalformedUvlIsNamed:
-    def test_parse_failure_raises_clickexception_naming_file(
-        self, monkeypatch
-    ):
+    def test_parse_failure_raises_clickexception_naming_file(self, monkeypatch):
         boom = ValueError("Unexpected token at line 1")
-        monkeypatch.setattr(
-            uvl_utils, "_discover_metamodels", lambda: _FakeDM(boom)
-        )
+        monkeypatch.setattr(uvl_utils, "_discover_metamodels", lambda: _FakeDM(boom))
         with pytest.raises(click.ClickException) as exc:
             list_all_features_from_uvl("/path/to/broken_model.uvl")
         msg = str(exc.value)
@@ -95,9 +94,7 @@ class TestMalformedUvlIsNamed:
 
     def test_parse_failure_is_not_raw_exception(self, monkeypatch):
         boom = ValueError("Unexpected token at line 1")
-        monkeypatch.setattr(
-            uvl_utils, "_discover_metamodels", lambda: _FakeDM(boom)
-        )
+        monkeypatch.setattr(uvl_utils, "_discover_metamodels", lambda: _FakeDM(boom))
         with pytest.raises(click.ClickException) as exc:
             list_all_features_from_uvl("/path/to/broken_model.uvl")
         # Not the raw flamapy/parser exception type.
@@ -106,16 +103,12 @@ class TestMalformedUvlIsNamed:
     def test_empty_uvl_parse_failure_named(self, monkeypatch):
         # An empty UVL typically makes the transformation choke.
         boom = Exception("empty model")
-        monkeypatch.setattr(
-            uvl_utils, "_discover_metamodels", lambda: _FakeDM(boom)
-        )
+        monkeypatch.setattr(uvl_utils, "_discover_metamodels", lambda: _FakeDM(boom))
         with pytest.raises(click.ClickException) as exc:
             list_all_features_from_uvl("/tmp/empty.uvl")
         assert "empty.uvl" in str(exc.value)
 
-    def test_clickexception_from_transform_is_passed_through(
-        self, monkeypatch
-    ):
+    def test_clickexception_from_transform_is_passed_through(self, monkeypatch):
         # If the transformation already raised a ClickException (e.g. a nested
         # guard), it must propagate unchanged — not be re-wrapped/double-named.
         original = click.ClickException("nested guard message")
@@ -131,6 +124,7 @@ class TestMalformedUvlIsNamed:
 # ---------------------------------------------------------------------------
 # Happy path: parse a (mocked) feature model into a sorted name list + root
 # ---------------------------------------------------------------------------
+
 
 class _FakeFeature:
     def __init__(self, name, children=None):
@@ -185,6 +179,7 @@ class TestListAllFeaturesHappyPath:
 # Tree traversal helpers used by list_all_features_from_uvl
 # ---------------------------------------------------------------------------
 
+
 class TestIterChildren:
     def test_children_attribute(self):
         node = _FakeFeature("p", children=[_FakeFeature("c")])
@@ -194,18 +189,21 @@ class TestIterChildren:
     def test_none_children_returns_empty(self):
         class N:
             children = None
+
         assert iter_children(N()) == []
 
     def test_get_children_method_fallback(self):
         class N:
             def get_children(self):
                 return [_FakeFeature("z")]
+
         kids = iter_children(N())
         assert [k.name for k in kids] == ["z"]
 
     def test_no_children_at_all(self):
         class N:
             pass
+
         assert iter_children(N()) == []
 
 
@@ -220,6 +218,7 @@ class TestGetRootFeature:
         class FM:
             def root(self):
                 return root
+
         assert get_root_feature(FM()) is root
 
     def test_get_root_method(self):
@@ -228,10 +227,12 @@ class TestGetRootFeature:
         class FM:
             def get_root(self):
                 return root
+
         assert get_root_feature(FM()) is root
 
     def test_no_root_raises_clean(self):
         class FM:
             pass
+
         with pytest.raises(click.ClickException, match="root feature"):
             get_root_feature(FM())

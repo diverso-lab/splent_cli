@@ -17,6 +17,7 @@ Boundary mocking (no real babel / git / network / subprocess):
   * Babel availability is probed via importlib.util.find_spec -> patch
     "splent_cli.commands.feature.feature_translate.importlib.util.find_spec".
 """
+
 import os
 import subprocess
 from unittest.mock import patch, MagicMock
@@ -67,6 +68,7 @@ def _make_feature(workspace, ns_safe="splent_io", name="splent_feature_auth"):
 # Hardened: Babel package missing -> clean ClickException
 # ---------------------------------------------------------------------------
 
+
 class TestBabelMissing:
     def test_require_babel_raises_clickexception(self):
         with patch(
@@ -78,9 +80,7 @@ class TestBabelMissing:
         assert "Babel" in str(exc.value.message)
         assert "pip install" in str(exc.value.message)
 
-    def test_command_clean_error_when_babel_missing(
-        self, runner, product_workspace
-    ):
+    def test_command_clean_error_when_babel_missing(self, runner, product_workspace):
         # Babel reported as unavailable -> command must abort with a clean
         # message (exit 1) and NOT a raw traceback.
         with patch(
@@ -97,6 +97,7 @@ class TestBabelMissing:
 # ---------------------------------------------------------------------------
 # Hardened: pybabel tool missing at the subprocess boundary -> clean error
 # ---------------------------------------------------------------------------
+
 
 class TestToolMissingAtBoundary:
     def test_run_pybabel_filenotfound_becomes_clickexception(self, tmp_path):
@@ -117,6 +118,7 @@ class TestToolMissingAtBoundary:
 # ---------------------------------------------------------------------------
 # Hardened: temporary babel.cfg is never left behind
 # ---------------------------------------------------------------------------
+
 
 class TestBabelCfgCleanup:
     def _redirect_mkstemp(self, tmp_path):
@@ -141,12 +143,15 @@ class TestBabelCfgCleanup:
 
         fake_mkstemp, holder = self._redirect_mkstemp(tmp_path)
 
-        with patch(
-            "splent_cli.commands.feature.feature_translate.tempfile.mkstemp",
-            side_effect=fake_mkstemp,
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            return_value=_fake_completed(returncode=1, stderr="boom"),
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_translate.tempfile.mkstemp",
+                side_effect=fake_mkstemp,
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                return_value=_fake_completed(returncode=1, stderr="boom"),
+            ),
         ):
             ok = _extract_feature(
                 str(feature_root), str(src_dir), str(translations_dir), "auth"
@@ -170,12 +175,15 @@ class TestBabelCfgCleanup:
 
         fake_mkstemp, holder = self._redirect_mkstemp(tmp_path)
 
-        with patch(
-            "splent_cli.commands.feature.feature_translate.tempfile.mkstemp",
-            side_effect=fake_mkstemp,
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            return_value=_fake_completed(returncode=0, stdout="ok"),
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_translate.tempfile.mkstemp",
+                side_effect=fake_mkstemp,
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                return_value=_fake_completed(returncode=0, stdout="ok"),
+            ),
         ):
             ok = _extract_feature(
                 str(feature_root), str(src_dir), str(translations_dir), "auth"
@@ -198,12 +206,15 @@ class TestBabelCfgCleanup:
 
         fake_mkstemp, holder = self._redirect_mkstemp(tmp_path)
 
-        with patch(
-            "splent_cli.commands.feature.feature_translate.tempfile.mkstemp",
-            side_effect=fake_mkstemp,
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            side_effect=FileNotFoundError(),
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_translate.tempfile.mkstemp",
+                side_effect=fake_mkstemp,
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                side_effect=FileNotFoundError(),
+            ),
         ):
             with pytest.raises(click.ClickException):
                 _extract_feature(
@@ -218,17 +229,17 @@ class TestBabelCfgCleanup:
 # Core happy-path / behavior
 # ---------------------------------------------------------------------------
 
+
 class TestNoFlags:
-    def test_no_action_flag_prompts_and_does_nothing(
-        self, runner, product_workspace
-    ):
+    def test_no_action_flag_prompts_and_does_nothing(self, runner, product_workspace):
         # Without --extract/--init/--compile the command should not shell out
         # and should not even probe babel.
-        with patch(
-            "splent_cli.utils.proc.subprocess.run"
-        ) as mock_run, patch(
-            "splent_cli.commands.feature.feature_translate.importlib.util.find_spec"
-        ) as mock_find:
+        with (
+            patch("splent_cli.utils.proc.subprocess.run") as mock_run,
+            patch(
+                "splent_cli.commands.feature.feature_translate.importlib.util.find_spec"
+            ) as mock_find,
+        ):
             result = runner.invoke(feature_translate, [])
         assert result.exit_code == 0
         assert "Specify" in result.output
@@ -237,21 +248,20 @@ class TestNoFlags:
 
 
 class TestExtractHappyPath:
-    def test_extract_invokes_pybabel_and_reports(
-        self, runner, product_workspace
-    ):
+    def test_extract_invokes_pybabel_and_reports(self, runner, product_workspace):
         _make_feature(product_workspace)
 
-        with patch(
-            "splent_cli.commands.feature.feature_translate.importlib.util.find_spec",
-            return_value=object(),
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            return_value=_fake_completed(returncode=0, stdout="extracted"),
-        ) as mock_run:
-            result = runner.invoke(
-                feature_translate, ["auth", "--extract"]
-            )
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_translate.importlib.util.find_spec",
+                return_value=object(),
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                return_value=_fake_completed(returncode=0, stdout="extracted"),
+            ) as mock_run,
+        ):
+            result = runner.invoke(feature_translate, ["auth", "--extract"])
 
         assert result.exit_code == 0, result.stderr
         assert "Traceback" not in result.output
@@ -261,21 +271,22 @@ class TestExtractHappyPath:
         called_cmd = mock_run.call_args.args[0]
         assert "extract" in called_cmd
 
-    def test_extract_creates_translations_dir(
-        self, runner, product_workspace
-    ):
+    def test_extract_creates_translations_dir(self, runner, product_workspace):
         root = _make_feature(product_workspace)
         translations = (
             root / "src" / "splent_io" / "splent_feature_auth" / "translations"
         )
         assert not translations.exists()
 
-        with patch(
-            "splent_cli.commands.feature.feature_translate.importlib.util.find_spec",
-            return_value=object(),
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            return_value=_fake_completed(returncode=0, stdout="ok"),
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_translate.importlib.util.find_spec",
+                return_value=object(),
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                return_value=_fake_completed(returncode=0, stdout="ok"),
+            ),
         ):
             result = runner.invoke(feature_translate, ["auth", "--extract"])
 
@@ -286,12 +297,13 @@ class TestExtractHappyPath:
 class TestNoFeaturesDeclared:
     def test_reports_when_no_features(self, runner, product_workspace):
         # Default product_workspace pyproject declares no features.
-        with patch(
-            "splent_cli.commands.feature.feature_translate.importlib.util.find_spec",
-            return_value=object(),
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run"
-        ) as mock_run:
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_translate.importlib.util.find_spec",
+                return_value=object(),
+            ),
+            patch("splent_cli.utils.proc.subprocess.run") as mock_run,
+        ):
             result = runner.invoke(feature_translate, ["--extract"])
         assert result.exit_code == 0
         assert "No features declared." in result.output

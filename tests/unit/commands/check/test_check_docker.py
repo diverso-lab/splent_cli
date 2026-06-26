@@ -3,6 +3,7 @@ Tests for the check:docker command.
 
 All subprocess.run calls are mocked — no real Docker needed.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -19,9 +20,13 @@ def runner():
 # _run() helper
 # ---------------------------------------------------------------------------
 
+
 class TestRunHelper:
     def test_returns_returncode_stdout_stderr(self):
-        with patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="v1.0\n", stderr="")):
+        with patch(
+            "subprocess.run",
+            return_value=MagicMock(returncode=0, stdout="v1.0\n", stderr=""),
+        ):
             rc, out, err = _run(["docker", "--version"])
         assert rc == 0
         assert out == "v1.0"
@@ -34,6 +39,7 @@ class TestRunHelper:
 
     def test_timeout_expired(self):
         import subprocess
+
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 10)):
             rc, out, err = _run(["slow_cmd"])
         assert rc == 1
@@ -43,6 +49,7 @@ class TestRunHelper:
 # ---------------------------------------------------------------------------
 # Output formatting helpers
 # ---------------------------------------------------------------------------
+
 
 class TestFormatHelpers:
     def test_ok_contains_checkmark(self):
@@ -62,6 +69,7 @@ class TestFormatHelpers:
 # ---------------------------------------------------------------------------
 # All checks pass
 # ---------------------------------------------------------------------------
+
 
 class TestAllPass:
     def test_exits_0_when_all_pass(self, runner):
@@ -88,6 +96,7 @@ class TestAllPass:
 # Docker not installed
 # ---------------------------------------------------------------------------
 
+
 class TestDockerNotInstalled:
     def test_exits_1_when_docker_missing(self, runner):
         def fake_run(cmd, **kwargs):
@@ -104,6 +113,7 @@ class TestDockerNotInstalled:
 # ---------------------------------------------------------------------------
 # Legacy docker-compose fallback
 # ---------------------------------------------------------------------------
+
 
 class TestLegacyComposeFallback:
     def test_warn_on_legacy_compose(self, runner):
@@ -123,11 +133,14 @@ class TestLegacyComposeFallback:
 # Docker daemon not running
 # ---------------------------------------------------------------------------
 
+
 class TestDaemonNotRunning:
     def test_exits_1_when_daemon_down(self, runner):
         def fake_run(cmd, **kwargs):
             if cmd == ["docker", "info"]:
-                return MagicMock(returncode=1, stdout="", stderr="Cannot connect to Docker daemon")
+                return MagicMock(
+                    returncode=1, stdout="", stderr="Cannot connect to Docker daemon"
+                )
             return MagicMock(returncode=0, stdout="output", stderr="")
 
         with patch("subprocess.run", side_effect=fake_run):

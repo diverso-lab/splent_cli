@@ -277,9 +277,7 @@ def spl_add_feature(spl_name, feature_package, org):
     else:
         parse_error = None
 
-    if parse_error is not None or feature_package not in set(
-        written_packages.values()
-    ):
+    if parse_error is not None or feature_package not in set(written_packages.values()):
         if bak is not None:
             atomic_write(uvl_path, bak.read_text(encoding="utf-8"))
         detail = (

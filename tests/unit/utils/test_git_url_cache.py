@@ -12,6 +12,7 @@ The module `import subprocess` directly, so we patch git_url.subprocess.run.
 No real ssh / git / network is required. The module-level probe cache is reset
 before every test so cases don't bleed into each other.
 """
+
 import subprocess
 
 import pytest

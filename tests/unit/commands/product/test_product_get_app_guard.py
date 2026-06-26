@@ -11,6 +11,7 @@ Hardened behavior under test:
 Plus a couple of core happy-path tests using a fake booted app so no real
 docker / git / network / database is required.
 """
+
 import pytest
 from unittest.mock import MagicMock
 from click.testing import CliRunner
@@ -48,6 +49,7 @@ def _make_fake_app():
 # ---------------------------------------------------------------------------
 # Hardened: get_app() failure -> clean ClickException, no traceback
 # ---------------------------------------------------------------------------
+
 
 class TestProductConfigBootGuard:
     def test_get_app_error_surfaced_as_clickexception(self, runner, monkeypatch):
@@ -120,6 +122,7 @@ class TestProductRoutesBootGuard:
 # Guard runs before context: requires_product still enforced
 # ---------------------------------------------------------------------------
 
+
 class TestRequiresProduct:
     def test_config_aborts_when_no_product_selected(self, runner, monkeypatch):
         monkeypatch.delenv("SPLENT_APP", raising=False)
@@ -139,6 +142,7 @@ class TestRequiresProduct:
 # ---------------------------------------------------------------------------
 # Happy paths with a fake booted app (no real boot)
 # ---------------------------------------------------------------------------
+
 
 class TestProductConfigHappyPath:
     def test_empty_config_no_keys_matched(self, runner, monkeypatch):

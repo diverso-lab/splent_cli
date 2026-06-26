@@ -14,6 +14,7 @@ exit code.
 
 All boundaries are mocked: no real docker / git / npx / bash / network.
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -46,21 +47,26 @@ def _no_traceback(text: str) -> bool:
 # subprocess.Popen directly inside a try/except FileNotFoundError.
 # ---------------------------------------------------------------------------
 
+
 class TestCompileToolMissing:
     def _run(self, container_id, watch, missing):
         """Drive _compile_in_container with the shell-out boundary patched.
 
         ``missing`` raises FileNotFoundError from the boundary (tool absent).
         """
-        with patch(
-            "splent_cli.commands.feature.feature_compile.os.path.exists",
-            return_value=True,
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            side_effect=FileNotFoundError() if missing else None,
-        ) as mock_run, patch(
-            "splent_cli.commands.feature.feature_compile.subprocess.Popen",
-            side_effect=FileNotFoundError() if missing else None,
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_compile.os.path.exists",
+                return_value=True,
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                side_effect=FileNotFoundError() if missing else None,
+            ) as mock_run,
+            patch(
+                "splent_cli.commands.feature.feature_compile.subprocess.Popen",
+                side_effect=FileNotFoundError() if missing else None,
+            ),
         ):
             if not missing:
                 mock_run.return_value = MagicMock(returncode=0)
@@ -111,12 +117,15 @@ class TestCompileToolMissing:
 class TestCompileToolFails:
     def test_webpack_nonzero_exit_surfaced_cleanly(self, capsys):
         # webpack present but exits non-zero → caller reports, does not raise.
-        with patch(
-            "splent_cli.commands.feature.feature_compile.os.path.exists",
-            return_value=True,
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            return_value=MagicMock(returncode=1, stdout="", stderr=""),
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_compile.os.path.exists",
+                return_value=True,
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                return_value=MagicMock(returncode=1, stdout="", stderr=""),
+            ),
         ):
             _compile_in_container(
                 container_id=None,
@@ -132,12 +141,15 @@ class TestCompileToolFails:
         assert _no_traceback(out)
 
     def test_webpack_success_reports_done(self, capsys):
-        with patch(
-            "splent_cli.commands.feature.feature_compile.os.path.exists",
-            return_value=True,
-        ), patch(
-            "splent_cli.utils.proc.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="", stderr=""),
+        with (
+            patch(
+                "splent_cli.commands.feature.feature_compile.os.path.exists",
+                return_value=True,
+            ),
+            patch(
+                "splent_cli.utils.proc.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
         ):
             _compile_in_container(
                 container_id=None,
@@ -155,6 +167,7 @@ class TestCompileToolFails:
 # feature:env — cp / shutil.copy guard + happy path
 # ---------------------------------------------------------------------------
 
+
 def _make_env_product(tmp_path, monkeypatch, *, with_template=True, existing_env=False):
     """Build a product whose feature symlink resolves to a docker/ dir.
 
@@ -169,8 +182,7 @@ def _make_env_product(tmp_path, monkeypatch, *, with_template=True, existing_env
     # Entry has no explicit namespace so the bare feature_name passed on the
     # CLI matches via startswith(); org_safe then defaults to "splent_io".
     (product / "pyproject.toml").write_text(
-        "[tool.splent]\n"
-        'features = ["splent_feature_auth@v1"]\n'
+        '[tool.splent]\nfeatures = ["splent_feature_auth@v1"]\n'
     )
 
     # Real feature target with a docker dir.
@@ -209,9 +221,7 @@ class TestEnvCopyGuard:
         feat_docker = tmp_path / "splent_feature_auth_real" / "docker"
         assert not (feat_docker / ".env").exists()
 
-    def test_generate_copies_template_happy_path(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_generate_copies_template_happy_path(self, tmp_path, monkeypatch, runner):
         feat_docker = _make_env_product(tmp_path, monkeypatch)
         result = runner.invoke(
             feature_env, ["splent_feature_auth", "--generate", "--dev"]
@@ -222,12 +232,8 @@ class TestEnvCopyGuard:
         assert env_file.read_text() == "KEY=value\n"
         assert "Created" in result.output
 
-    def test_existing_env_is_not_overwritten(
-        self, tmp_path, monkeypatch, runner
-    ):
-        feat_docker = _make_env_product(
-            tmp_path, monkeypatch, existing_env=True
-        )
+    def test_existing_env_is_not_overwritten(self, tmp_path, monkeypatch, runner):
+        feat_docker = _make_env_product(tmp_path, monkeypatch, existing_env=True)
         result = runner.invoke(
             feature_env, ["splent_feature_auth", "--generate", "--dev"]
         )
@@ -236,9 +242,7 @@ class TestEnvCopyGuard:
         assert (feat_docker / ".env").read_text() == "EXISTING=1\n"
         assert "skipping" in result.output.lower()
 
-    def test_no_template_warns_without_crash(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_no_template_warns_without_crash(self, tmp_path, monkeypatch, runner):
         _make_env_product(tmp_path, monkeypatch, with_template=False)
         result = runner.invoke(
             feature_env, ["splent_feature_auth", "--generate", "--dev"]
@@ -252,10 +256,9 @@ class TestEnvCopyGuard:
 # feature:git — git missing guard + arg passthrough forwards exit code
 # ---------------------------------------------------------------------------
 
+
 class TestGitToolGuard:
-    def test_missing_git_surfaced_cleanly(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_missing_git_surfaced_cleanly(self, tmp_path, monkeypatch, runner):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
         cache = (
@@ -278,9 +281,7 @@ class TestGitToolGuard:
         assert "not installed or not on PATH" in result.stderr
         assert _no_traceback(result.stderr)
 
-    def test_passthrough_forwards_git_exit_code(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_passthrough_forwards_git_exit_code(self, tmp_path, monkeypatch, runner):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
         cache = (
@@ -296,9 +297,7 @@ class TestGitToolGuard:
             "splent_cli.utils.proc.subprocess.run",
             return_value=MagicMock(returncode=3, stdout="", stderr=""),
         ) as mock_run:
-            result = runner.invoke(
-                feature_git, ["auth", "log", "--oneline", "-5"]
-            )
+            result = runner.invoke(feature_git, ["auth", "log", "--oneline", "-5"])
 
         # Exit code forwarded verbatim.
         assert result.exit_code == 3

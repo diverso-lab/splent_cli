@@ -1,6 +1,7 @@
 """
 Tests for the product:down command.
 """
+
 import pytest
 import tomli_w
 from unittest.mock import patch, MagicMock
@@ -22,6 +23,7 @@ def _success_run(*args, **kwargs):
 # Flag validation
 # ---------------------------------------------------------------------------
 
+
 class TestFlagValidation:
     def test_requires_splent_app(self, runner, workspace):
         result = runner.invoke(product_down, [])
@@ -32,6 +34,7 @@ class TestFlagValidation:
 # ---------------------------------------------------------------------------
 # Basic shutdown (no --v)
 # ---------------------------------------------------------------------------
+
 
 class TestBasicShutdown:
     def test_stops_product_without_volumes(self, runner, product_workspace):
@@ -64,6 +67,7 @@ class TestBasicShutdown:
 # Volume removal (--v flag)
 # ---------------------------------------------------------------------------
 
+
 class TestVolumeRemoval:
     def test_cancel_skips_removal(self, runner, product_workspace):
         with patch("subprocess.run", side_effect=_success_run) as mock_run:
@@ -83,6 +87,7 @@ class TestVolumeRemoval:
 # Features in pyproject.toml
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureShutdown:
     def test_features_are_stopped(self, runner, product_workspace, tmp_path):
         # Add a feature to pyproject
@@ -93,7 +98,7 @@ class TestFeatureShutdown:
                 "version": "1.0.0",
                 "optional-dependencies": {
                     "features": ["splent_io/splent_feature_auth@v1.0.0"]
-                }
+                },
             }
         }
         with open(pyproject, "wb") as f:
@@ -101,8 +106,12 @@ class TestFeatureShutdown:
 
         # Create feature docker dir in cache
         feat_docker = (
-            tmp_path / ".splent_cache" / "features"
-            / "splent_io" / "splent_feature_auth@v1.0.0" / "docker"
+            tmp_path
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "splent_feature_auth@v1.0.0"
+            / "docker"
         )
         feat_docker.mkdir(parents=True)
         (feat_docker / "docker-compose.dev.yml").write_text("services: {}")

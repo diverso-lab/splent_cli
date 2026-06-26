@@ -1,4 +1,5 @@
 """Tests that db:dump and db:restore use MYSQL_PWD env var, not -p flag."""
+
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from splent_cli.commands.database.db_dump import db_dump

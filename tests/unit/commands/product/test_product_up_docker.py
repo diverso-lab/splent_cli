@@ -1,4 +1,5 @@
 """Tests for product:up — Docker daemon check and failure propagation."""
+
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from splent_cli.commands.product.product_up import product_up, _check_docker_running
@@ -28,7 +29,9 @@ class TestDockerDaemonCheck:
         with patch("splent_cli.commands.product.product_up.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
             result = runner.invoke(product_up, ["--dev"])
-        assert "running" in result.stderr.lower() or "reachable" in result.stderr.lower()
+        assert (
+            "running" in result.stderr.lower() or "reachable" in result.stderr.lower()
+        )
 
     def test_check_docker_running_delegates_to_require_docker(self):
         """_check_docker_running is a thin wrapper over the shared require_docker."""
@@ -68,11 +71,14 @@ class TestFeatureFailurePropagation:
             result.returncode = 1 if call_count["n"] == 1 else 0
             return result
 
-        (product_workspace / "test_app" / "docker" / "docker-compose.dev.yml").write_text(
-            "services:\n  web:\n    image: alpine\n"
-        )
+        (
+            product_workspace / "test_app" / "docker" / "docker-compose.dev.yml"
+        ).write_text("services:\n  web:\n    image: alpine\n")
 
-        with patch("splent_cli.commands.product.product_up.subprocess.run", side_effect=mock_run):
+        with patch(
+            "splent_cli.commands.product.product_up.subprocess.run",
+            side_effect=mock_run,
+        ):
             result = runner.invoke(product_up, ["--dev"])
 
         assert result.exit_code == 1
@@ -89,6 +95,9 @@ class TestFeatureFailurePropagation:
                 return MagicMock(returncode=0)
             return MagicMock(returncode=1)
 
-        with patch("splent_cli.commands.product.product_up.subprocess.run", side_effect=mock_run):
+        with patch(
+            "splent_cli.commands.product.product_up.subprocess.run",
+            side_effect=mock_run,
+        ):
             result = runner.invoke(product_up, ["--dev"])
         assert result.exit_code == 1

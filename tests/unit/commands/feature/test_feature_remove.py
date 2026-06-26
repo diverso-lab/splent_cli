@@ -1,6 +1,7 @@
 """
 Tests for the feature:remove command.
 """
+
 import tomllib
 import tomli_w
 import pytest
@@ -17,6 +18,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 class TestValidation:
     def test_requires_splent_app(self, runner, workspace):
@@ -38,6 +40,7 @@ class TestValidation:
 # ---------------------------------------------------------------------------
 # Removing from pyproject.toml
 # ---------------------------------------------------------------------------
+
 
 class TestPyprojectUpdate:
     def _write_pyproject(self, path, features):
@@ -87,6 +90,7 @@ class TestPyprojectUpdate:
 # Symlink removal
 # ---------------------------------------------------------------------------
 
+
 class TestSymlinkRemoval:
     def test_removes_existing_symlink(self, runner, product_workspace, monkeypatch):
         # Ensure predictable org: no GITHUB_USER → org = "splent-io" → org_safe = "splent_io"
@@ -102,7 +106,9 @@ class TestSymlinkRemoval:
         assert result.exit_code == 0
         assert not link.is_symlink()
 
-    def test_missing_symlink_does_not_crash(self, runner, product_workspace, monkeypatch):
+    def test_missing_symlink_does_not_crash(
+        self, runner, product_workspace, monkeypatch
+    ):
         monkeypatch.delenv("GITHUB_USER", raising=False)
         result = runner.invoke(feature_remove, ["nonexistent_feature"])
         assert result.exit_code == 0
@@ -111,6 +117,7 @@ class TestSymlinkRemoval:
 # ---------------------------------------------------------------------------
 # Success message
 # ---------------------------------------------------------------------------
+
 
 class TestSuccessMessage:
     def test_always_shows_success_at_end(self, runner, product_workspace):

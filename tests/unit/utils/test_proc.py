@@ -9,6 +9,7 @@ All subprocess / PATH interactions are mocked at the boundary:
   * splent_cli.utils.proc.shutil.which
 No real docker / git / network is required.
 """
+
 import subprocess
 
 import click
@@ -66,7 +67,9 @@ class TestRun:
         monkeypatch.setattr(
             proc.subprocess,
             "run",
-            lambda *a, **k: _completed(returncode=1, stdout="boom on stdout", stderr=""),
+            lambda *a, **k: _completed(
+                returncode=1, stdout="boom on stdout", stderr=""
+            ),
         )
         with pytest.raises(click.ClickException) as exc:
             proc.run(["ruff"], check=True, capture=True)

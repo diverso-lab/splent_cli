@@ -11,6 +11,7 @@ from splent_cli.commands.export.export_puml import (
 # _parse_uvl
 # ---------------------------------------------------------------------------
 
+
 class TestParseUvl:
     def _uvl(self, tmp_path, content):
         p = tmp_path / "model.uvl"
@@ -18,58 +19,73 @@ class TestParseUvl:
         return str(p)
 
     def test_parses_feature_names(self, tmp_path):
-        path = self._uvl(tmp_path, (
-            "features\n"
-            "    auth { org 'splent-io' package 'splent_feature_auth' }\n"
-            "    profile { org 'splent-io' package 'splent_feature_profile' }\n"
-            "constraints\n"
-        ))
+        path = self._uvl(
+            tmp_path,
+            (
+                "features\n"
+                "    auth { org 'splent-io' package 'splent_feature_auth' }\n"
+                "    profile { org 'splent-io' package 'splent_feature_profile' }\n"
+                "constraints\n"
+            ),
+        )
         data = _parse_uvl(path)
         names = [f["name"] for f in data["features"]]
         assert "auth" in names
         assert "profile" in names
 
     def test_parses_package_and_org(self, tmp_path):
-        path = self._uvl(tmp_path, (
-            "features\n"
-            "    auth { org 'splent-io' package 'splent_feature_auth' }\n"
-            "constraints\n"
-        ))
+        path = self._uvl(
+            tmp_path,
+            (
+                "features\n"
+                "    auth { org 'splent-io' package 'splent_feature_auth' }\n"
+                "constraints\n"
+            ),
+        )
         data = _parse_uvl(path)
         feat = data["features"][0]
         assert feat["package"] == "splent_feature_auth"
         assert feat["org"] == "splent-io"
 
     def test_parses_mandatory_cardinality(self, tmp_path):
-        path = self._uvl(tmp_path, (
-            "features\n"
-            "    mandatory\n"
-            "    auth { org 'x' package 'splent_feature_auth' }\n"
-            "    optional\n"
-            "    profile { org 'x' package 'splent_feature_profile' }\n"
-            "constraints\n"
-        ))
+        path = self._uvl(
+            tmp_path,
+            (
+                "features\n"
+                "    mandatory\n"
+                "    auth { org 'x' package 'splent_feature_auth' }\n"
+                "    optional\n"
+                "    profile { org 'x' package 'splent_feature_profile' }\n"
+                "constraints\n"
+            ),
+        )
         data = _parse_uvl(path)
         by_name = {f["name"]: f for f in data["features"]}
         assert by_name["auth"]["cardinality"] == "mandatory"
         assert by_name["profile"]["cardinality"] == "optional"
 
     def test_default_cardinality_is_optional(self, tmp_path):
-        path = self._uvl(tmp_path, (
-            "features\n"
-            "    auth { org 'x' package 'splent_feature_auth' }\n"
-            "constraints\n"
-        ))
+        path = self._uvl(
+            tmp_path,
+            (
+                "features\n"
+                "    auth { org 'x' package 'splent_feature_auth' }\n"
+                "constraints\n"
+            ),
+        )
         data = _parse_uvl(path)
         assert data["features"][0]["cardinality"] == "optional"
 
     def test_parses_constraints(self, tmp_path):
-        path = self._uvl(tmp_path, (
-            "features\n"
-            "    auth { org 'x' package 'splent_feature_auth' }\n"
-            "constraints\n"
-            "    profile => auth\n"
-        ))
+        path = self._uvl(
+            tmp_path,
+            (
+                "features\n"
+                "    auth { org 'x' package 'splent_feature_auth' }\n"
+                "constraints\n"
+                "    profile => auth\n"
+            ),
+        )
         data = _parse_uvl(path)
         assert any("profile => auth" in c for c in data["constraints"])
 
@@ -89,6 +105,7 @@ class TestParseUvl:
 # _parse_models
 # ---------------------------------------------------------------------------
 
+
 class TestParseModels:
     def test_returns_empty_for_missing_file(self, tmp_path):
         assert _parse_models(str(tmp_path / "models.py")) == []
@@ -96,8 +113,7 @@ class TestParseModels:
     def test_parses_integer_primary_key(self, tmp_path):
         p = tmp_path / "models.py"
         p.write_text(
-            "class User(db.Model):\n"
-            "    id = db.Column(db.Integer, primary_key=True)\n"
+            "class User(db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n"
         )
         result = _parse_models(str(p))
         assert len(result) == 1
@@ -108,10 +124,7 @@ class TestParseModels:
 
     def test_parses_string_column(self, tmp_path):
         p = tmp_path / "models.py"
-        p.write_text(
-            "class User(db.Model):\n"
-            "    name = db.Column(db.String(100))\n"
-        )
+        p.write_text("class User(db.Model):\n    name = db.Column(db.String(100))\n")
         result = _parse_models(str(p))
         attrs = {a["name"]: a for a in result[0]["attributes"]}
         assert attrs["name"]["type"] == "str"
@@ -143,8 +156,7 @@ class TestParseModels:
     def test_parses_relationship(self, tmp_path):
         p = tmp_path / "models.py"
         p.write_text(
-            "class User(db.Model):\n"
-            "    posts = db.relationship(Post, backref='user')\n"
+            "class User(db.Model):\n    posts = db.relationship(Post, backref='user')\n"
         )
         result = _parse_models(str(p))
         rels = result[0]["relationships"]
@@ -198,27 +210,23 @@ class TestParseModels:
 # _read_contract
 # ---------------------------------------------------------------------------
 
+
 class TestReadContract:
     def test_returns_none_when_no_pyproject(self, tmp_path):
         assert _read_contract(str(tmp_path)) is None
 
     def test_returns_contract_dict(self, tmp_path):
         (tmp_path / "pyproject.toml").write_bytes(
-            b"[tool.splent.contract]\n"
-            b'routes = ["/auth/login"]\n'
+            b'[tool.splent.contract]\nroutes = ["/auth/login"]\n'
         )
         result = _read_contract(str(tmp_path))
         assert result is not None
         assert "/auth/login" in result["routes"]
 
     def test_returns_none_when_no_contract_key(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_bytes(
-            b'[tool.splent]\nname = "test"\n'
-        )
+        (tmp_path / "pyproject.toml").write_bytes(b'[tool.splent]\nname = "test"\n')
         assert _read_contract(str(tmp_path)) is None
 
     def test_returns_none_when_no_tool_splent_section(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_bytes(
-            b'[project]\nname = "test"\n'
-        )
+        (tmp_path / "pyproject.toml").write_bytes(b'[project]\nname = "test"\n')
         assert _read_contract(str(tmp_path)) is None

@@ -1,8 +1,12 @@
 """
 Tests for env-aware feature reading (features + features_dev + features_prod).
 """
+
 import pytest
-from splent_cli.utils.feature_utils import read_features_from_data, write_features_to_data
+from splent_cli.utils.feature_utils import (
+    read_features_from_data,
+    write_features_to_data,
+)
 
 
 @pytest.fixture
@@ -27,7 +31,6 @@ def pyproject_data():
 
 
 class TestReadFeaturesFromData:
-
     def test_no_env_returns_base_only(self, pyproject_data):
         result = read_features_from_data(pyproject_data)
         assert len(result) == 2
@@ -60,10 +63,15 @@ class TestReadFeaturesFromData:
 
     def test_deduplicates_overlapping_features(self):
         data = {
-            "tool": {"splent": {
-                "features": ["splent-io/feat_a@v1.0.0"],
-                "features_dev": ["splent-io/feat_a@v1.0.0", "splent-io/feat_b@v1.0.0"],
-            }}
+            "tool": {
+                "splent": {
+                    "features": ["splent-io/feat_a@v1.0.0"],
+                    "features_dev": [
+                        "splent-io/feat_a@v1.0.0",
+                        "splent-io/feat_b@v1.0.0",
+                    ],
+                }
+            }
         }
         result = read_features_from_data(data, env="dev")
         assert len(result) == 2
@@ -75,10 +83,14 @@ class TestReadFeaturesFromData:
         assert result == ["feat_a"]
 
     def test_empty_base_with_env_features(self):
-        data = {"tool": {"splent": {
-            "features": [],
-            "features_dev": ["splent-io/feat_debug@v1.0.0"],
-        }}}
+        data = {
+            "tool": {
+                "splent": {
+                    "features": [],
+                    "features_dev": ["splent-io/feat_debug@v1.0.0"],
+                }
+            }
+        }
         result = read_features_from_data(data, env="dev")
         assert result == ["splent-io/feat_debug@v1.0.0"]
 
@@ -93,7 +105,6 @@ class TestReadFeaturesFromData:
 
 
 class TestWriteFeaturesToData:
-
     def test_writes_to_tool_splent(self):
         data = {"tool": {"splent": {}}}
         write_features_to_data(data, ["feat_a"], key="features")

@@ -3,6 +3,7 @@ Tests for the check:github command.
 
 All HTTP calls are mocked — no real GitHub API needed.
 """
+
 import json
 import urllib.error
 import pytest
@@ -17,8 +18,13 @@ def runner():
     return CliRunner(mix_stderr=False)
 
 
-def _mock_response(login="testuser", name="Test User", plan="free",
-                   rate_remaining="4999", rate_limit="5000"):
+def _mock_response(
+    login="testuser",
+    name="Test User",
+    plan="free",
+    rate_remaining="4999",
+    rate_limit="5000",
+):
     """Build a fake urllib response."""
     body = json.dumps({"login": login, "name": name, "plan": {"name": plan}}).encode()
     mock_resp = MagicMock()
@@ -35,6 +41,7 @@ def _mock_response(login="testuser", name="Test User", plan="free",
 # ---------------------------------------------------------------------------
 # Missing credentials
 # ---------------------------------------------------------------------------
+
 
 class TestMissingCredentials:
     def test_exits_when_no_github_user(self, runner, monkeypatch):
@@ -55,6 +62,7 @@ class TestMissingCredentials:
 # ---------------------------------------------------------------------------
 # Successful authentication
 # ---------------------------------------------------------------------------
+
 
 class TestSuccessfulAuth:
     def test_exits_0_when_valid(self, runner, monkeypatch):
@@ -87,6 +95,7 @@ class TestSuccessfulAuth:
 # ---------------------------------------------------------------------------
 # HTTP errors
 # ---------------------------------------------------------------------------
+
 
 class TestHttpErrors:
     def test_exits_1_on_401(self, runner, monkeypatch):

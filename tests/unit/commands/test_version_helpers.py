@@ -1,4 +1,5 @@
 """Tests for pure helper functions in version.py."""
+
 import pytest
 
 from splent_cli.commands.version import (
@@ -13,9 +14,7 @@ from splent_cli.utils.feature_utils import load_product_features
 
 class TestPyprojectVersion:
     def test_returns_version_from_valid_file(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_bytes(
-            b'[project]\nversion = "1.2.3"\n'
-        )
+        (tmp_path / "pyproject.toml").write_bytes(b'[project]\nversion = "1.2.3"\n')
         assert _pyproject_version(str(tmp_path / "pyproject.toml")) == "1.2.3"
 
     def test_returns_none_when_file_missing(self, tmp_path):
@@ -34,9 +33,7 @@ class TestPyprojectVersion:
 
 class TestProductVersion:
     def test_reads_version_from_product_pyproject(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_bytes(
-            b'[project]\nversion = "2.0.0"\n'
-        )
+        (tmp_path / "pyproject.toml").write_bytes(b'[project]\nversion = "2.0.0"\n')
         assert _product_version(str(tmp_path)) == "2.0.0"
 
     def test_returns_none_when_pyproject_missing(self, tmp_path):
@@ -50,8 +47,7 @@ class TestProductVersion:
 class TestDeclaredFeatures:
     def test_returns_features_list(self, tmp_path):
         (tmp_path / "pyproject.toml").write_bytes(
-            b'[tool.splent]\n'
-            b'features = ["ns/feat_a@v1", "ns/feat_b"]\n'
+            b'[tool.splent]\nfeatures = ["ns/feat_a@v1", "ns/feat_b"]\n'
         )
         result = load_product_features(str(tmp_path))
         assert "ns/feat_a@v1" in result
@@ -73,22 +69,16 @@ class TestDeclaredFeatures:
 
 class TestFeatureLocation:
     def test_versioned_in_cache(self, tmp_path):
-        cache = (
-            tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1"
-        )
+        cache = tmp_path / ".splent_cache" / "features" / "splent_io" / "auth@v1"
         cache.mkdir(parents=True)
         assert _feature_location(str(tmp_path), "splent_io/auth@v1") == "cache"
 
     def test_versioned_missing(self, tmp_path):
-        assert (
-            _feature_location(str(tmp_path), "splent_io/auth@v1") == "missing"
-        )
+        assert _feature_location(str(tmp_path), "splent_io/auth@v1") == "missing"
 
     def test_editable_at_workspace_root(self, tmp_path):
         (tmp_path / "auth").mkdir()
-        assert (
-            _feature_location(str(tmp_path), "splent_io/auth") == "workspace"
-        )
+        assert _feature_location(str(tmp_path), "splent_io/auth") == "workspace"
 
     def test_editable_in_cache_fallback(self, tmp_path):
         cache = tmp_path / ".splent_cache" / "features" / "splent_io" / "auth"
@@ -96,9 +86,7 @@ class TestFeatureLocation:
         assert _feature_location(str(tmp_path), "splent_io/auth") == "cache"
 
     def test_editable_missing(self, tmp_path):
-        assert (
-            _feature_location(str(tmp_path), "splent_io/auth") == "missing"
-        )
+        assert _feature_location(str(tmp_path), "splent_io/auth") == "missing"
 
     def test_no_namespace_prefix_defaults(self, tmp_path):
         (tmp_path / "auth").mkdir()

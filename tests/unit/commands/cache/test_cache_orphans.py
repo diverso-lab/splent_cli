@@ -1,6 +1,7 @@
 """
 Tests for the cache:orphans command.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -29,7 +30,7 @@ def _make_product(workspace, name, features=None):
     features_list = "\n".join(f'  "{f}",' for f in (features or []))
     (product_dir / "pyproject.toml").write_text(
         f'[project]\nname = "{name}"\nversion = "1.0.0"\n\n'
-        f'[tool.splent]\nfeatures = [\n{features_list}\n]\n'
+        f"[tool.splent]\nfeatures = [\n{features_list}\n]\n"
     )
     return product_dir
 
@@ -37,6 +38,7 @@ def _make_product(workspace, name, features=None):
 # ---------------------------------------------------------------------------
 # _get_cache_entries() helper
 # ---------------------------------------------------------------------------
+
 
 class TestGetCacheEntries:
     def test_returns_empty_for_missing_cache(self, tmp_path):
@@ -67,6 +69,7 @@ class TestGetCacheEntries:
 # _get_all_product_refs() helper
 # ---------------------------------------------------------------------------
 
+
 class TestGetAllProductRefs:
     def test_extracts_versioned_ref(self, tmp_path):
         _make_product(tmp_path, "myapp", ["splent_io/auth@v1.0.0"])
@@ -87,6 +90,7 @@ class TestGetAllProductRefs:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 class TestCacheOrphansCommand:
     def test_empty_cache_shows_info(self, runner, workspace):
@@ -119,4 +123,8 @@ class TestCacheOrphansCommand:
         result = runner.invoke(cache_orphans, [])
         assert result.exit_code == 0
         assert "splent_feature_payments" in result.output
-        assert "splent_feature_auth" not in result.output.split("Orphaned")[1] if "Orphaned" in result.output else True
+        assert (
+            "splent_feature_auth" not in result.output.split("Orphaned")[1]
+            if "Orphaned" in result.output
+            else True
+        )

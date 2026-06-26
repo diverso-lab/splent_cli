@@ -75,9 +75,7 @@ def db_migrate(feature, message, empty):
     and kept so you can write ``upgrade()``/``downgrade()`` by hand.
     """
     if empty and not feature:
-        click.echo(
-            click.style("❌ --empty requires a FEATURE argument.", fg="red")
-        )
+        click.echo(click.style("❌ --empty requires a FEATURE argument.", fg="red"))
         raise SystemExit(1)
 
     if feature:

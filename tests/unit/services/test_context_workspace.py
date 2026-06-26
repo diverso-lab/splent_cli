@@ -1,4 +1,5 @@
 """Tests for context.workspace() validation."""
+
 from click.testing import CliRunner
 import click
 from splent_cli.services.context import workspace
@@ -11,9 +12,7 @@ class TestWorkspaceValidation:
         assert result == tmp_path
 
     def test_exits_when_path_does_not_exist(self, monkeypatch):
-        monkeypatch.setenv(
-            "WORKING_DIR", "/nonexistent/path/that/does/not/exist"
-        )
+        monkeypatch.setenv("WORKING_DIR", "/nonexistent/path/that/does/not/exist")
 
         @click.command()
         def cmd():
@@ -21,10 +20,7 @@ class TestWorkspaceValidation:
 
         result = CliRunner().invoke(cmd)
         assert result.exit_code == 1
-        assert (
-            "not found" in result.output.lower()
-            or "❌" in result.output
-        )
+        assert "not found" in result.output.lower() or "❌" in result.output
 
     def test_error_message_mentions_source_env(self, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", "/nonexistent/path")
@@ -34,7 +30,4 @@ class TestWorkspaceValidation:
             workspace()
 
         result = CliRunner().invoke(cmd)
-        assert (
-            "source .env" in result.output
-            or "WORKING_DIR" in result.output
-        )
+        assert "source .env" in result.output or "WORKING_DIR" in result.output

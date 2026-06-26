@@ -11,6 +11,7 @@ from splent_cli.commands.export.export_puml import (
 # Shared test data builders
 # ---------------------------------------------------------------------------
 
+
 def _uvl(features=None, constraints=None):
     return {
         "features": features or [],
@@ -50,6 +51,7 @@ def _attr(name, type_="str", pk=False, nullable=True, unique=False):
 # ---------------------------------------------------------------------------
 # _generate_feature_puml
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateFeaturePuml:
     def test_has_startuml_and_enduml(self):
@@ -125,6 +127,7 @@ class TestGenerateFeaturePuml:
 # _generate_deps_puml
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateDepsPuml:
     def test_has_startuml_and_enduml(self):
         result = _generate_deps_puml("myapp", _uvl())
@@ -172,6 +175,7 @@ class TestGenerateDepsPuml:
 # ---------------------------------------------------------------------------
 # _generate_class_puml
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateClassPuml:
     def test_has_startuml_and_enduml(self):
@@ -223,16 +227,14 @@ class TestGenerateClassPuml:
         }
         result = _generate_class_puml("myapp", models, _uvl())
         # name without nullable=True should not have '?' after the type
-        lines = [line for line in result.splitlines() if "name" in line and "str" in line]
+        lines = [
+            line for line in result.splitlines() if "name" in line and "str" in line
+        ]
         assert lines, "Should have a line with 'name' attribute"
         assert "?" not in lines[0]
 
     def test_public_methods_in_output(self):
-        models = {
-            "splent_feature_auth": [
-                _model("User", methods=["login", "logout"])
-            ]
-        }
+        models = {"splent_feature_auth": [_model("User", methods=["login", "logout"])]}
         result = _generate_class_puml("myapp", models, _uvl())
         assert "login()" in result
         assert "logout()" in result
@@ -247,13 +249,13 @@ class TestGenerateClassPuml:
         assert "class Post" in result
 
     def test_fk_relationship_rendered(self):
-        post_attrs = [
-            _attr("user_id", type_="int", pk=False, nullable=True)
-        ]
+        post_attrs = [_attr("user_id", type_="int", pk=False, nullable=True)]
         post_fks = [{"column": "user_id", "target_table": "user", "target_col": "id"}]
         models = {
             "splent_feature_auth": [_model("User")],
-            "splent_feature_blog": [_model("Post", attributes=post_attrs, fks=post_fks)],
+            "splent_feature_blog": [
+                _model("Post", attributes=post_attrs, fks=post_fks)
+            ],
         }
         result = _generate_class_puml("myapp", models, _uvl())
         # FK from Post to User should produce a relationship line

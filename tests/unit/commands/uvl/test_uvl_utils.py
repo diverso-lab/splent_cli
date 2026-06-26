@@ -1,4 +1,5 @@
 """Tests for pure helper functions in uvl_utils.py."""
+
 import os
 import pytest
 
@@ -18,6 +19,7 @@ from splent_cli.commands.uvl.uvl_utils import (
 # ---------------------------------------------------------------------------
 # normalize_feature_name
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizeFeatureName:
     def test_full_versioned_dep(self):
@@ -47,6 +49,7 @@ class TestNormalizeFeatureName:
 # resolve_uvlhub_raw_url
 # ---------------------------------------------------------------------------
 
+
 class TestResolveUvlhubRawUrl:
     def test_builds_correct_url(self):
         url = resolve_uvlhub_raw_url("uvlhub.io", "10.1234/test", "model.uvl")
@@ -65,6 +68,7 @@ class TestResolveUvlhubRawUrl:
 # ---------------------------------------------------------------------------
 # extract_implications_from_uvl_text
 # ---------------------------------------------------------------------------
+
 
 class TestExtractImplicationsFromUvlText:
     def test_simple_implication(self):
@@ -111,6 +115,7 @@ class TestExtractImplicationsFromUvlText:
 # ---------------------------------------------------------------------------
 # write_csvconf_full
 # ---------------------------------------------------------------------------
+
 
 class TestWriteCsvconfFull:
     def test_creates_file(self):
@@ -166,6 +171,7 @@ class TestWriteCsvconfFull:
 # read_splent_app
 # ---------------------------------------------------------------------------
 
+
 class TestReadSplentApp:
     def test_returns_app_name(self, tmp_path, monkeypatch):
         monkeypatch.delenv("SPLENT_APP", raising=False)
@@ -196,6 +202,7 @@ class TestReadSplentApp:
 # load_pyproject
 # ---------------------------------------------------------------------------
 
+
 class TestLoadPyproject:
     def test_loads_valid_toml(self, tmp_path):
         p = tmp_path / "pyproject.toml"
@@ -211,6 +218,7 @@ class TestLoadPyproject:
 # ---------------------------------------------------------------------------
 # get_uvl_cfg
 # ---------------------------------------------------------------------------
+
 
 class TestGetUvlCfg:
     def test_extracts_uvl_section(self):

@@ -107,9 +107,7 @@ def test_corrupt_manifest_surfaces_through_mutating_api(tmp_path):
 
 
 def test_non_dict_features_is_healed_not_an_error(tmp_path):
-    _write_manifest(
-        tmp_path, json.dumps({"schema_version": "1", "features": ["oops"]})
-    )
+    _write_manifest(tmp_path, json.dumps({"schema_version": "1", "features": ["oops"]}))
     result = read_manifest(str(tmp_path))
     assert result["features"] == {}
 

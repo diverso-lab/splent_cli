@@ -1,4 +1,5 @@
 """Tests for db:dump — env var validation before running mysqldump."""
+
 from click.testing import CliRunner
 from splent_cli.commands.database.db_dump import db_dump
 
@@ -17,7 +18,12 @@ class TestDbDumpEnvValidation:
 
     def test_exits_when_all_missing(self, monkeypatch):
         monkeypatch.setenv("SPLENT_APP", "test_app")
-        for var in ("MARIADB_HOSTNAME", "MARIADB_USER", "MARIADB_PASSWORD", "MARIADB_DATABASE"):
+        for var in (
+            "MARIADB_HOSTNAME",
+            "MARIADB_USER",
+            "MARIADB_PASSWORD",
+            "MARIADB_DATABASE",
+        ):
             monkeypatch.delenv(var, raising=False)
         runner = CliRunner(mix_stderr=True)
         result = runner.invoke(db_dump, [])

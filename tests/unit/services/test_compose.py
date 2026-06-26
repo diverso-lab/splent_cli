@@ -12,6 +12,7 @@ from splent_cli.services import compose
 # project_name()
 # ---------------------------------------------------------------------------
 
+
 class TestProjectName:
     def test_basic(self):
         assert compose.project_name("my_app", "dev") == "my_app_dev"
@@ -39,12 +40,19 @@ class TestProjectName:
 # normalize_feature_ref()
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeFeatureRef:
     def test_bare_name_gets_default_namespace(self):
-        assert compose.normalize_feature_ref("splent_feature_auth") == "splent_io/splent_feature_auth"
+        assert (
+            compose.normalize_feature_ref("splent_feature_auth")
+            == "splent_io/splent_feature_auth"
+        )
 
     def test_namespaced_unchanged(self):
-        assert compose.normalize_feature_ref("splent_io/splent_feature_auth") == "splent_io/splent_feature_auth"
+        assert (
+            compose.normalize_feature_ref("splent_io/splent_feature_auth")
+            == "splent_io/splent_feature_auth"
+        )
 
     def test_strips_features_prefix(self):
         result = compose.normalize_feature_ref("features/splent_io/splent_feature_auth")
@@ -58,6 +66,7 @@ class TestNormalizeFeatureRef:
 # ---------------------------------------------------------------------------
 # resolve_file() — touches the filesystem
 # ---------------------------------------------------------------------------
+
 
 class TestResolveFile:
     def test_prefers_env_specific_file(self, tmp_path):
@@ -94,11 +103,17 @@ class TestResolveFile:
 # product_path() and feature_docker_dir()
 # ---------------------------------------------------------------------------
 
+
 class TestPaths:
     def test_product_path(self):
         result = compose.product_path("my_app", "/workspace")
         assert result == "/workspace/my_app"
 
     def test_feature_docker_dir(self):
-        result = compose.feature_docker_dir("/workspace", "splent_io/splent_feature_auth")
-        assert result == "/workspace/.splent_cache/features/splent_io/splent_feature_auth/docker"
+        result = compose.feature_docker_dir(
+            "/workspace", "splent_io/splent_feature_auth"
+        )
+        assert (
+            result
+            == "/workspace/.splent_cache/features/splent_io/splent_feature_auth/docker"
+        )

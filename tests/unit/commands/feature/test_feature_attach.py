@@ -1,4 +1,5 @@
 """Tests for the feature:attach command."""
+
 import pytest
 from click.testing import CliRunner
 
@@ -14,6 +15,7 @@ def runner():
 # Missing pyproject.toml
 # ---------------------------------------------------------------------------
 
+
 class TestMissingPyproject:
     def test_exits_when_no_pyproject(self, runner, product_workspace):
         # Remove pyproject.toml from the product
@@ -26,6 +28,7 @@ class TestMissingPyproject:
 # ---------------------------------------------------------------------------
 # Cache not found
 # ---------------------------------------------------------------------------
+
 
 class TestCacheNotFound:
     def test_exits_when_cache_missing(self, runner, product_workspace):
@@ -42,8 +45,11 @@ class TestCacheNotFound:
 # Successful attach
 # ---------------------------------------------------------------------------
 
+
 class TestSuccessfulAttach:
-    def _setup_cache(self, workspace, namespace="splent_io", name="auth", version="v1.0.0"):
+    def _setup_cache(
+        self, workspace, namespace="splent_io", name="auth", version="v1.0.0"
+    ):
         cache_dir = (
             workspace / ".splent_cache" / "features" / namespace / f"{name}@{version}"
         )
@@ -64,9 +70,7 @@ class TestSuccessfulAttach:
     def test_creates_symlink(self, runner, product_workspace):
         self._setup_cache(product_workspace)
         runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
-        link = (
-            product_workspace / "test_app" / "features" / "splent_io" / "auth@v1.0.0"
-        )
+        link = product_workspace / "test_app" / "features" / "splent_io" / "auth@v1.0.0"
         assert link.is_symlink()
 
     def test_success_message(self, runner, product_workspace):
@@ -100,8 +104,11 @@ class TestSuccessfulAttach:
 # Symlink replacement
 # ---------------------------------------------------------------------------
 
+
 class TestSymlinkReplacement:
-    def _setup_cache(self, workspace, namespace="splent_io", name="auth", version="v1.0.0"):
+    def _setup_cache(
+        self, workspace, namespace="splent_io", name="auth", version="v1.0.0"
+    ):
         cache_dir = (
             workspace / ".splent_cache" / "features" / namespace / f"{name}@{version}"
         )

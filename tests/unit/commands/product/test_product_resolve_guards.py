@@ -14,6 +14,7 @@ Plus a couple of happy-path tests for the command entry point.
 
 No docker / git / network / real deletion outside tmp_path is required.
 """
+
 import os
 
 import pytest
@@ -31,8 +32,9 @@ def runner():
     return CliRunner(mix_stderr=False)
 
 
-def _make_cache_dir(workspace, namespace="splent_io", name="splent_feature_demo",
-                    version="v1.0.0"):
+def _make_cache_dir(
+    workspace, namespace="splent_io", name="splent_feature_demo", version="v1.0.0"
+):
     """Create a versioned cache folder inside .splent_cache and return its path."""
     cache_dir = os.path.join(
         str(workspace), ".splent_cache", "features", namespace, f"{name}@{version}"
@@ -48,16 +50,20 @@ def _make_cache_dir(workspace, namespace="splent_io", name="splent_feature_demo"
 # Confirmation gating: --force only deletes after confirm / --yes
 # ---------------------------------------------------------------------------
 
+
 class TestForceConfirmationGating:
     def test_abort_at_prompt_leaves_cache_intact(self, tmp_path):
         cache_dir = _make_cache_dir(tmp_path)
 
-        with patch(
-            "splent_cli.commands.product.product_resolve.click.confirm",
-            return_value=False,
-        ) as mock_confirm, patch(
-            "splent_cli.commands.product.product_resolve.shutil.rmtree"
-        ) as mock_rmtree:
+        with (
+            patch(
+                "splent_cli.commands.product.product_resolve.click.confirm",
+                return_value=False,
+            ) as mock_confirm,
+            patch(
+                "splent_cli.commands.product.product_resolve.shutil.rmtree"
+            ) as mock_rmtree,
+        ):
             _force_remove_cache_dir(str(tmp_path), cache_dir, yes=False)
 
         # Prompted, declined → nothing removed, folder still there.
@@ -95,6 +101,7 @@ class TestForceConfirmationGating:
 # ---------------------------------------------------------------------------
 # Path validation: rmtree target must be inside .splent_cache
 # ---------------------------------------------------------------------------
+
 
 class TestRmtreeTargetIsInsideCache:
     def test_refuses_path_outside_cache_root(self, tmp_path):
@@ -160,6 +167,7 @@ class TestRmtreeTargetIsInsideCache:
 # rmtree errors are handled cleanly (no traceback)
 # ---------------------------------------------------------------------------
 
+
 class TestRmtreeErrorHandling:
     def test_rmtree_oserror_surfaced_without_traceback(self, tmp_path, capsys):
         cache_dir = _make_cache_dir(tmp_path)
@@ -197,6 +205,7 @@ class TestRmtreeErrorHandling:
 # ---------------------------------------------------------------------------
 # Command entry point: core happy paths
 # ---------------------------------------------------------------------------
+
 
 class TestProductSyncHappyPath:
     def _write_pyproject(self, tmp_path, features_block):
@@ -238,8 +247,7 @@ class TestProductSyncHappyPath:
         monkeypatch.delenv("SPLENT_ENV", raising=False)
         self._write_pyproject(
             tmp_path,
-            '[tool.splent]\n'
-            'features = ["splent-io/splent_feature_demo@v1.0.0"]\n',
+            '[tool.splent]\nfeatures = ["splent-io/splent_feature_demo@v1.0.0"]\n',
         )
         cache_dir = _make_cache_dir(tmp_path)
 

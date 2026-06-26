@@ -1,4 +1,5 @@
 """Tests for manifest.get_dependents — exception handling specificity."""
+
 from unittest.mock import patch
 from pathlib import Path
 from splent_cli.utils.manifest import get_dependents, set_feature_state
@@ -17,8 +18,13 @@ def _make_product(tmp_path):
 
 def _add_auth_feature(product_path):
     set_feature_state(
-        product_path, "myapp", KEY,
-        "declared", namespace=NS, name=NAME, version=VER,
+        product_path,
+        "myapp",
+        KEY,
+        "declared",
+        namespace=NS,
+        name=NAME,
+        version=VER,
     )
 
 
@@ -57,18 +63,18 @@ class TestGetDependentsErrorHandling:
         product_path = _make_product(tmp_path)
         profile_key = "splent_io/splent_feature_profile@v1.0.0"
         set_feature_state(
-            product_path, "myapp", profile_key,
-            "declared", namespace=NS,
-            name="splent_feature_profile", version=VER,
+            product_path,
+            "myapp",
+            profile_key,
+            "declared",
+            namespace=NS,
+            name="splent_feature_profile",
+            version=VER,
         )
-        d = (
-            Path(product_path)
-            / "features" / NS / "splent_feature_profile"
-        )
+        d = Path(product_path) / "features" / NS / "splent_feature_profile"
         d.mkdir(parents=True)
         (d / "pyproject.toml").write_text(
-            "[tool.splent.contract.requires]\n"
-            'features = ["splent_feature_auth"]\n'
+            '[tool.splent.contract.requires]\nfeatures = ["splent_feature_auth"]\n'
         )
 
         result = get_dependents(product_path, "splent_feature_auth")

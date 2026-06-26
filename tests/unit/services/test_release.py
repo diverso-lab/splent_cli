@@ -1,4 +1,5 @@
 """Tests for the release service — error handling in git operations."""
+
 import subprocess
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -13,20 +14,13 @@ from splent_cli.services.release import (
 
 class TestExtractRepo:
     def test_https_with_token(self):
-        assert (
-            extract_repo("https://token@github.com/org/repo.git")
-            == "org/repo"
-        )
+        assert extract_repo("https://token@github.com/org/repo.git") == "org/repo"
 
     def test_https_plain(self):
-        assert (
-            extract_repo("https://github.com/org/repo.git") == "org/repo"
-        )
+        assert extract_repo("https://github.com/org/repo.git") == "org/repo"
 
     def test_ssh(self):
-        assert (
-            extract_repo("git@github.com:org/repo.git") == "org/repo"
-        )
+        assert extract_repo("git@github.com:org/repo.git") == "org/repo"
 
     def test_invalid_raises_system_exit(self):
         with pytest.raises(SystemExit):
@@ -35,9 +29,7 @@ class TestExtractRepo:
 
 class TestCommitLocalChanges:
     def test_clean_tree_skips_commit(self, tmp_path):
-        with patch(
-            "splent_cli.services.release.subprocess.run"
-        ) as mock_run:
+        with patch("splent_cli.services.release.subprocess.run") as mock_run:
             mock_result = MagicMock()
             mock_result.stdout = ""
             mock_run.return_value = mock_result
@@ -53,9 +45,7 @@ class TestCommitLocalChanges:
             assert mock_run.call_count == 1  # only git status
 
     def test_git_push_failure_exits_with_message(self, tmp_path):
-        with patch(
-            "splent_cli.services.release.subprocess.run"
-        ) as mock_run:
+        with patch("splent_cli.services.release.subprocess.run") as mock_run:
             with patch(
                 "splent_cli.services.release.click.confirm",
                 return_value=True,
@@ -65,9 +55,7 @@ class TestCommitLocalChanges:
                 # status → dirty, add → ok, commit → ok, push → fail
                 error = subprocess.CalledProcessError(1, "git push")
                 error.stderr = "Permission denied"
-                mock_run.side_effect = [
-                    dirty_result, None, None, error
-                ]
+                mock_run.side_effect = [dirty_result, None, None, error]
 
                 import click
 
@@ -81,9 +69,7 @@ class TestCommitLocalChanges:
                 assert "Traceback" not in result.output
 
     def test_git_push_failure_explains_partial_state(self, tmp_path):
-        with patch(
-            "splent_cli.services.release.subprocess.run"
-        ) as mock_run:
+        with patch("splent_cli.services.release.subprocess.run") as mock_run:
             with patch(
                 "splent_cli.services.release.click.confirm",
                 return_value=True,
@@ -92,9 +78,7 @@ class TestCommitLocalChanges:
                 dirty_result.stdout = "M pyproject.toml"
                 error = subprocess.CalledProcessError(1, "git push")
                 error.stderr = "network error"
-                mock_run.side_effect = [
-                    dirty_result, None, None, error
-                ]
+                mock_run.side_effect = [dirty_result, None, None, error]
 
                 import click
 
@@ -113,18 +97,14 @@ class TestCommitLocalChanges:
 
 class TestCreateAndPushGitTag:
     def test_tag_push_failure_exits_cleanly(self, tmp_path):
-        with patch(
-            "splent_cli.services.release.subprocess.run"
-        ) as mock_run:
+        with patch("splent_cli.services.release.subprocess.run") as mock_run:
             # fetch → ok, tag list → ok (no tags), create tag → ok,
             # push tag → fail
             tags_result = MagicMock()
             tags_result.stdout = ""
             error = subprocess.CalledProcessError(1, "git push")
             error.stderr = "rejected"
-            mock_run.side_effect = [
-                MagicMock(), tags_result, MagicMock(), error
-            ]
+            mock_run.side_effect = [MagicMock(), tags_result, MagicMock(), error]
 
             import click
 
@@ -135,18 +115,16 @@ class TestCreateAndPushGitTag:
             result = CliRunner(mix_stderr=False).invoke(cmd)
             assert result.exit_code == 1
             assert "Traceback" not in result.output
-            assert "error:" in result.output.lower() or "failed" in result.output.lower()
+            assert (
+                "error:" in result.output.lower() or "failed" in result.output.lower()
+            )
 
 
 class TestBuildAndUploadPypi:
     def test_build_failure_exits_cleanly(self, tmp_path):
-        with patch(
-            "splent_cli.services.release.subprocess.run"
-        ) as mock_run:
+        with patch("splent_cli.services.release.subprocess.run") as mock_run:
             error = subprocess.CalledProcessError(1, "python -m build")
-            mock_run.side_effect = [
-                MagicMock(), error
-            ]  # rm -rf ok, build fails
+            mock_run.side_effect = [MagicMock(), error]  # rm -rf ok, build fails
 
             import click
 
@@ -157,7 +135,10 @@ class TestBuildAndUploadPypi:
             result = CliRunner(mix_stderr=False).invoke(cmd)
             assert result.exit_code == 1
             assert "Traceback" not in result.output
-            assert "build failed" in result.output.lower() or "error:" in result.output.lower()
+            assert (
+                "build failed" in result.output.lower()
+                or "error:" in result.output.lower()
+            )
 
     def test_upload_failure_shows_manual_recovery_hint(self, tmp_path):
         # The real build step is mocked, so it produces no files. Create a dummy
@@ -167,12 +148,12 @@ class TestBuildAndUploadPypi:
         dist_dir.mkdir()
         (dist_dir / "pkg-1.0.0-py3-none-any.whl").write_text("dummy")
 
-        with patch(
-            "splent_cli.services.release.subprocess.run"
-        ) as mock_run:
+        with patch("splent_cli.services.release.subprocess.run") as mock_run:
             error = subprocess.CalledProcessError(1, "twine upload")
             mock_run.side_effect = [
-                MagicMock(), MagicMock(), error
+                MagicMock(),
+                MagicMock(),
+                error,
             ]  # rm, build ok, upload fails
 
             import click

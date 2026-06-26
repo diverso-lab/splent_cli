@@ -9,6 +9,7 @@ Covered hardened behaviors:
 Everything that touches the database / alembic / the lifecycle state machine is
 mocked at the module boundary — no real docker / git / network / DB required.
 """
+
 import contextlib
 import os
 from unittest.mock import patch, MagicMock
@@ -35,28 +36,39 @@ def _flask_ctx():
 
 
 @contextlib.contextmanager
-def _patched(monkeypatch, tmp_path, *, declared, mdir, migration_manager,
-             downgrade, find_dependents):
+def _patched(
+    monkeypatch,
+    tmp_path,
+    *,
+    declared,
+    mdir,
+    migration_manager,
+    downgrade,
+    find_dependents,
+):
     """Patch every module-level boundary db_rollback reaches into."""
     monkeypatch.setenv("SPLENT_APP", "test_app")
     monkeypatch.setenv("WORKING_DIR", str(tmp_path))
     mod = "splent_cli.commands.database.db_rollback"
-    with _flask_ctx(), \
-            patch(f"{mod}.PathUtils.get_app_base_dir", return_value=str(tmp_path)), \
-            patch(f"{mod}.get_features_from_pyproject", return_value=declared), \
-            patch(f"{mod}.MigrationManager", migration_manager), \
-            patch(f"{mod}.alembic_downgrade", downgrade), \
-            patch(f"{mod}._find_dependents", return_value=find_dependents), \
-            patch(f"{mod}.advance_state"), \
-            patch(
-                f"{mod}.resolve_feature_key_from_entry",
-                side_effect=lambda e: (e, "ns", e, "1.0.0"),
-            ):
+    with (
+        _flask_ctx(),
+        patch(f"{mod}.PathUtils.get_app_base_dir", return_value=str(tmp_path)),
+        patch(f"{mod}.get_features_from_pyproject", return_value=declared),
+        patch(f"{mod}.MigrationManager", migration_manager),
+        patch(f"{mod}.alembic_downgrade", downgrade),
+        patch(f"{mod}._find_dependents", return_value=find_dependents),
+        patch(f"{mod}.advance_state"),
+        patch(
+            f"{mod}.resolve_feature_key_from_entry",
+            side_effect=lambda e: (e, "ns", e, "1.0.0"),
+        ),
+    ):
         yield
 
 
-def _make_migration_manager(*, mdir, revision_after, all_status=None,
-                            dep_revisions=None):
+def _make_migration_manager(
+    *, mdir, revision_after, all_status=None, dep_revisions=None
+):
     """Build a MagicMock standing in for the MigrationManager class.
 
     `dep_revisions` maps dependent feature name -> current revision (used by
@@ -71,6 +83,7 @@ def _make_migration_manager(*, mdir, revision_after, all_status=None,
         if feature in dep_revisions:
             return dep_revisions[feature]
         return revision_after
+
     mm.get_current_feature_revision.side_effect = _current_rev
     return mm
 
@@ -113,7 +126,8 @@ class TestCascadePartialRollbackRecovery:
             raise RuntimeError("alembic: target database is not up to date")
 
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=[feature, dep_a, dep_b],
             mdir=mdir,
             migration_manager=mm,
@@ -122,9 +136,7 @@ class TestCascadePartialRollbackRecovery:
         ):
             runner = CliRunner(mix_stderr=False)
             # cascade=True so it does not prompt; we exercise the failure path.
-            result = runner.invoke(
-                db_rollback, [feature, "--cascade"]
-            )
+            result = runner.invoke(db_rollback, [feature, "--cascade"])
 
         assert result.exit_code == 1
         combined = result.output + result.stderr
@@ -167,7 +179,8 @@ class TestCascadePartialRollbackRecovery:
             return None
 
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=[feature, dep],
             mdir=mdir,
             migration_manager=mm,
@@ -200,7 +213,8 @@ class TestMigrationFileDeletionPrompt:
         (versions / "__init__.py").write_text("")
         mdir = {feature: str(target_dir)}
         mm = _make_migration_manager(
-            mdir=mdir, revision_after=None,  # None => rolled back to base
+            mdir=mdir,
+            revision_after=None,  # None => rolled back to base
         )
         return feature, target_dir, versions, mdir, mm
 
@@ -213,7 +227,8 @@ class TestMigrationFileDeletionPrompt:
         before = sorted(os.listdir(versions))
 
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=[feature],
             mdir=mdir,
             migration_manager=mm,
@@ -238,7 +253,8 @@ class TestMigrationFileDeletionPrompt:
         )
 
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=[feature],
             mdir=mdir,
             migration_manager=mm,
@@ -256,22 +272,22 @@ class TestMigrationFileDeletionPrompt:
         assert result.exit_code == 0
         # The deletion confirm must be invoked with default=False.
         delete_calls = [
-            c for c in spy.call_args_list
+            c
+            for c in spy.call_args_list
             if "delete" in (str(c.args[0]) if c.args else "").lower()
         ]
         assert delete_calls, "expected a deletion confirmation prompt"
         for c in delete_calls:
             assert c.kwargs.get("default") is False
 
-    def test_confirm_yes_deletes_only_migration_files(
-        self, tmp_path, monkeypatch
-    ):
+    def test_confirm_yes_deletes_only_migration_files(self, tmp_path, monkeypatch):
         feature, target_dir, versions, mdir, mm = self._setup_rolled_to_base(
             tmp_path, monkeypatch
         )
 
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=[feature],
             mdir=mdir,
             migration_manager=mm,
@@ -296,7 +312,8 @@ class TestCoreHappyPath:
     ):
         mm = _make_migration_manager(mdir={}, revision_after=None, all_status=[])
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=["other_feature"],
             mdir={},
             migration_manager=mm,
@@ -324,7 +341,8 @@ class TestCoreHappyPath:
         mm = _make_migration_manager(mdir=mdir, revision_after="rev_keep")
 
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=[feature],
             mdir=mdir,
             migration_manager=mm,
@@ -348,7 +366,8 @@ class TestCoreHappyPath:
         # No migration dir on disk.
         mm = _make_migration_manager(mdir={feature: None}, revision_after=None)
         with _patched(
-            monkeypatch, tmp_path,
+            monkeypatch,
+            tmp_path,
             declared=[feature],
             mdir={feature: None},
             migration_manager=mm,

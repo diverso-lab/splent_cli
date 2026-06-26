@@ -4,6 +4,7 @@ Tests for the feature:add command.
 Pattern: real filesystem via tmp_path — this command reads/writes pyproject.toml
 and creates symlinks. No subprocess to mock.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -31,6 +32,7 @@ def product_workspace_with_feature(product_workspace):
 # Argument validation
 # ---------------------------------------------------------------------------
 
+
 class TestArgumentValidation:
     def test_requires_namespace_slash_name(self, runner, product_workspace):
         result = runner.invoke(feature_add, ["splent_feature_auth"])  # no slash
@@ -47,6 +49,7 @@ class TestArgumentValidation:
 # Workspace root checks
 # ---------------------------------------------------------------------------
 
+
 class TestWorkspaceRootCheck:
     def test_exits_when_not_at_workspace_root(self, runner, product_workspace):
         result = runner.invoke(feature_add, ["splent_io/nonexistent_feature"])
@@ -58,8 +61,11 @@ class TestWorkspaceRootCheck:
 # Successful add
 # ---------------------------------------------------------------------------
 
+
 class TestSuccessfulAdd:
-    def test_adds_feature_to_pyproject(self, runner, product_workspace_with_feature, tmp_path):
+    def test_adds_feature_to_pyproject(
+        self, runner, product_workspace_with_feature, tmp_path
+    ):
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         assert result.exit_code == 0
 
@@ -73,7 +79,9 @@ class TestSuccessfulAdd:
         link = tmp_path / "test_app" / "features" / "splent_io" / "splent_feature_auth"
         assert link.is_symlink()
 
-    def test_symlink_points_to_workspace_root(self, runner, product_workspace_with_feature, tmp_path):
+    def test_symlink_points_to_workspace_root(
+        self, runner, product_workspace_with_feature, tmp_path
+    ):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
 
         link = tmp_path / "test_app" / "features" / "splent_io" / "splent_feature_auth"
@@ -90,8 +98,11 @@ class TestSuccessfulAdd:
 # Missing pyproject.toml
 # ---------------------------------------------------------------------------
 
+
 class TestMissingPyproject:
-    def test_exits_when_pyproject_missing(self, runner, workspace, monkeypatch, tmp_path):
+    def test_exits_when_pyproject_missing(
+        self, runner, workspace, monkeypatch, tmp_path
+    ):
         """Product directory exists but has no pyproject.toml → exit 1."""
         monkeypatch.setenv("SPLENT_APP", "test_app")
         # Feature exists at workspace root
@@ -108,8 +119,11 @@ class TestMissingPyproject:
 # Idempotency
 # ---------------------------------------------------------------------------
 
+
 class TestIdempotency:
-    def test_adding_twice_does_not_duplicate(self, runner, product_workspace_with_feature, tmp_path):
+    def test_adding_twice_does_not_duplicate(
+        self, runner, product_workspace_with_feature, tmp_path
+    ):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
 
@@ -118,13 +132,17 @@ class TestIdempotency:
         count = content.count("splent_io/splent_feature_auth")
         assert count == 1
 
-    def test_second_add_shows_already_present(self, runner, product_workspace_with_feature):
+    def test_second_add_shows_already_present(
+        self, runner, product_workspace_with_feature
+    ):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         result = runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         assert result.exit_code == 0
         assert "already" in result.output.lower()
 
-    def test_existing_symlink_replaced_not_errored(self, runner, product_workspace_with_feature, tmp_path):
+    def test_existing_symlink_replaced_not_errored(
+        self, runner, product_workspace_with_feature, tmp_path
+    ):
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         runner.invoke(feature_add, ["splent_io/splent_feature_auth"])
         link = tmp_path / "test_app" / "features" / "splent_io" / "splent_feature_auth"
@@ -135,8 +153,11 @@ class TestIdempotency:
 # Custom namespace
 # ---------------------------------------------------------------------------
 
+
 class TestCustomNamespace:
-    def test_custom_namespace_creates_correct_dir(self, runner, product_workspace, tmp_path):
+    def test_custom_namespace_creates_correct_dir(
+        self, runner, product_workspace, tmp_path
+    ):
         # Create feature at workspace root
         (tmp_path / "custom_feature").mkdir(parents=True)
 

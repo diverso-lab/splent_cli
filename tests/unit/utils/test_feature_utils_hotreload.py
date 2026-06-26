@@ -17,6 +17,7 @@ No real docker/network: the only boundary that shells out is
 with ``check=False``), and ``compose.resolve_file`` / ``find_main_container``
 are mocked.
 """
+
 import subprocess
 
 import pytest
@@ -40,7 +41,9 @@ def fake_compose(monkeypatch):
     """
     from splent_cli.services import compose
 
-    monkeypatch.setattr(compose, "resolve_file", lambda *a, **k: "/p/docker/compose.dev.yml")
+    monkeypatch.setattr(
+        compose, "resolve_file", lambda *a, **k: "/p/docker/compose.dev.yml"
+    )
     monkeypatch.setattr(compose, "project_name", lambda *a, **k: "proj_dev")
     monkeypatch.setattr(compose, "find_main_container", lambda *a, **k: "cid123")
     return compose
@@ -202,9 +205,7 @@ class TestMissingComposeWarns:
 
 
 class TestMissingContainerWarns:
-    def test_reinstall_no_container_warns_and_skips_docker(
-        self, monkeypatch, capsys
-    ):
+    def test_reinstall_no_container_warns_and_skips_docker(self, monkeypatch, capsys):
         from splent_cli.services import compose
 
         monkeypatch.setattr(
@@ -225,9 +226,7 @@ class TestMissingContainerWarns:
         assert "not running" in out
         assert "skipping" in out
 
-    def test_uninstall_no_container_warns_and_skips_docker(
-        self, monkeypatch, capsys
-    ):
+    def test_uninstall_no_container_warns_and_skips_docker(self, monkeypatch, capsys):
         from splent_cli.services import compose
 
         monkeypatch.setattr(

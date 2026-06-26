@@ -1,6 +1,7 @@
 """
 Tests for the cache:usage command.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -18,13 +19,14 @@ def _make_product(workspace, name, features=None):
     features_list = "\n".join(f'  "{f}",' for f in (features or []))
     (product_dir / "pyproject.toml").write_text(
         f'[project]\nname = "{name}"\nversion = "1.0.0"\n\n'
-        f'[project.optional-dependencies]\nfeatures = [\n{features_list}\n]\n'
+        f"[project.optional-dependencies]\nfeatures = [\n{features_list}\n]\n"
     )
 
 
 # ---------------------------------------------------------------------------
 # _get_feature_usage() helper
 # ---------------------------------------------------------------------------
+
 
 class TestGetFeatureUsage:
     def test_returns_empty_for_no_products(self, tmp_path):
@@ -56,6 +58,7 @@ class TestGetFeatureUsage:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 class TestCacheUsageCommand:
     def test_no_features_shows_info(self, runner, workspace):

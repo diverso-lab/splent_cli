@@ -8,6 +8,7 @@ calls are mocked — no real Docker / daemon / network required.
 check_infra does ``import subprocess`` directly, so the boundary to patch is
 ``splent_cli.commands.check.check_infra.subprocess.run``.
 """
+
 import json
 import subprocess
 
@@ -36,9 +37,7 @@ def _make_product(tmp_path, monkeypatch, *, features=None, with_compose=True):
 
     feats = features or []
     feats_toml = ", ".join(f'"{f}"' for f in feats)
-    (prod / "pyproject.toml").write_text(
-        f"[tool.splent]\nfeatures = [{feats_toml}]\n"
-    )
+    (prod / "pyproject.toml").write_text(f"[tool.splent]\nfeatures = [{feats_toml}]\n")
     if with_compose:
         (prod / "docker" / "docker-compose.yml").write_text("services: {}\n")
 
@@ -56,6 +55,7 @@ def _no_traceback(text):
 # ---------------------------------------------------------------------------
 # HARDENED: the diagnostic must never crash on a broken docker boundary
 # ---------------------------------------------------------------------------
+
 
 class TestDockerMissingNeverCrashes:
     def test_docker_binary_missing_does_not_traceback(
@@ -104,9 +104,7 @@ class TestDockerMissingNeverCrashes:
         _no_traceback(result.stderr)
         assert "Infrastructure check" in result.stdout
 
-    def test_docker_timeout_does_not_traceback(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_docker_timeout_does_not_traceback(self, tmp_path, monkeypatch, runner):
         """A hung daemon (TimeoutExpired) is absorbed, not surfaced as a crash."""
         _make_product(tmp_path, monkeypatch)
         with patch(
@@ -123,6 +121,7 @@ class TestDockerMissingNeverCrashes:
 # ---------------------------------------------------------------------------
 # HARDENED: malformed / missing pyproject yields a clean FAIL naming the file
 # ---------------------------------------------------------------------------
+
 
 class TestPyprojectGuards:
     def test_malformed_pyproject_is_clean_fail_naming_it(
@@ -149,9 +148,7 @@ class TestPyprojectGuards:
         assert "pyproject.toml" in combined
         assert "TOML" in combined or "valid" in combined.lower()
 
-    def test_missing_pyproject_is_clean_fail(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_missing_pyproject_is_clean_fail(self, tmp_path, monkeypatch, runner):
         """No pyproject at all → clean FAIL message, non-zero exit, no crash."""
         prod = _make_product(tmp_path, monkeypatch)
         (prod / "pyproject.toml").unlink()
@@ -171,6 +168,7 @@ class TestPyprojectGuards:
 # ---------------------------------------------------------------------------
 # HARDENED: parsing helpers tolerate a broken docker boundary
 # ---------------------------------------------------------------------------
+
 
 class TestRunHelperGuards:
     def test_run_maps_missing_tool_to_nonzero(self):
@@ -223,17 +221,14 @@ class TestParseHelpersTolerateBadInput:
 # Core happy paths
 # ---------------------------------------------------------------------------
 
+
 class TestHappyPaths:
     def test_clean_config_all_pass(self, tmp_path, monkeypatch, runner):
         """A single product compose with one unique published port and no
         conflicts passes with exit 0."""
         _make_product(tmp_path, monkeypatch)
         cfg = json.dumps(
-            {
-                "services": {
-                    "web": {"ports": [{"published": "8000", "target": 80}]}
-                }
-            }
+            {"services": {"web": {"ports": [{"published": "8000", "target": 80}]}}}
         )
 
         def fake_run(cmd, **kwargs):
@@ -253,9 +248,7 @@ class TestHappyPaths:
         assert "checks passed" in result.stdout
         assert "[FAIL]" not in result.stdout
 
-    def test_port_conflict_across_features_is_fail(
-        self, tmp_path, monkeypatch, runner
-    ):
+    def test_port_conflict_across_features_is_fail(self, tmp_path, monkeypatch, runner):
         """Same published port declared by a feature and the product is a
         real conflict → [FAIL] naming the port and a non-zero exit."""
         _make_product(tmp_path, monkeypatch, features=["splent_io/feat_a"])
@@ -265,11 +258,7 @@ class TestHappyPaths:
         (feat_docker / "docker-compose.yml").write_text("services: {}\n")
 
         cfg = json.dumps(
-            {
-                "services": {
-                    "web": {"ports": [{"published": "8080", "target": 80}]}
-                }
-            }
+            {"services": {"web": {"ports": [{"published": "8080", "target": 80}]}}}
         )
 
         def fake_run(cmd, **kwargs):

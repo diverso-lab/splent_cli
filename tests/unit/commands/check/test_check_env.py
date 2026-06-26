@@ -1,4 +1,5 @@
 """Tests for the check:env command."""
+
 import pytest
 from click.testing import CliRunner
 
@@ -13,6 +14,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # _pkg_version helper
 # ---------------------------------------------------------------------------
+
 
 class TestPkgVersion:
     def test_installed_package_returns_version(self):
@@ -33,6 +35,7 @@ class TestPkgVersion:
 # ---------------------------------------------------------------------------
 # check:env command
 # ---------------------------------------------------------------------------
+
 
 class TestCheckEnvCommand:
     def test_reports_python_version(self, runner, workspace):
@@ -84,7 +87,9 @@ class TestCheckEnvCommand:
         result = runner.invoke(check_env)
         assert "GITHUB_TOKEN" in result.output
 
-    def test_github_token_not_set_shows_warning(self, runner, product_workspace, monkeypatch):
+    def test_github_token_not_set_shows_warning(
+        self, runner, product_workspace, monkeypatch
+    ):
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         result = runner.invoke(check_env)
         assert "GITHUB_TOKEN" in result.output
@@ -94,7 +99,9 @@ class TestCheckEnvCommand:
         result = runner.invoke(check_env)
         assert "PyPI" in result.output
 
-    def test_pypi_token_not_set_shows_warning(self, runner, product_workspace, monkeypatch):
+    def test_pypi_token_not_set_shows_warning(
+        self, runner, product_workspace, monkeypatch
+    ):
         monkeypatch.delenv("TWINE_PASSWORD", raising=False)
         monkeypatch.delenv("PYPI_TOKEN", raising=False)
         result = runner.invoke(check_env)

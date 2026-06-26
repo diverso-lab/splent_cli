@@ -1,6 +1,7 @@
 """
 Tests for the cache:versions command.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -22,6 +23,7 @@ def _make_cache(workspace, namespace, dir_name):
 # Input validation
 # ---------------------------------------------------------------------------
 
+
 class TestInputValidation:
     def test_rejects_missing_slash(self, runner, workspace):
         result = runner.invoke(cache_versions, ["auth"])
@@ -38,6 +40,7 @@ class TestInputValidation:
 # Namespace not found
 # ---------------------------------------------------------------------------
 
+
 class TestNamespaceNotFound:
     def test_warns_when_namespace_missing(self, runner, workspace):
         result = runner.invoke(cache_versions, ["missing_ns/auth"])
@@ -48,6 +51,7 @@ class TestNamespaceNotFound:
 # ---------------------------------------------------------------------------
 # No entries for feature
 # ---------------------------------------------------------------------------
+
 
 class TestNoEntries:
     def test_warns_when_feature_not_found(self, runner, workspace):
@@ -61,6 +65,7 @@ class TestNoEntries:
 # ---------------------------------------------------------------------------
 # Versioned entries
 # ---------------------------------------------------------------------------
+
 
 class TestVersionedEntries:
     def test_shows_version(self, runner, workspace):
@@ -81,6 +86,7 @@ class TestVersionedEntries:
 # Editable entry
 # ---------------------------------------------------------------------------
 
+
 class TestEditableEntry:
     def test_shows_editable_label(self, runner, workspace):
         _make_cache(workspace, "splent_io", "auth")  # no @version = editable
@@ -99,6 +105,7 @@ class TestEditableEntry:
 # ---------------------------------------------------------------------------
 # Namespace normalisation (dash → underscore)
 # ---------------------------------------------------------------------------
+
 
 class TestNamespaceNormalisation:
     def test_dash_converted_to_underscore(self, runner, workspace):

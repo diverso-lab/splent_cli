@@ -12,6 +12,7 @@ instead of letting the HTTPError bubble up as an uncaught exception.
 All network is mocked at the boundary (urllib.request.urlopen is patched per
 module to raise a 403 HTTPError); no real network/git is touched.
 """
+
 import io
 import urllib.error
 

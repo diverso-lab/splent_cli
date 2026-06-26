@@ -157,9 +157,7 @@ def _compile_in_container(container_id, feature, watch, production, workspace, p
             raise click.ClickException(
                 f"'{run_cmd[0]}' is not installed or not on PATH.\n{tool_hint}"
             )
-        click.echo(
-            click.style(f"👀 Watching {feature} in {mode} mode...", fg="blue")
-        )
+        click.echo(click.style(f"👀 Watching {feature} in {mode} mode...", fg="blue"))
     else:
         result = run(run_cmd, check=False, tool_hint=tool_hint)
         if result.returncode != 0:

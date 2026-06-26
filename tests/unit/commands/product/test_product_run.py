@@ -4,6 +4,7 @@ Tests for the product:run command.
 product_run queries docker containers — we mock subprocess.run to control
 what docker ps -q and docker inspect return.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -32,6 +33,7 @@ def _inspect_result(mounts=None):
 # Flag validation
 # ---------------------------------------------------------------------------
 
+
 class TestFlagValidation:
     def test_rejects_both_dev_and_prod(self, runner, product_workspace):
         result = runner.invoke(product_runc, ["--dev", "--prod"])
@@ -48,17 +50,21 @@ class TestFlagValidation:
 # No containers running → run locally
 # ---------------------------------------------------------------------------
 
+
 class TestNoContainers:
     def test_runs_locally_when_no_containers(self, runner, product_workspace):
         """Daemon up (docker info returns 0) but no matching containers → run locally."""
+
         def fake_run(cmd, **kwargs):
             if "ps" in cmd:
                 return _ps_result([])  # no containers
             # docker info, docker exec, bash entrypoint, etc. → success
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run), \
-                patch("os.path.isfile", return_value=True):
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch("os.path.isfile", return_value=True),
+        ):
             result = runner.invoke(product_runc, ["--dev"])
         assert result.exit_code == 0
         assert "locally" in result.output or "No containers" in result.output
@@ -67,6 +73,7 @@ class TestNoContainers:
 # ---------------------------------------------------------------------------
 # Container found → exec entrypoint
 # ---------------------------------------------------------------------------
+
 
 class TestContainerFound:
     def test_execs_in_container_with_workspace_mount(self, runner, product_workspace):
@@ -80,8 +87,10 @@ class TestContainerFound:
                 return _inspect_result(["/workspace"])
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run), \
-                patch("os.path.isfile", return_value=True):
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch("os.path.isfile", return_value=True),
+        ):
             result = runner.invoke(product_runc, ["--dev"])
 
         assert result.exit_code == 0
@@ -89,7 +98,9 @@ class TestContainerFound:
         assert exec_calls, "Expected a docker exec call"
         assert "abc123" in exec_calls[0]
 
-    def test_uses_first_container_when_no_workspace_mount(self, runner, product_workspace):
+    def test_uses_first_container_when_no_workspace_mount(
+        self, runner, product_workspace
+    ):
         """Falls back to container_ids[0] when no container has /workspace mount."""
         call_cmds = []
 
@@ -101,8 +112,10 @@ class TestContainerFound:
                 return _inspect_result(["/other"])  # not /workspace
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run), \
-                patch("os.path.isfile", return_value=True):
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch("os.path.isfile", return_value=True),
+        ):
             result = runner.invoke(product_runc, ["--dev"])
 
         assert result.exit_code == 0
@@ -121,8 +134,10 @@ class TestContainerFound:
                 return _inspect_result(["/workspace"])
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run), \
-                patch("os.path.isfile", return_value=True):
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch("os.path.isfile", return_value=True),
+        ):
             result = runner.invoke(product_runc, ["--dev"])
 
         assert result.exit_code == 0

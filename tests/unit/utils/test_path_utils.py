@@ -3,6 +3,7 @@ Tests for splent_cli.utils.path_utils (the CLI shim over splent_framework PathUt
 
 These methods are pure path compositions — no filesystem access, just string joins.
 """
+
 import pytest
 from splent_cli.utils.path_utils import PathUtils
 
@@ -50,7 +51,10 @@ class TestGetCommandsPath:
     def test_same_as_commands_dir(self):
         # get_commands_path() is os.path.abspath of get_commands_dir() — same on absolute paths
         import os
-        assert PathUtils.get_commands_path() == os.path.abspath(PathUtils.get_commands_dir())
+
+        assert PathUtils.get_commands_path() == os.path.abspath(
+            PathUtils.get_commands_dir()
+        )
 
 
 class TestGetSplentFrameworkDir:
@@ -60,7 +64,10 @@ class TestGetSplentFrameworkDir:
 
     def test_changes_with_working_dir(self, monkeypatch):
         monkeypatch.setenv("WORKING_DIR", "/custom")
-        assert PathUtils.get_splent_framework_dir() == "/custom/splent_framework/src/splent_framework"
+        assert (
+            PathUtils.get_splent_framework_dir()
+            == "/custom/splent_framework/src/splent_framework"
+        )
 
 
 class TestGetCoreDir:

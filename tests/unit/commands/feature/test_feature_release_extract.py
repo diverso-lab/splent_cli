@@ -15,6 +15,7 @@ from splent_cli.commands.feature.feature_release import (
 # parse_feature_ref
 # ---------------------------------------------------------------------------
 
+
 class TestParseFeatureRef:
     def test_full_format(self):
         ns, name, ver = parse_feature_ref("splent-io/auth@v1.2.3")
@@ -49,6 +50,7 @@ class TestParseFeatureRef:
 # _extract_routes
 # ---------------------------------------------------------------------------
 
+
 class TestExtractRoutes:
     def test_finds_routes(self, tmp_path):
         f = tmp_path / "routes.py"
@@ -71,10 +73,7 @@ class TestExtractRoutes:
 
     def test_result_is_sorted(self, tmp_path):
         f = tmp_path / "routes.py"
-        f.write_text(
-            '@bp.route("/z")\n'
-            '@bp.route("/a")\n'
-        )
+        f.write_text('@bp.route("/z")\n@bp.route("/a")\n')
         result = _extract_routes(f)
         assert result == sorted(result)
 
@@ -88,6 +87,7 @@ class TestExtractRoutes:
 # ---------------------------------------------------------------------------
 # _extract_blueprints
 # ---------------------------------------------------------------------------
+
 
 class TestExtractBlueprints:
     def test_finds_base_blueprint(self, tmp_path):
@@ -119,6 +119,7 @@ class TestExtractBlueprints:
 # _extract_models
 # ---------------------------------------------------------------------------
 
+
 class TestExtractModels:
     def test_finds_sqlalchemy_model_classes(self, tmp_path):
         f = tmp_path / "models.py"
@@ -138,8 +139,7 @@ class TestExtractModels:
     def test_deduplicates_class_names(self, tmp_path):
         f = tmp_path / "models.py"
         f.write_text(
-            "class User(db.Model):\n    pass\n"
-            "class User(db.Model):\n    pass\n"
+            "class User(db.Model):\n    pass\nclass User(db.Model):\n    pass\n"
         )
         result = _extract_models(f)
         assert result.count("User") == 1
@@ -148,6 +148,7 @@ class TestExtractModels:
 # ---------------------------------------------------------------------------
 # _extract_hooks
 # ---------------------------------------------------------------------------
+
 
 class TestExtractHooks:
     def test_finds_template_hooks(self, tmp_path):
@@ -177,12 +178,12 @@ class TestExtractHooks:
 # _extract_services
 # ---------------------------------------------------------------------------
 
+
 class TestExtractServices:
     def test_finds_base_service_classes(self, tmp_path):
         f = tmp_path / "services.py"
         f.write_text(
-            "class AuthService(BaseService):\n    pass\n"
-            "class NotAService:\n    pass\n"
+            "class AuthService(BaseService):\n    pass\nclass NotAService:\n    pass\n"
         )
         result = _extract_services(f)
         assert "AuthService" in result
@@ -201,6 +202,7 @@ class TestExtractServices:
 # ---------------------------------------------------------------------------
 # _scan_dependencies
 # ---------------------------------------------------------------------------
+
 
 class TestScanDependencies:
     def test_finds_feature_imports(self, tmp_path):
@@ -224,27 +226,21 @@ class TestScanDependencies:
     def test_finds_env_vars_getenv(self, tmp_path):
         src = tmp_path / "src"
         src.mkdir()
-        (src / "config.py").write_text(
-            'secret = os.getenv("MY_SECRET_KEY")\n'
-        )
+        (src / "config.py").write_text('secret = os.getenv("MY_SECRET_KEY")\n')
         _, env_vars = _scan_dependencies(src, "splent_feature_auth")
         assert "MY_SECRET_KEY" in env_vars
 
     def test_finds_env_vars_environ_get(self, tmp_path):
         src = tmp_path / "src"
         src.mkdir()
-        (src / "config.py").write_text(
-            'val = os.environ.get("DB_URL")\n'
-        )
+        (src / "config.py").write_text('val = os.environ.get("DB_URL")\n')
         _, env_vars = _scan_dependencies(src, "splent_feature_auth")
         assert "DB_URL" in env_vars
 
     def test_finds_env_vars_environ_bracket(self, tmp_path):
         src = tmp_path / "src"
         src.mkdir()
-        (src / "config.py").write_text(
-            'val = os.environ["API_KEY"]\n'
-        )
+        (src / "config.py").write_text('val = os.environ["API_KEY"]\n')
         _, env_vars = _scan_dependencies(src, "splent_feature_auth")
         assert "API_KEY" in env_vars
 

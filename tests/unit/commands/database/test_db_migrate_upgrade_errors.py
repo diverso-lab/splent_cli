@@ -10,6 +10,7 @@ Hardened behaviors under test:
 All alembic / DB / filesystem-dependency boundaries are mocked; no real
 docker / git / network / database is required.
 """
+
 import os
 from unittest.mock import patch, MagicMock
 
@@ -39,9 +40,7 @@ def _write_migration(versions_dir, name, empty=True):
     else:
         body_up = "    op.add_column('t', sa.Column('c', sa.Integer()))\n"
         body_down = "    op.drop_column('t', 'c')\n"
-    content = (
-        "def upgrade():\n" + body_up + "\n\ndef downgrade():\n" + body_down
-    )
+    content = "def upgrade():\n" + body_up + "\n\ndef downgrade():\n" + body_down
     path = os.path.join(versions_dir, name)
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
@@ -54,9 +53,7 @@ def _write_migration(versions_dir, name, empty=True):
 
 
 class TestDbMigrateGenerationFailure:
-    def test_generation_failure_surfaced_without_debug(
-        self, tmp_path, monkeypatch
-    ):
+    def test_generation_failure_surfaced_without_debug(self, tmp_path, monkeypatch):
         """A failing alembic_migrate must be reported, NOT swallowed into
         a false 'up to date', even when SPLENT_DEBUG is unset."""
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
@@ -65,17 +62,20 @@ class TestDbMigrateGenerationFailure:
 
         mdir = _make_versions_dir(tmp_path, "auth")
 
-        with patch(
-            "splent_cli.commands.database.db_migrate."
-            "MigrationManager.get_feature_migration_dir",
-            return_value=mdir,
-        ), patch(
-            "splent_cli.commands.database.db_migrate."
-            "get_features_from_pyproject",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.database.db_migrate.alembic_migrate",
-            side_effect=RuntimeError("alembic autogenerate exploded"),
+        with (
+            patch(
+                "splent_cli.commands.database.db_migrate."
+                "MigrationManager.get_feature_migration_dir",
+                return_value=mdir,
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.alembic_migrate",
+                side_effect=RuntimeError("alembic autogenerate exploded"),
+            ),
         ):
             runner = CliRunner(mix_stderr=False)
             result = runner.invoke(db_migrate, ["auth"])
@@ -101,17 +101,20 @@ class TestDbMigrateGenerationFailure:
 
         mdir = _make_versions_dir(tmp_path, "auth")
 
-        with patch(
-            "splent_cli.commands.database.db_migrate."
-            "MigrationManager.get_feature_migration_dir",
-            return_value=mdir,
-        ), patch(
-            "splent_cli.commands.database.db_migrate."
-            "get_features_from_pyproject",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.database.db_migrate.alembic_migrate",
-            side_effect=RuntimeError("boom-detail"),
+        with (
+            patch(
+                "splent_cli.commands.database.db_migrate."
+                "MigrationManager.get_feature_migration_dir",
+                return_value=mdir,
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.alembic_migrate",
+                side_effect=RuntimeError("boom-detail"),
+            ),
         ):
             runner = CliRunner(mix_stderr=False)
             result = runner.invoke(db_migrate, ["auth"])
@@ -120,9 +123,7 @@ class TestDbMigrateGenerationFailure:
         assert "Traceback" in result.output
         assert "boom-detail" in result.output
 
-    def test_no_changes_distinguished_from_failure(
-        self, tmp_path, monkeypatch
-    ):
+    def test_no_changes_distinguished_from_failure(self, tmp_path, monkeypatch):
         """When generation succeeds but produces an EMPTY migration, the file
         is removed and the feature is reported 'up to date' — this must be
         clearly different from a generation failure."""
@@ -137,17 +138,20 @@ class TestDbMigrateGenerationFailure:
             # Simulate alembic writing an empty (pass/pass) migration file.
             _write_migration(versions_dir, "0001_auth.py", empty=True)
 
-        with patch(
-            "splent_cli.commands.database.db_migrate."
-            "MigrationManager.get_feature_migration_dir",
-            return_value=mdir,
-        ), patch(
-            "splent_cli.commands.database.db_migrate."
-            "get_features_from_pyproject",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.database.db_migrate.alembic_migrate",
-            side_effect=fake_migrate,
+        with (
+            patch(
+                "splent_cli.commands.database.db_migrate."
+                "MigrationManager.get_feature_migration_dir",
+                return_value=mdir,
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.alembic_migrate",
+                side_effect=fake_migrate,
+            ),
         ):
             runner = CliRunner(mix_stderr=False)
             result = runner.invoke(db_migrate, ["auth"])
@@ -156,13 +160,9 @@ class TestDbMigrateGenerationFailure:
         assert "up to date" in result.output
         assert "failed" not in result.output.lower()
         # The empty migration must have been removed.
-        assert not os.path.exists(
-            os.path.join(versions_dir, "0001_auth.py")
-        )
+        assert not os.path.exists(os.path.join(versions_dir, "0001_auth.py"))
 
-    def test_real_changes_reported_as_new_migration(
-        self, tmp_path, monkeypatch
-    ):
+    def test_real_changes_reported_as_new_migration(self, tmp_path, monkeypatch):
         """A non-empty generated migration is kept and reported as new."""
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
@@ -174,17 +174,20 @@ class TestDbMigrateGenerationFailure:
         def fake_migrate(directory=None, message=None):
             _write_migration(versions_dir, "0001_auth.py", empty=False)
 
-        with patch(
-            "splent_cli.commands.database.db_migrate."
-            "MigrationManager.get_feature_migration_dir",
-            return_value=mdir,
-        ), patch(
-            "splent_cli.commands.database.db_migrate."
-            "get_features_from_pyproject",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.database.db_migrate.alembic_migrate",
-            side_effect=fake_migrate,
+        with (
+            patch(
+                "splent_cli.commands.database.db_migrate."
+                "MigrationManager.get_feature_migration_dir",
+                return_value=mdir,
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_migrate.alembic_migrate",
+                side_effect=fake_migrate,
+            ),
         ):
             runner = CliRunner(mix_stderr=False)
             result = runner.invoke(db_migrate, ["auth"])
@@ -229,9 +232,7 @@ class TestDbMigrateGenerationFailure:
 
 
 class TestDbUpgradeFailure:
-    def test_upgrade_failure_surfaced_without_debug(
-        self, tmp_path, monkeypatch
-    ):
+    def test_upgrade_failure_surfaced_without_debug(self, tmp_path, monkeypatch):
         """A failing alembic_upgrade must produce a non-zero exit and a clean
         error message — never a silent/false success."""
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
@@ -240,17 +241,20 @@ class TestDbUpgradeFailure:
 
         mdir = _make_versions_dir(tmp_path, "auth")
 
-        with patch(
-            "splent_cli.commands.database.db_upgrade."
-            "MigrationManager.get_feature_migration_dir",
-            return_value=mdir,
-        ), patch(
-            "splent_cli.commands.database.db_upgrade."
-            "get_features_from_pyproject",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.database.db_upgrade.alembic_upgrade",
-            side_effect=RuntimeError("Can't locate revision identified by 'abc'"),
+        with (
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.get_feature_migration_dir",
+                return_value=mdir,
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.alembic_upgrade",
+                side_effect=RuntimeError("Can't locate revision identified by 'abc'"),
+            ),
         ):
             runner = CliRunner(mix_stderr=False)
             result = runner.invoke(db_upgrade, ["auth"])
@@ -263,9 +267,7 @@ class TestDbUpgradeFailure:
         assert "Migration upgrade failed" in (result.output + result.stderr)
         assert "Traceback" not in (result.output + result.stderr)
 
-    def test_upgrade_missing_models_skipped_silently(
-        self, tmp_path, monkeypatch
-    ):
+    def test_upgrade_missing_models_skipped_silently(self, tmp_path, monkeypatch):
         """A feature whose migrations import a missing 'models' module is
         skipped, not treated as a hard failure."""
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
@@ -273,30 +275,29 @@ class TestDbUpgradeFailure:
 
         mdir = _make_versions_dir(tmp_path, "auth")
 
-        with patch(
-            "splent_cli.commands.database.db_upgrade."
-            "MigrationManager.get_feature_migration_dir",
-            return_value=mdir,
-        ), patch(
-            "splent_cli.commands.database.db_upgrade."
-            "get_features_from_pyproject",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.database.db_upgrade.alembic_upgrade",
-            side_effect=ImportError("No module named 'models'"),
+        with (
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.get_feature_migration_dir",
+                return_value=mdir,
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.alembic_upgrade",
+                side_effect=ImportError("No module named 'models'"),
+            ),
         ):
             runner = CliRunner(mix_stderr=False)
             result = runner.invoke(db_upgrade, ["auth"])
 
         assert result.exit_code == 0
-        assert "Migration upgrade failed" not in (
-            result.output + result.stderr
-        )
+        assert "Migration upgrade failed" not in (result.output + result.stderr)
         assert "Traceback" not in (result.output + result.stderr)
 
-    def test_upgrade_happy_path_reports_revision(
-        self, tmp_path, monkeypatch
-    ):
+    def test_upgrade_happy_path_reports_revision(self, tmp_path, monkeypatch):
         """A successful upgrade reports the feature and its revision."""
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
@@ -305,27 +306,31 @@ class TestDbUpgradeFailure:
 
         fake_app = MagicMock()
 
-        with patch(
-            "splent_cli.commands.database.db_upgrade.current_app", fake_app
-        ), patch(
-            "splent_cli.commands.database.db_upgrade."
-            "MigrationManager.get_feature_migration_dir",
-            return_value=mdir,
-        ), patch(
-            "splent_cli.commands.database.db_upgrade."
-            "get_features_from_pyproject",
-            return_value=[],
-        ), patch(
-            "splent_cli.commands.database.db_upgrade.alembic_upgrade",
-            return_value=None,
-        ), patch(
-            "splent_cli.commands.database.db_upgrade."
-            "MigrationManager.get_current_feature_revision",
-            return_value="rev123",
-        ), patch(
-            "splent_cli.commands.database.db_upgrade."
-            "MigrationManager.update_feature_status",
-            return_value=None,
+        with (
+            patch("splent_cli.commands.database.db_upgrade.current_app", fake_app),
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.get_feature_migration_dir",
+                return_value=mdir,
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.alembic_upgrade",
+                return_value=None,
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.get_current_feature_revision",
+                return_value="rev123",
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.update_feature_status",
+                return_value=None,
+            ),
         ):
             runner = CliRunner(mix_stderr=False)
             result = runner.invoke(db_upgrade, ["auth"])
@@ -335,9 +340,7 @@ class TestDbUpgradeFailure:
         assert "❌" not in result.output
         assert "Traceback" not in result.output
 
-    def test_no_dirs_reports_warning_not_failure(
-        self, tmp_path, monkeypatch
-    ):
+    def test_no_dirs_reports_warning_not_failure(self, tmp_path, monkeypatch):
         """With no feature migration dirs at all, db:upgrade warns and exits
         cleanly (no false failure)."""
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))

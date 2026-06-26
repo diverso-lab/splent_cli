@@ -4,6 +4,7 @@ Tests for the env:show command.
 env:show reads .env and compares each variable against the live shell
 via `bash -c "echo $VAR"`. We mock subprocess.run to control the shell output.
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -19,6 +20,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # _mask() helper — pure logic
 # ---------------------------------------------------------------------------
+
 
 class TestMask:
     def test_long_sensitive_value_is_masked(self):
@@ -48,6 +50,7 @@ class TestMask:
 # No .env file
 # ---------------------------------------------------------------------------
 
+
 class TestNoEnvFile:
     def test_exits_when_no_env_file(self, runner, workspace):
         result = runner.invoke(env_show, [])
@@ -58,6 +61,7 @@ class TestNoEnvFile:
 # ---------------------------------------------------------------------------
 # Variable comparison scenarios
 # ---------------------------------------------------------------------------
+
 
 class TestVariableComparison:
     def _invoke_with_env(self, runner, workspace, env_content, shell_values: dict):
@@ -76,7 +80,8 @@ class TestVariableComparison:
 
     def test_loaded_and_matching_shows_checkmark(self, runner, workspace):
         result = self._invoke_with_env(
-            runner, workspace,
+            runner,
+            workspace,
             "APP_NAME=myapp\n",
             {"APP_NAME": "myapp"},
         )
@@ -87,7 +92,8 @@ class TestVariableComparison:
 
     def test_not_loaded_shows_warning(self, runner, workspace):
         result = self._invoke_with_env(
-            runner, workspace,
+            runner,
+            workspace,
             "MISSING_VAR=somevalue\n",
             {"MISSING_VAR": ""},  # empty → not loaded
         )
@@ -96,16 +102,20 @@ class TestVariableComparison:
 
     def test_differs_shows_diff_message(self, runner, workspace):
         result = self._invoke_with_env(
-            runner, workspace,
+            runner,
+            workspace,
             "APP_ENV=dev\n",
             {"APP_ENV": "prod"},  # different value
         )
         assert result.exit_code == 0
-        assert "differs" in result.output.lower() or "loaded but differs" in result.output
+        assert (
+            "differs" in result.output.lower() or "loaded but differs" in result.output
+        )
 
     def test_shows_tip_at_end(self, runner, workspace):
         result = self._invoke_with_env(
-            runner, workspace,
+            runner,
+            workspace,
             "APP_NAME=myapp\n",
             {"APP_NAME": "myapp"},
         )
@@ -113,7 +123,8 @@ class TestVariableComparison:
 
     def test_skips_comment_lines(self, runner, workspace):
         result = self._invoke_with_env(
-            runner, workspace,
+            runner,
+            workspace,
             "# This is a comment\nAPP_NAME=myapp\n",
             {"APP_NAME": "myapp"},
         )
@@ -123,7 +134,8 @@ class TestVariableComparison:
 
     def test_skips_lines_without_equals(self, runner, workspace):
         result = self._invoke_with_env(
-            runner, workspace,
+            runner,
+            workspace,
             "NOEQUALS\nAPP_NAME=myapp\n",
             {"APP_NAME": "myapp"},
         )

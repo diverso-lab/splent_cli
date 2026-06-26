@@ -364,9 +364,7 @@ def _scaffold_service(
     repos_path = os.path.join(
         feature_path, "src", ns_safe, feature_name, "repositories.py"
     )
-    if os.path.isfile(repos_path) and _confirm_overwrite(
-        repos_path, "repositories.py"
-    ):
+    if os.path.isfile(repos_path) and _confirm_overwrite(repos_path, "repositories.py"):
         with open(repos_path, "w") as f:
             f.write(
                 "# Refinement features do not need their own repository.\n"
@@ -875,8 +873,7 @@ def feature_refinement(refiner_name):
         tomllib.loads(content)
     except tomllib.TOMLDecodeError as e:
         click.secho(
-            f"  Refusing to write pyproject.toml: the result is not valid TOML.\n"
-            f"  {e}",
+            f"  Refusing to write pyproject.toml: the result is not valid TOML.\n  {e}",
             fg="red",
         )
         raise SystemExit(1)

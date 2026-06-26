@@ -4,6 +4,7 @@ Tests for the product:status command.
 Pattern: mock subprocess.run to simulate docker compose ps output.
 Use product_workspace fixture for a real filesystem + env var setup.
 """
+
 import json
 import pytest
 from unittest.mock import patch, MagicMock
@@ -27,6 +28,7 @@ def _mock_run(containers: list[dict], returncode: int = 0):
 # Flag validation
 # ---------------------------------------------------------------------------
 
+
 class TestFlagValidation:
     def test_rejects_both_dev_and_prod(self, runner, product_workspace):
         result = runner.invoke(product_docker, ["--dev", "--prod"])
@@ -43,11 +45,16 @@ class TestFlagValidation:
 # No compose file
 # ---------------------------------------------------------------------------
 
+
 class TestNoComposeFile:
-    def test_shows_no_containers_when_no_compose_file(self, runner, tmp_path, monkeypatch):
+    def test_shows_no_containers_when_no_compose_file(
+        self, runner, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("WORKING_DIR", str(tmp_path))
         monkeypatch.setenv("SPLENT_APP", "test_app")
-        (tmp_path / "test_app" / "docker").mkdir(parents=True)  # docker dir but no compose file
+        (tmp_path / "test_app" / "docker").mkdir(
+            parents=True
+        )  # docker dir but no compose file
 
         result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
@@ -59,8 +66,16 @@ class TestNoComposeFile:
 # ---------------------------------------------------------------------------
 
 CONTAINERS = [
-    {"Service": "web", "State": "running", "Publishers": [{"PublishedPort": 8080, "TargetPort": 8000}]},
-    {"Service": "db",  "State": "running", "Publishers": [{"PublishedPort": 5432, "TargetPort": 5432}]},
+    {
+        "Service": "web",
+        "State": "running",
+        "Publishers": [{"PublishedPort": 8080, "TargetPort": 8000}],
+    },
+    {
+        "Service": "db",
+        "State": "running",
+        "Publishers": [{"PublishedPort": 5432, "TargetPort": 5432}],
+    },
 ]
 
 
@@ -97,9 +112,12 @@ class TestRunningContainers:
 # No containers running
 # ---------------------------------------------------------------------------
 
+
 class TestNoContainers:
     def test_empty_output_shows_info(self, runner, product_workspace):
-        with patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")):
+        with patch(
+            "subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")
+        ):
             result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "No containers" in result.output or "Is it up?" in result.output
@@ -109,11 +127,15 @@ class TestNoContainers:
 # docker compose ps failure
 # ---------------------------------------------------------------------------
 
+
 class TestDockerFailure:
     def test_shows_no_containers_on_docker_error(self, runner, product_workspace):
-        with patch("subprocess.run", return_value=MagicMock(
-            returncode=1, stdout="", stderr="Cannot connect to Docker daemon"
-        )):
+        with patch(
+            "subprocess.run",
+            return_value=MagicMock(
+                returncode=1, stdout="", stderr="Cannot connect to Docker daemon"
+            ),
+        ):
             result = runner.invoke(product_docker, ["--dev"])
         # Docker errors result in empty container list, not a hard failure
         assert result.exit_code == 0
@@ -123,6 +145,7 @@ class TestDockerFailure:
 # ---------------------------------------------------------------------------
 # Exited / unhealthy containers
 # ---------------------------------------------------------------------------
+
 
 class TestContainerStates:
     def test_exited_container(self, runner, product_workspace):
@@ -139,8 +162,8 @@ class TestContainerStates:
 # ---------------------------------------------------------------------------
 
 # click.style() wraps text in ANSI escape codes, not the color name as a string.
-_GREEN  = "\x1b[32m"
-_RED    = "\x1b[31m"
+_GREEN = "\x1b[32m"
+_RED = "\x1b[31m"
 _YELLOW = "\x1b[33m"
 
 
@@ -181,14 +204,16 @@ class TestStatusColor:
 # JSON parsing edge cases (lines 68, 72-73, 76-77)
 # ---------------------------------------------------------------------------
 
+
 class TestJsonParsing:
     def test_skips_empty_lines_in_output(self, runner, product_workspace):
         """Blank lines between JSON objects must be silently ignored (line 68)."""
         container = {"Service": "web", "State": "running", "Publishers": []}
         stdout_with_blanks = f"\n{json.dumps(container)}\n\n"
-        with patch("subprocess.run", return_value=MagicMock(
-            returncode=0, stdout=stdout_with_blanks, stderr=""
-        )):
+        with patch(
+            "subprocess.run",
+            return_value=MagicMock(returncode=0, stdout=stdout_with_blanks, stderr=""),
+        ):
             result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "web" in result.output
@@ -197,18 +222,22 @@ class TestJsonParsing:
         """Malformed JSON lines must be silently skipped (lines 72-73)."""
         container = {"Service": "db", "State": "running", "Publishers": []}
         stdout_mixed = f"not-json\n{json.dumps(container)}\nalso-not-json\n"
-        with patch("subprocess.run", return_value=MagicMock(
-            returncode=0, stdout=stdout_mixed, stderr=""
-        )):
+        with patch(
+            "subprocess.run",
+            return_value=MagicMock(returncode=0, stdout=stdout_mixed, stderr=""),
+        ):
             result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "db" in result.output
 
     def test_no_containers_after_parse(self, runner, product_workspace):
         """Output has content but every line is malformed → 'No containers' message (lines 76-77)."""
-        with patch("subprocess.run", return_value=MagicMock(
-            returncode=0, stdout="not-json\nalso-not-json\n", stderr=""
-        )):
+        with patch(
+            "subprocess.run",
+            return_value=MagicMock(
+                returncode=0, stdout="not-json\nalso-not-json\n", stderr=""
+            ),
+        ):
             result = runner.invoke(product_docker, ["--dev"])
         assert result.exit_code == 0
         assert "No containers" in result.output

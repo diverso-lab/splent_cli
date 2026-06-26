@@ -1,8 +1,12 @@
 """Tests for the check:pyproject command and its _find_missing_pkgs helper."""
+
 import pytest
 from click.testing import CliRunner
 
-from splent_cli.commands.check.check_pyproject import check_pyproject, _find_missing_pkgs
+from splent_cli.commands.check.check_pyproject import (
+    check_pyproject,
+    _find_missing_pkgs,
+)
 
 
 @pytest.fixture
@@ -13,6 +17,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # _find_missing_pkgs helper
 # ---------------------------------------------------------------------------
+
 
 class TestFindMissingPkgs:
     def test_installed_package_not_reported(self):
@@ -46,6 +51,7 @@ class TestFindMissingPkgs:
 # ---------------------------------------------------------------------------
 # check:pyproject command
 # ---------------------------------------------------------------------------
+
 
 class TestCheckPyproject:
     def test_exits_when_no_splent_app(self, runner, workspace):
@@ -93,7 +99,7 @@ class TestCheckPyproject:
         (uvl_dir / "model.uvl").write_text("features\nconstraints\n")
         (product_workspace / "test_app" / "pyproject.toml").write_text(
             '[project]\nname = "test_app"\nversion = "1.0.0"\n'
-            '[project.optional-dependencies]\nfeatures = []\n'
+            "[project.optional-dependencies]\nfeatures = []\n"
             '[tool.splent.uvl]\nfile = "model.uvl"\n'
         )
         result = runner.invoke(check_pyproject)
@@ -102,7 +108,7 @@ class TestCheckPyproject:
     def test_uvl_file_missing_shows_fail(self, runner, product_workspace):
         (product_workspace / "test_app" / "pyproject.toml").write_text(
             '[project]\nname = "test_app"\nversion = "1.0.0"\n'
-            '[project.optional-dependencies]\nfeatures = []\n'
+            "[project.optional-dependencies]\nfeatures = []\n"
             '[tool.splent.uvl]\nfile = "missing.uvl"\n'
         )
         result = runner.invoke(check_pyproject)
@@ -112,7 +118,7 @@ class TestCheckPyproject:
     def test_no_version_shows_warning(self, runner, product_workspace):
         (product_workspace / "test_app" / "pyproject.toml").write_text(
             '[project]\nname = "test_app"\n'
-            '[project.optional-dependencies]\nfeatures = []\n'
+            "[project.optional-dependencies]\nfeatures = []\n"
         )
         result = runner.invoke(check_pyproject)
         assert "version" in result.output.lower()
@@ -120,7 +126,7 @@ class TestCheckPyproject:
     def test_no_name_shows_warning(self, runner, product_workspace):
         (product_workspace / "test_app" / "pyproject.toml").write_text(
             '[project]\nversion = "1.0.0"\n'
-            '[project.optional-dependencies]\nfeatures = []\n'
+            "[project.optional-dependencies]\nfeatures = []\n"
         )
         result = runner.invoke(check_pyproject)
         assert "name" in result.output.lower()
