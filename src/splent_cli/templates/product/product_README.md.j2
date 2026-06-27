@@ -1,1 +1,26 @@
 # {{ product_name }}
+
+A website built with **SPLENT** — a Software Product Line framework.
+
+## Run it locally
+
+Requires Docker. From the workspace:
+
+```bash
+splent product:select {{ product_name }}
+splent product:derive --dev   # build, run migrations and start
+splent db:seed -y             # optional: load demo data
+splent product:port           # print the local URL
+```
+
+Everyday commands:
+
+```bash
+splent product:up --dev       # start          splent product:down --dev   # stop
+splent product:logs           # tail logs      splent product:restart      # restart
+```
+
+## Documentation
+
+For features, the SPL/UVL model, the CLI and everything else, see the
+SPLENT documentation: https://docs.splent.io

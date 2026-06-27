@@ -35,7 +35,10 @@ def spl_create(name):
 
     # {name}.uvl
     uvl_path = os.path.join(spl_dir, f"{name}.uvl")
-    uvl_content = f"features\n    {name}\n        mandatory\n\nconstraints\n"
+    # A fresh SPL has no features yet — emit a minimal VALID model (just the
+    # root, no empty 'mandatory'/'optional' group, which UVL rejects). Tabs are
+    # used for indentation, consistent with spl:add-feature.
+    uvl_content = f"features\n\t{name}\n"
     with open(uvl_path, "w") as f:
         f.write(uvl_content)
 

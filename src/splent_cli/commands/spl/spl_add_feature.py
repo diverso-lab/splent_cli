@@ -219,45 +219,42 @@ def spl_add_feature(spl_name, feature_package, org):
     with open(uvl_path, "r", encoding="utf-8") as f:
         lines = f.read().splitlines()
 
-    # Find the line before "constraints" to insert the feature
-    insert_idx = None
-    constraints_idx = None
-    for i, line in enumerate(lines):
-        if line.strip() == "constraints":
-            constraints_idx = i
-            insert_idx = i
-            break
-
-    if insert_idx is None:
-        insert_idx = len(lines)
-
-    # The line-insertion below assumes "constraints" lives on its own line.
-    # If it doesn't (e.g. malformed or unexpected layout), bail out before
-    # touching the file rather than silently corrupting the model.
-    if detected_deps and constraints_idx is None:
-        click.secho(
-            f"  ❌ No 'constraints' section found in {uvl_path}.\n"
-            f"     Refusing to edit: the UVL layout is not what this command "
-            f"expects (a 'constraints' header on its own line). "
-            f"Add the feature and constraints manually.",
-            fg="red",
-        )
-        raise SystemExit(1)
-
-    # Insert feature declaration
-    feature_line = (
-        f"\t\toptional\n\t\t\t{short_name} {{org '{org}', package '{feature_package}'}}"
+    # Locate the (optional) "constraints" header and an existing "optional" group.
+    # A fresh SPL has neither. UVL rejects an EMPTY "constraints" section, so we
+    # only create that section when there is at least one constraint to add.
+    constraints_idx = next(
+        (i for i, line in enumerate(lines) if line.strip() == "constraints"), None
     )
-    lines.insert(insert_idx, feature_line)
+    optional_idx = next(
+        (i for i, line in enumerate(lines) if line.strip() == "optional"), None
+    )
 
-    # Insert constraints after "constraints" line
-    if detected_deps and constraints_idx is not None:
-        # constraints_idx shifted by 1 due to insertion above
+    # Insert the feature under a SINGLE shared "optional" group, reusing it if it
+    # already exists (so repeated calls don't emit multiple 'optional' headers,
+    # which produced invalid UVL). The feature goes just before "constraints" if
+    # present, otherwise at the end of the features block. Indentation is tabs
+    # throughout, consistent with spl:create.
+    feat_at = constraints_idx if constraints_idx is not None else len(lines)
+    feature_decl = f"\t\t\t{short_name} {{org '{org}', package '{feature_package}'}}"
+    if optional_idx is not None:
+        lines.insert(feat_at, feature_decl)
+        if constraints_idx is not None:
+            constraints_idx += 1
+    else:
+        lines.insert(feat_at, "\t\toptional")
+        lines.insert(feat_at + 1, feature_decl)
+        if constraints_idx is not None:
+            constraints_idx += 2
+
+    # Add constraints, creating the section on demand (never leave it empty).
+    if detected_deps:
+        if constraints_idx is None:
+            lines.append("constraints")
+            constraints_idx = len(lines) - 1
+        ci = constraints_idx
         for dep in sorted(detected_deps):
-            constraints_idx += (
-                2  # +1 for feature line (2 lines), +1 for each constraint
-            )
-            lines.insert(constraints_idx, f"\t{short_name} => {dep}")
+            ci += 1
+            lines.insert(ci, f"\t{short_name} => {dep}")
 
     # Back up the original UVL, then write atomically so a crash mid-write can
     # never leave a half-written / truncated model.
