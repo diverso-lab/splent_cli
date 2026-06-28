@@ -79,8 +79,13 @@ def _reapply(app, feats: list[str], entry_lookup: dict, product_path, product_na
             if info:
                 key, ns, name, version = info
                 advance_state(
-                    product_path, product_name, key,
-                    to="migrated", namespace=ns, name=name, version=version,
+                    product_path,
+                    product_name,
+                    key,
+                    to="migrated",
+                    namespace=ns,
+                    name=name,
+                    version=version,
                 )
         except ImportError as e:
             if "models" in str(e):
@@ -173,9 +178,7 @@ def _reset_one_feature(app, feature_name, yes, product_path, product_name):
                 text(f"DELETE FROM `{SPLENT_MIGRATIONS_TABLE}` WHERE feature = :f"),
                 {"f": feat},
             )
-            conn.execute(
-                text(f"DROP TABLE IF EXISTS `{alembic_version_table(feat)}`")
-            )
+            conn.execute(text(f"DROP TABLE IF EXISTS `{alembic_version_table(feat)}`"))
         conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
     click.secho("⬆️  Re-applying migrations...", fg="cyan")
@@ -238,7 +241,9 @@ def _reset_everything(app, yes, product_path, product_name):
         click.echo(click.style("⚠️  No feature migrations found.", fg="yellow"))
     else:
         click.echo(
-            click.style(f"⬆️  Applying migrations for {len(dirs)} features...", fg="cyan")
+            click.style(
+                f"⬆️  Applying migrations for {len(dirs)} features...", fg="cyan"
+            )
         )
         _reapply(app, list(dirs.keys()), _entry_lookup(), product_path, product_name)
 
