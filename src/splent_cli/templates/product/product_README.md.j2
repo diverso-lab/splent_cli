@@ -1,26 +1,79 @@
 # {{ product_name }}
 
-A website built with **SPLENT** — a Software Product Line framework.
+A web application built with **SPLENT**.
 
-## Run it locally
+## What is SPLENT?
 
-Requires Docker. From the workspace:
+**SPLENT** — **S**oftware **P**roduct **L**ine **En**gineering **T**oolkit — is a
+modular ecosystem for building web applications in Python following Software
+Product Line (SPL) principles. It connects a **formal variability model** (the
+features that exist and how they can be combined, written in UVL) with
+**executable infrastructure** (Docker, databases, migrations, deployments), so a
+product is *derived* from a feature selection in an automated, validated and
+reproducible way.
+
+This product is a **thin shell**: it only declares which features it includes
+(see `pyproject.toml`) and SPLENT composes, validates and runs them.
+
+## Requirements
+
+- Docker + Docker Compose
+- Python 3.13+
+- `make`
+
+## 1. Set up the workspace
+
+This product lives inside a **SPLENT workspace** — a folder that holds the SPLENT
+tooling repositories next to this product:
+
+```
+my-workspace/
+├── splent_cli/          # the `splent` command (runs in Docker)
+├── splent_framework/    # the Flask app factory and base classes
+├── splent_catalog/      # the SPL / UVL variability models
+└── {{ product_name }}/  # this product
+```
+
+Clone those repositories side by side in the same parent folder.
+
+## 2. Start the SPLENT CLI
+
+The `splent` command runs inside a Docker container that bind-mounts the
+workspace at `/workspace`. Boot it once:
+
+```bash
+cd splent_cli
+make setup        # prepares .env, builds & starts the CLI container, and enters it
+splent --help     # now you are inside the container — list every command
+```
+
+> You don't have to stay inside the container: from the host you can run any
+> command with `docker exec splent_cli_container splent <command>`.
+
+## 3. Run this product
+
+From inside the CLI container:
 
 ```bash
 splent product:select {{ product_name }}
-splent product:derive --dev   # build, run migrations and start
-splent db:seed -y             # optional: load demo data
+splent product:derive --dev   # build images, run migrations and start the stack
+splent db:seed -y             # optional: load demo content
 splent product:port           # print the local URL
 ```
 
-Everyday commands:
+Open the URL that `product:port` prints and you're up.
+
+## Everyday commands
 
 ```bash
-splent product:up --dev       # start          splent product:down --dev   # stop
-splent product:logs           # tail logs      splent product:restart      # restart
+splent product:up --dev       # start the stack
+splent product:down --dev     # stop the stack
+splent product:logs           # tail logs
+splent product:restart        # restart
+splent spl:compare <a> <b>    # compare this product's features against another
 ```
 
 ## Documentation
 
-For features, the SPL/UVL model, the CLI and everything else, see the
-SPLENT documentation: https://docs.splent.io
+Features, the SPL/UVL model, the full CLI reference and guides:
+**[docs.splent.io](https://docs.splent.io)**
