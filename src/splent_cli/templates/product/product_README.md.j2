@@ -70,7 +70,6 @@ splent product:up --dev       # start the stack
 splent product:down --dev     # stop the stack
 splent product:logs           # tail logs
 splent product:restart        # restart
-splent spl:compare <a> <b>    # compare this product's features against another
 ```
 
 ## Documentation
