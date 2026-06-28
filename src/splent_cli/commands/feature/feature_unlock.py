@@ -4,7 +4,6 @@ import tomllib
 import click
 import requests
 from splent_cli.services import context, compose
-from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.utils.cache_utils import make_feature_writable
 from splent_cli.utils.proc import run
 from splent_cli.utils.io_utils import load_toml, atomic_write
@@ -343,7 +342,16 @@ def feature_edit(feature_name, edit_all, force):
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
-    features = read_features_from_data(data)
+    # Look across all feature lists (features, features_dev, features_prod) so
+    # that dev/prod-only features (e.g. admin) can also be unlocked, not just
+    # the default `features` list.
+    splent_cfg = data.get("tool", {}).get("splent", {})
+    features = [
+        entry
+        for key in ("features", "features_dev", "features_prod")
+        for entry in (splent_cfg.get(key) or [])
+        if isinstance(entry, str)
+    ]
 
     # ── Single feature ────────────────────────────────────────────────
     if feature_name:
