@@ -212,6 +212,15 @@ class TestCheckProductGuards:
         # FAILs the command exits 0.
         product_dir = product_workspace / "test_app"
         _set_features(product_dir, "splent_io/splent_feature_auth@v1.0.0")
+        # Force the boot failure this test is about. Relying on the ambient
+        # environment made the premise false whenever a real workspace with a
+        # bootable product was visible to the process.
+        import splent_cli.utils.dynamic_imports as dynamic_imports
+
+        def _boot_fails():
+            raise RuntimeError("app cannot boot in this environment")
+
+        monkeypatch.setattr(dynamic_imports, "get_app", _boot_fails)
         # Remove docker dir so docker/.env is absent.
         result = runner.invoke(check_product)
         assert result.exit_code == 0
