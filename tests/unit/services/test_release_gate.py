@@ -6,6 +6,9 @@ irreversible step (version bump / commit / tag push / PyPI upload) so a failure
 leaves the repo and remotes untouched.
 """
 
+import os
+import shutil
+import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -126,6 +129,16 @@ class TestPipelineGateOrdering:
 
 class TestLintPathReal:
     """Real ruff invocation (ruff is a dev dependency)."""
+
+    @pytest.fixture(autouse=True)
+    def _ruff_on_path(self, monkeypatch):
+        # ruff is installed in the environment running the tests, but
+        # _lint_path shells out and resolves it through PATH, which does not
+        # necessarily include that environment's bin directory.
+        bindir = os.path.dirname(sys.executable)
+        monkeypatch.setenv("PATH", bindir + os.pathsep + os.environ.get("PATH", ""))
+        if shutil.which("ruff") is None:
+            pytest.skip("ruff not installed in the test environment")
 
     def test_clean_file_passes(self, tmp_path):
         (tmp_path / "ok.py").write_text("x = 1\nprint(x)\n")

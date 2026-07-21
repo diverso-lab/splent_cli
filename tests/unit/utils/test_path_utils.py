@@ -4,6 +4,7 @@ Tests for splent_cli.utils.path_utils (the CLI shim over splent_framework PathUt
 These methods are pure path compositions — no filesystem access, just string joins.
 """
 
+import os
 import pytest
 from splent_cli.utils.path_utils import PathUtils
 
@@ -14,8 +15,17 @@ def set_working_dir(monkeypatch):
 
 
 class TestGetSplentCliDir:
-    def test_returns_expected_path(self):
-        assert PathUtils.get_splent_cli_dir() == "/workspace/splent_cli/src/splent_cli"
+    def test_falls_back_to_installed_package_when_workspace_missing(
+        self, monkeypatch, tmp_path
+    ):
+        # No splent_cli checkout under WORKING_DIR: the resolver must fall back
+        # to the installed package location instead of a path that does not
+        # exist. tmp_path guarantees the dev tree is absent on any machine.
+        monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+        import splent_cli.utils.path_utils as module
+
+        expected = os.path.dirname(os.path.dirname(os.path.abspath(module.__file__)))
+        assert PathUtils.get_splent_cli_dir() == expected
 
     def test_changes_with_working_dir(self, monkeypatch, tmp_path):
         dev_path = tmp_path / "splent_cli" / "src" / "splent_cli"

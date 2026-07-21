@@ -21,6 +21,9 @@ from splent_cli.services import context
 class TestWorkspace:
     def test_default_is_workspace(self, monkeypatch):
         monkeypatch.delenv("WORKING_DIR", raising=False)
+        # The default only exists inside the container; existence is not what
+        # this test is about, so pin it true to keep the test hermetic.
+        monkeypatch.setattr(Path, "exists", lambda self: True)
         assert context.workspace() == Path("/workspace")
 
     def test_reads_working_dir_env(self, tmp_path, monkeypatch):

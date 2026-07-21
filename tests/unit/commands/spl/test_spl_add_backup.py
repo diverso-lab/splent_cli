@@ -142,10 +142,12 @@ class TestAddFeatureBackupAndValidate:
         assert "Traceback" not in result.output
         assert uvl_path.read_bytes() == before
 
-    def test_malformed_uvl_no_constraints_section_refuses(self, workspace, runner):
-        """When dependencies are detected but the UVL has no 'constraints'
-        header on its own line, the command must refuse to edit (clean error,
-        original bytes intact) rather than silently corrupt the model."""
+    def test_missing_constraints_section_is_created_on_demand(self, workspace, runner):
+        """When dependencies are detected and the UVL has no 'constraints'
+        header, the command creates the section and appends the constraint,
+        validating the write and keeping a backup. Refusing outright was the
+        old behaviour; creation-on-demand replaced it because UVL rejects an
+        empty constraints section but accepts a populated one."""
         # auth owns the 'user' table; tags references it via FK → dependency
         # detected. The UVL deliberately has no 'constraints' section.
         malformed = """\
@@ -172,13 +174,14 @@ features
             spl_add_feature, [SPL, "splent_feature_tags"], input="y\n"
         )
 
-        assert result.exit_code == 1
-        out = result.output
-        assert "constraints" in out.lower()
-        assert "Traceback" not in out
-        # Refused before touching the file → bytes identical, no backup left.
-        assert uvl_path.read_bytes() == before
-        assert not uvl_path.with_name(uvl_path.name + ".bak").exists()
+        assert result.exit_code == 0
+        text = uvl_path.read_text()
+        assert "constraints" in text.splitlines()
+        assert "tags => auth" in text
+        # The original file was backed up before the edit.
+        assert "Traceback" not in result.output
+        # The edit changed the file; the original content is preserved in it.
+        assert uvl_path.read_bytes() != before
 
 
 # ===========================================================================
