@@ -10,6 +10,10 @@ from splent_framework.utils.path_utils import PathUtils
 from splent_cli.utils.io_utils import load_toml
 from splent_cli.utils.proc import run
 
+# What the operator actually exported, captured before any .env is applied.
+# Precedence from here on: shell environment > product .env > workspace .env.
+_shell_env = dict(os.environ)
+
 load_dotenv()
 
 _app_instance = None
@@ -21,7 +25,13 @@ dotenv_path = None
 if module_name:
     dotenv_path = PathUtils.get_app_env_file()
     if os.path.exists(dotenv_path):
+        # The product's .env beats the workspace .env, hence override=True.
+        # But it must never beat the process environment: a product .env
+        # carries container paths (WORKING_DIR=/workspace/), and blindly
+        # overriding made the CLI unusable from the host, because whatever
+        # WORKING_DIR the operator exported was clobbered on import.
         load_dotenv(dotenv_path, override=True)
+        os.environ.update(_shell_env)
 
 
 def install_features_if_needed():
