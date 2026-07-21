@@ -220,18 +220,32 @@ def _reset_everything(app, yes, product_path, product_name):
         raise SystemExit(1)
 
     click.echo(click.style("📋 Recreating splent_migrations table...", fg="cyan"))
-    with db.engine.begin() as conn:
-        conn.execute(
-            text(
-                f"""
-                CREATE TABLE IF NOT EXISTS `{SPLENT_MIGRATIONS_TABLE}` (
-                    `feature`        VARCHAR(255) NOT NULL,
-                    `last_migration` VARCHAR(255) DEFAULT NULL,
-                    PRIMARY KEY (`feature`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                """
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS `{SPLENT_MIGRATIONS_TABLE}` (
+                        `feature`        VARCHAR(255) NOT NULL,
+                        `last_migration` VARCHAR(255) DEFAULT NULL,
+                        PRIMARY KEY (`feature`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    """
+                )
+            )
+    except Exception as exc:
+        # The drop above succeeded, so the schema is empty but the migration
+        # tracking table is gone: surface the partial state instead of a raw
+        # traceback, and tell the operator how to converge.
+        click.echo(
+            click.style(
+                f"Failed to recreate the migration tracking table `{SPLENT_MIGRATIONS_TABLE}`: {exc}\n"
+                "The database is empty but untracked. Re-run 'splent db:reset' once the "
+                "database connection is back.",
+                fg="red",
             )
         )
+        raise SystemExit(1)
 
     ctx = click.get_current_context()
     ctx.invoke(clear_uploads)
