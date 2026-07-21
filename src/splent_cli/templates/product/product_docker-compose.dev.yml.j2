@@ -9,8 +9,16 @@ services:
       - ${SPLENT_HOST_PROJECT_DIR}:/workspace
     env_file:
       - /workspace/{{ product_name }}/docker/.env
+    environment:
+      # Wire the e2e layer to the grid below. The target URL is resolved by
+      # the browser, so it must name a host the browser container can reach.
+      SELENIUM_GRID_URL: http://{{ product_name }}_selenium_hub:4444
+      SELENIUM_TARGET_URL: http://{{ product_name }}_web:5000
     ports:
       - "{{ web_port }}:5000"
+      # Locust web interface, served from inside this container by
+      # 'splent locust'.
+      - "8089:8089"
     depends_on:
       {{ product_name }}_db:
         condition: service_healthy
@@ -34,6 +42,38 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
+    networks:
+      - {{ network_name }}
+
+  {{ product_name }}_selenium_hub:
+    image: selenium/hub:latest
+    container_name: {{ product_name }}_selenium_hub
+    networks:
+      - {{ network_name }}
+
+  {{ product_name }}_selenium_chrome:
+    image: selenium/node-chrome:latest
+    container_name: {{ product_name }}_selenium_chrome
+    shm_size: 2gb
+    environment:
+      SE_EVENT_BUS_HOST: {{ product_name }}_selenium_hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+    depends_on:
+      - {{ product_name }}_selenium_hub
+    networks:
+      - {{ network_name }}
+
+  {{ product_name }}_selenium_firefox:
+    image: selenium/node-firefox:latest
+    container_name: {{ product_name }}_selenium_firefox
+    shm_size: 2gb
+    environment:
+      SE_EVENT_BUS_HOST: {{ product_name }}_selenium_hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+    depends_on:
+      - {{ product_name }}_selenium_hub
     networks:
       - {{ network_name }}
 
