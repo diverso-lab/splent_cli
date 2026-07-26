@@ -139,9 +139,29 @@ def detect_host_ip():
 # ---------------------------------------------------------
 
 
+# The Flask app always listens on this port inside the container. A product
+# publishes other ports too (locust on 8089, for one), and docker does not
+# guarantee the app's mapping comes first, so it has to be picked by name.
+APP_CONTAINER_PORT = "5000"
+
+
+def parse_port_mappings(mapping: str) -> list[tuple[str, str]]:
+    """Every published (external, internal) pair in a `docker ps` port string.
+
+    A line looks like
+    "0.0.0.0:8089->8089/tcp, [::]:8089->8089/tcp, 0.0.0.0:5818->5000/tcp".
+    Duplicates from the IPv4 and IPv6 entries collapse, order is preserved.
+    """
+    pairs = []
+    for external, internal in re.findall(r"(\d+)->(\d+)", mapping):
+        if (external, internal) not in pairs:
+            pairs.append((external, internal))
+    return pairs
+
+
 def get_runtime_ports(container_name: str):
     """
-    Parse 'docker ps' to extract the published ports of a container.
+    Parse 'docker ps' to extract the published web port of a container.
     """
     result = subprocess.run(
         ["docker", "ps", "--format", "{{.Names}} {{.Ports}}"],
@@ -156,12 +176,21 @@ def get_runtime_ports(container_name: str):
     for line in result.stdout.splitlines():
         if line.startswith(container_name):
             mapping = line[len(container_name) :].strip()
+            pairs = parse_port_mappings(mapping)
 
-            # Example mapping: "0.0.0.0:5435->5000/tcp"
-            match = re.search(r"(\d+)->(\d+)", mapping)
-            if match:
-                external, internal = match.groups()
-                return external, internal
+            for external, internal in pairs:
+                if internal == APP_CONTAINER_PORT:
+                    return external, internal
+
+            if len(pairs) == 1:
+                return pairs[0]
+
+            if pairs:
+                published = ", ".join(f"{e}->{i}" for e, i in pairs)
+                raise click.ClickException(
+                    f"Container '{container_name}' publishes {published} but none "
+                    f"maps to the app port {APP_CONTAINER_PORT}."
+                )
 
             raise click.ClickException(
                 f"Container '{container_name}' found but port format is unrecognized: {mapping}"

@@ -113,7 +113,13 @@ class SPLENTCLI(click.Group):
                 cmd for cmd in all_cmds if cmd.startswith(("spl:", "uvl:"))
             ],
             "🛒 Marketplace": [
-                cmd for cmd in all_cmds if cmd.startswith("marketplace:")
+                cmd
+                for cmd in all_cmds
+                # login/logout/whoami are bare on purpose (docker-login
+                # ergonomics), so they are listed by name next to the
+                # namespaced marketplace commands they belong with.
+                if cmd.startswith("marketplace:")
+                or cmd in ("login", "logout", "whoami")
             ],
             "🧱 Database": [cmd for cmd in all_cmds if cmd.startswith("db:")],
             "💾 Cache": [cmd for cmd in all_cmds if cmd.startswith("cache:")],
