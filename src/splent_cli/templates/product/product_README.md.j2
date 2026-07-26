@@ -19,9 +19,12 @@ SPLENT tooling repositories.
 mkdir splent_workspace && cd splent_workspace
 git clone https://github.com/diverso-lab/splent_framework.git
 git clone https://github.com/diverso-lab/splent_cli.git
-git clone https://github.com/splent-io/splent_catalog.git
 git clone <url-of-this-repository>
 ```
+
+Those three are all you need to run the product. The SPL catalog
+(`splent_catalog`) is only required to create new products or to validate the
+variability model, and the features themselves are installed from PyPI.
 
 ### 2. Check your Git config file
 
@@ -75,9 +78,12 @@ When it finishes the app is served at <http://localhost:{{ web_port }}>, and
 ## When something looks wrong
 
 ```bash
-splent product:validate   # model satisfiable, contracts compatible, imports fine
+splent product:logs       # what the app actually says
 splent doctor             # full workspace diagnosis
 ```
+
+`splent product:validate` goes further and checks that the feature selection
+satisfies the variability model, so it needs the `splent_catalog` clone.
 
 ## Documentation
 
