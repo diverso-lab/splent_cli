@@ -3,9 +3,7 @@ import os
 import click
 from dotenv import load_dotenv
 
-from splent_cli.utils.dynamic_imports import get_app
 from splent_cli.utils.command_loader import load_commands
-from splent_cli.utils.db_utils import check_db_connection
 
 load_dotenv()
 
@@ -40,6 +38,8 @@ class SPLENTCLI(click.Group):
 
         self._feature_cmds_cache: dict[str, click.BaseCommand] = {}
         try:
+            from splent_cli.utils.dynamic_imports import get_app
+
             app = get_app()
             with app.app_context():
                 registry = app.extensions.get("splent_feature_commands", {})
@@ -84,6 +84,9 @@ class SPLENTCLI(click.Group):
         command = self.get_command(ctx, cmd_name)
 
         if command and getattr(command, "requires_app", False):
+            from splent_cli.utils.dynamic_imports import get_app
+            from splent_cli.utils.db_utils import check_db_connection
+
             app = get_app()
             if getattr(command, "requires_db", False):
                 if not check_db_connection(app):

@@ -51,15 +51,24 @@ class TestNormalizeFeatureName:
 
 
 class TestResolveUvlhubRawUrl:
-    def test_builds_correct_url(self):
+    def test_builds_correct_url(self, monkeypatch):
+        monkeypatch.delenv("UVLHUB_URL", raising=False)
         url = resolve_uvlhub_raw_url("uvlhub.io", "10.1234/test", "model.uvl")
         assert url == "https://www.uvlhub.io/doi/10.1234/test/files/raw/model.uvl/"
+
+    def test_honors_uvlhub_url_env(self, monkeypatch):
+        """A custom UVLHUB_URL replaces the production base (trailing slash
+        stripped) so fetch/info/publish all target the configured instance."""
+        monkeypatch.setenv("UVLHUB_URL", "https://staging.example/")
+        url = resolve_uvlhub_raw_url("uvlhub.io", "10.1234/test", "model.uvl")
+        assert url == "https://staging.example/doi/10.1234/test/files/raw/model.uvl/"
 
     def test_unsupported_mirror_raises(self):
         with pytest.raises(click.ClickException, match="Unsupported mirror"):
             resolve_uvlhub_raw_url("other.io", "10.1234/test", "model.uvl")
 
-    def test_doi_with_slashes(self):
+    def test_doi_with_slashes(self, monkeypatch):
+        monkeypatch.delenv("UVLHUB_URL", raising=False)
         url = resolve_uvlhub_raw_url("uvlhub.io", "10.99/my/doi", "app.uvl")
         assert "10.99/my/doi" in url
         assert url.endswith("/app.uvl/")

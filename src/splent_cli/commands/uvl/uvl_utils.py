@@ -13,6 +13,13 @@ import tomllib
 
 from splent_cli.utils.feature_utils import read_features_from_data
 
+DEFAULT_UVLHUB_URL = "https://www.uvlhub.io"
+
+
+def uvlhub_base_url() -> str:
+    """Base URL of the UVLHub instance (UVLHUB_URL env, default uvlhub.io)."""
+    return os.getenv("UVLHUB_URL", DEFAULT_UVLHUB_URL).rstrip("/")
+
 
 def _require_flamapy():
     try:
@@ -131,12 +138,16 @@ def normalize_feature_name(dep: str) -> str:
 
 
 def resolve_uvlhub_raw_url(mirror: str, doi: str, file: str) -> str:
-    """Resolve a uvlhub.io DOI + filename to a raw download URL."""
+    """Resolve a uvlhub.io DOI + filename to a raw download URL.
+
+    The base honors UVLHUB_URL so fetch/info/publish all target the same
+    instance (custom deployments included), defaulting to production.
+    """
     if mirror != "uvlhub.io":
         raise click.ClickException(
             f"Unsupported mirror '{mirror}' (only 'uvlhub.io' implemented)"
         )
-    return f"https://www.uvlhub.io/doi/{doi}/files/raw/{file}/"
+    return f"{uvlhub_base_url()}/doi/{doi}/files/raw/{file}/"
 
 
 def iter_children(node):

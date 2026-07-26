@@ -1,6 +1,7 @@
 """Unit tests for services/marketplace.py — index building and querying."""
 
 import json
+from pathlib import Path
 
 from splent_cli.services import marketplace
 
@@ -154,6 +155,99 @@ class TestUvlParser:
         model = marketplace.parse_uvl_structure(UVL_TEXT)
         assert ["events", "media"] in model["constraints"]
         assert ["session_redis", "redis"] in model["constraints"]
+
+
+SPL_METADATA = """\
+[spl]
+name = "demo_spl"
+description = "Demo SPL"
+
+[spl.uvl]
+mirror = "uvlhub.io"
+doi = "10.1234/demo"
+file = "demo_spl.uvl"
+"""
+
+
+class TestBuildSpls:
+    """build_spls auto-fetches missing UVLs (spl:fetch logic) best-effort:
+    a fetch failure must warn — never fail the build, never stay silent —
+    and a locally present UVL must mean zero network."""
+
+    def _catalog_spl(self, tmp_path, name="demo_spl"):
+        spl_dir = tmp_path / "splent_catalog" / name
+        spl_dir.mkdir(parents=True)
+        (spl_dir / "metadata.toml").write_text(SPL_METADATA)
+        return spl_dir
+
+    def test_missing_uvl_invokes_fetch_and_failure_warns_without_propagating(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from splent_cli.commands.spl import spl_utils
+
+        spl_dir = self._catalog_spl(tmp_path)
+        calls = []
+
+        def _failing_fetch(spl_name, metadata, target):
+            calls.append((spl_name, target))
+            raise RuntimeError("UVLHub is down")
+
+        monkeypatch.setattr(spl_utils, "_fetch_uvl", _failing_fetch)
+
+        spls = marketplace.build_spls(str(tmp_path))
+
+        # The fetch WAS attempted, with the right SPL and target path.
+        assert calls == [("demo_spl", str(spl_dir / "demo_spl.uvl"))]
+        # The failure did not propagate: the SPL is indexed without a model.
+        assert len(spls) == 1
+        assert spls[0]["name"] == "demo_spl"
+        assert spls[0]["model"] is None
+        assert spls[0]["uvl"]["doi"] == "10.1234/demo"
+        # And it was warned about — regressions never disappear silently.
+        out = capsys.readouterr().out
+        assert "could not fetch UVL for demo_spl" in out
+        assert "UVLHub is down" in out
+
+    def test_local_uvl_present_means_zero_network(self, tmp_path, monkeypatch):
+        from splent_cli.commands.spl import spl_utils
+
+        spl_dir = self._catalog_spl(tmp_path)
+        (spl_dir / "demo_spl.uvl").write_text(UVL_TEXT)
+        calls = []
+
+        def _boom(*args, **kwargs):
+            calls.append(args)
+            raise AssertionError("fetch attempted with a local UVL present")
+
+        monkeypatch.setattr(spl_utils, "_fetch_uvl", _boom)
+
+        spls = marketplace.build_spls(str(tmp_path))
+
+        assert calls == []
+        assert len(spls) == 1
+        assert spls[0]["model"] is not None
+        assert "theme" in spls[0]["model"]["features"]
+
+    def test_successful_fetch_writes_uvl_and_parses_model(
+        self, tmp_path, monkeypatch
+    ):
+        from splent_cli.commands.spl import spl_utils
+
+        spl_dir = self._catalog_spl(tmp_path)
+
+        def _fake_fetch(spl_name, metadata, target):
+            Path(target).write_text(UVL_TEXT)
+
+        monkeypatch.setattr(spl_utils, "_fetch_uvl", _fake_fetch)
+
+        spls = marketplace.build_spls(str(tmp_path))
+
+        assert (spl_dir / "demo_spl.uvl").is_file()
+        assert len(spls) == 1
+        model = spls[0]["model"]
+        assert model is not None
+        assert model["features"]["events"]["presence"] == "optional"
+        assert ["events", "media"] in model["constraints"]
 
 
 class TestSearch:

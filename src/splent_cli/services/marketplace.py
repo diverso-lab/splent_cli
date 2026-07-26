@@ -30,6 +30,8 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+import click
+
 INDEX_SCHEMA = 1
 FEATURE_PREFIX = "splent_feature_"
 
@@ -370,6 +372,20 @@ def build_spls(workspace: str) -> list[dict]:
             "model": None,
         }
         uvl_path = spl_dir / f"{spl_dir.name}.uvl"
+        if not uvl_path.is_file():
+            # UVL files are not tracked in git — fetch from UVLHub (spl:fetch
+            # logic) when the metadata has a DOI. Best-effort: an SPL without
+            # a published model is indexed without one, never fails the build
+            # — but the failure is warned about, never swallowed silently.
+            try:
+                from splent_cli.commands.spl.spl_utils import _fetch_uvl
+
+                _fetch_uvl(spl_dir.name, metadata, str(uvl_path))
+            except Exception as e:  # noqa: BLE001 - best-effort indexing
+                click.secho(
+                    f"  ⚠  could not fetch UVL for {spl_dir.name}: {e}",
+                    fg="yellow",
+                )
         if uvl_path.is_file():
             try:
                 entry["model"] = parse_uvl_structure(uvl_path.read_text())
