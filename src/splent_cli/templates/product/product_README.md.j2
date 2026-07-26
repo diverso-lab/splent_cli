@@ -1,78 +1,86 @@
 # {{ product_name }}
 
-A web application built with **SPLENT**.
+A web application built with SPLENT{% if spl_name %}, derived from the `{{ spl_name }}` product line{% endif %}.
 
-## What is SPLENT?
-
-**SPLENT** — **S**oftware **P**roduct **L**ine **En**gineering **T**oolkit — is a
-modular ecosystem for building web applications in Python following Software
-Product Line (SPL) principles. It connects a **formal variability model** (the
-features that exist and how they can be combined, written in UVL) with
-**executable infrastructure** (Docker, databases, migrations, deployments), so a
-product is *derived* from a feature selection in an automated, validated and
-reproducible way.
-
-This product is a **thin shell**: it only declares which features it includes
+This repository is a thin shell. It declares which features the product installs
 (see `pyproject.toml`) and SPLENT composes, validates and runs them.
 
-## Requirements
+## Run it locally
 
-- Docker + Docker Compose
-- Python 3.13+
-- `make`
+Your machine only needs **Docker**, **Git** and **GNU Make**. Python, Node and
+the database all live inside containers, so nothing else has to be installed.
 
-## 1. Set up the workspace
+### 1. Create a workspace
 
-This product lives inside a **SPLENT workspace** — a folder that holds the SPLENT
-tooling repositories next to this product:
+A SPLENT product is not standalone. It lives in a workspace folder next to the
+SPLENT tooling repositories.
 
+```bash
+mkdir splent_workspace && cd splent_workspace
+git clone https://github.com/diverso-lab/splent_framework.git
+git clone https://github.com/diverso-lab/splent_cli.git
+git clone https://github.com/splent-io/splent_catalog.git
+git clone <url-of-this-repository>
 ```
-my-workspace/
-├── splent_cli/          # the `splent` command (runs in Docker)
-├── splent_framework/    # the Flask app factory and base classes
-├── splent_catalog/      # the SPL / UVL variability models
-└── {{ product_name }}/  # this product
+
+### 2. Check your Git config file
+
+The CLI container mounts your `~/.gitconfig`. If that file does not exist,
+Docker creates it as an empty directory and installing features fails later.
+Create it once as a real file.
+
+```bash
+rm -rf ~/.gitconfig && touch ~/.gitconfig
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
 ```
 
-Clone those repositories side by side in the same parent folder.
-
-## 2. Start the SPLENT CLI
-
-The `splent` command runs inside a Docker container that bind-mounts the
-workspace at `/workspace`. Boot it once:
+### 3. Start the SPLENT CLI
 
 ```bash
 cd splent_cli
-make setup        # prepares .env, builds & starts the CLI container, and enters it
-splent --help     # now you are inside the container — list every command
+make setup
 ```
 
-> You don't have to stay inside the container: from the host you can run any
-> command with `docker exec splent_cli_container splent <command>`.
+That prepares the workspace `.env`, starts the CLI container and drops you
+inside it. Every `splent` command below runs in there. From the host you can
+also use `docker exec splent_cli_container splent <command>`.
 
-## 3. Run this product
-
-From inside the CLI container:
+### 4. Bring the product up
 
 ```bash
 splent product:select {{ product_name }}
-splent product:derive --dev   # build images, run migrations and start the stack
-splent db:seed -y             # optional: load demo content
-splent product:port           # print the local URL
+splent product:resolve        # install the features declared in pyproject.toml
+splent product:derive --dev   # build images, run migrations, start the stack
+splent db:seed -y             # load demo data, optional
 ```
 
-Open the URL that `product:port` prints and you're up.
+The first derive downloads images and compiles assets, so give it a few minutes.
+When it finishes the app is served at <http://localhost:{{ web_port }}>, and
+`splent product:port` prints that URL again whenever you need it.
 
 ## Everyday commands
 
+| Command | What it does |
+|---------|--------------|
+| `splent product:up --dev` | Start the stack |
+| `splent product:down --dev` | Stop the stack |
+| `splent product:restart` | Restart the Flask app |
+| `splent product:logs` | Tail the container logs |
+| `splent product:console` | Python shell with the app loaded |
+| `splent feature:status` | Features installed in this product |
+| `splent db:migrate` | Generate and apply a migration |
+| `splent product:port` | Print the local URL |
+
+## When something looks wrong
+
 ```bash
-splent product:up --dev       # start the stack
-splent product:down --dev     # stop the stack
-splent product:logs           # tail logs
-splent product:restart        # restart
+splent product:validate   # model satisfiable, contracts compatible, imports fine
+splent doctor             # full workspace diagnosis
 ```
 
 ## Documentation
 
-Features, the SPL/UVL model, the full CLI reference and guides:
-**[docs.splent.io](https://docs.splent.io)**
+Everything else, from the feature catalog and the UVL variability model to the
+full command reference and deployment, lives at
+[docs.splent.io](https://docs.splent.io).
