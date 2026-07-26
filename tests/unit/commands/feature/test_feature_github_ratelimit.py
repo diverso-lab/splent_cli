@@ -9,8 +9,9 @@ Hardened behavior under test: when the GitHub API answers with HTTP 403
 
 instead of letting the HTTPError bubble up as an uncaught exception.
 
-All network is mocked at the boundary (urllib.request.urlopen is patched per
-module to raise a 403 HTTPError); no real network/git is touched.
+All network is mocked at the single boundary every command now shares
+(splent_cli.services.registry → urllib.request.urlopen, patched to raise a
+403 HTTPError); no real network/git is touched.
 """
 
 import io
@@ -88,7 +89,7 @@ class TestUpgrade403:
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_upgrade.urllib.request.urlopen",
+                "splent_cli.services.registry.urllib.request.urlopen",
                 _raise_403(remaining="0"),
             )
             result = runner.invoke(feature_upgrade, [])
@@ -111,7 +112,7 @@ class TestUpgrade403:
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_upgrade.urllib.request.urlopen",
+                "splent_cli.services.registry.urllib.request.urlopen",
                 _raise_403(remaining="0"),
             )
             result = runner.invoke(feature_upgrade, ["splent_feature_auth"])
@@ -131,7 +132,7 @@ class TestVersions403:
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_versions.urllib.request.urlopen",
+                "splent_cli.services.registry.urllib.request.urlopen",
                 _raise_403(remaining="0"),
             )
             result = runner.invoke(
@@ -153,7 +154,7 @@ class TestVersions403:
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_versions.urllib.request.urlopen",
+                "splent_cli.services.registry.urllib.request.urlopen",
                 _raise_403(remaining="0"),
             )
             result = runner.invoke(
@@ -173,7 +174,7 @@ class TestVersions403:
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_versions.urllib.request.urlopen",
+                "splent_cli.services.registry.urllib.request.urlopen",
                 _raise_403(remaining="0"),
             )
             result = runner.invoke(feature_versions, ["--all"])
@@ -197,7 +198,7 @@ class TestSearch403:
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_search.urllib.request.urlopen",
+                "splent_cli.services.registry.urllib.request.urlopen",
                 _raise_403(remaining="0"),
             )
             result = runner.invoke(feature_search, [])
@@ -220,7 +221,7 @@ class TestSearch403:
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_search.urllib.request.urlopen",
+                "splent_cli.services.registry.urllib.request.urlopen",
                 _raise_403(remaining=None),
             )
             result = runner.invoke(feature_search, ["auth"])
@@ -267,21 +268,15 @@ class TestHappyPath:
             {"name": "splent_feature_auth", "description": "Auth feature"},
         ]
 
-        def _fake_request(url, token):
-            if "/orgs/" in url and "page=1" in url:
-                return repos
-            if "/orgs/" in url:
-                return []
-            # _latest_tag → releases/latest then tags
-            if url.endswith("/releases/latest"):
-                return {"tag_name": "v1.2.3"}
-            return [{"name": "v1.2.3"}]
-
         runner = CliRunner(mix_stderr=False)
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "splent_cli.commands.feature.feature_search._github_request",
-                _fake_request,
+                "splent_cli.services.registry.list_org_repos",
+                lambda org, token=None: list(repos),
+            )
+            mp.setattr(
+                "splent_cli.services.registry.latest_semver_tag",
+                lambda org, repo, token=None: "v1.2.3",
             )
             result = runner.invoke(feature_search, [])
 

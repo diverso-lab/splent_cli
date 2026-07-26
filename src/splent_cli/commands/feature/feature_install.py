@@ -1,8 +1,6 @@
 import os
-import re
 import click
-import requests
-from splent_cli.services import context, compose
+from splent_cli.services import context, compose, registry
 from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.utils.proc import run, require_docker
 from splent_cli.utils.io_utils import load_toml
@@ -86,23 +84,9 @@ def _check_dependencies(workspace, product, env_name, feature_pyproject, short):
 
 def _get_available_versions(namespace: str, repo: str, limit: int = 10) -> list[str]:
     """Fetch semver tags from GitHub, sorted newest first."""
-    api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
-    try:
-        r = requests.get(api_url, timeout=5)
-        r.raise_for_status()
-        tags = r.json()
-        versions = []
-        for tag in tags:
-            name = tag.get("name", "")
-            m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", name)
-            if m:
-                versions.append(
-                    (int(m.group(1)), int(m.group(2)), int(m.group(3)), name)
-                )
-        versions.sort(reverse=True)
-        return [v[3] for v in versions[:limit]]
-    except (requests.RequestException, KeyError, IndexError, ValueError):
-        return []
+    return registry.list_semver_tags(
+        namespace, repo, token=registry.github_token(), limit=limit
+    )
 
 
 @click.command(
@@ -313,9 +297,6 @@ def feature_install(feature_identifier, env_scope, mode, version):
         if not os.path.isdir(feature_dir):
             # Clone to workspace root as editable
             click.echo(click.style("  clone    ", dim=True) + f"{short} (editable)")
-            from splent_cli.commands.feature.feature_clone import (
-                _get_latest_tag,
-            )
             from splent_cli.utils.git_url import (
                 clone as git_clone,
                 CLONE_SUCCESS,
@@ -323,7 +304,7 @@ def feature_install(feature_identifier, env_scope, mode, version):
             )
 
             # SSH first, then HTTPS (per repo). ref=tag (None → default branch).
-            tag = _get_latest_tag(namespace_github, feature_name)
+            tag = registry.latest_semver_tag(namespace_github, feature_name)
             outcome, _used, err = git_clone(
                 namespace_github, feature_name, feature_dir, ref=tag
             )

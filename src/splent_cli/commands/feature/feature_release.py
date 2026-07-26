@@ -14,6 +14,7 @@ from pathlib import Path
 
 from splent_cli.commands.feature.feature_attach import feature_attach
 from splent_cli.services import context, release
+from splent_cli.utils.archetype import detect_archetype
 from splent_cli.utils.feature_utils import normalize_namespace
 from splent_cli.utils.proc import run
 
@@ -105,6 +106,25 @@ def _extract_services(services_path: Path) -> list[str]:
         set(
             re.findall(
                 r"""class\s+(\w+)\s*\([^)]*(?:BaseService|Service)[^)]*\)""", text
+            )
+        )
+    )
+
+
+def _extract_registered_services(init_path: Path) -> list[str]:
+    """Service names registered in the locator via register_service(app, "X", …).
+
+    This is the authoritative provider signal: whatever is registered here is
+    exactly what other features can reach through service_proxy — including
+    plain classes that extend nothing (e.g. MailService).
+    """
+    if not init_path.exists():
+        return []
+    text = init_path.read_text()
+    return sorted(
+        set(
+            re.findall(
+                r"""register_service\s*\(\s*\w+\s*,\s*['"](\w+)['"]""", text
             )
         )
     )
@@ -315,7 +335,155 @@ def _scan_dependencies(
     return sorted(required_features), sorted(env_vars)
 
 
-def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict:
+def _extract_service_proxies(src_dir: Path) -> tuple[set[str], set[str]]:
+    """Service class names looked up via ``service_proxy("XService")``,
+    split into ``(hard, soft)`` dependencies.
+
+    Cross-feature usage in SPLENT goes through the service locator, not
+    imports (e.g. recaptcha calling ``service_proxy("SettingsService")``),
+    so import scanning alone misses real feature dependencies.
+
+    A usage wrapped in ``try:`` is the codebase idiom for a SOFT dependency
+    (the feature tolerates the service being absent — e.g. public showing
+    events only when installed): those become requires.features_optional.
+    Bare usages are hard requirements. For proxies bound to a name
+    (``svc = service_proxy("X")``) hardness is decided by where the name is
+    used, since creating the lazy proxy is always safe.
+    """
+    import ast
+
+    names: set[str] = set()
+    soft: set[str] = set()
+    for py_file in src_dir.rglob("*.py"):
+        text = py_file.read_text()
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            # Unparseable file: fall back to the conservative regex (all
+            # calls count) rather than silently dropping dependencies.
+            names.update(
+                re.findall(
+                    r"""service_proxy\s*\(\s*['"](\w+)['"]""",
+                    _strip_docstrings_and_comments(text),
+                )
+            )
+            continue
+
+        guarded_ranges: list[tuple[int, int]] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Try):
+                for child in node.body:
+                    guarded_ranges.append(
+                        (child.lineno, child.end_lineno or child.lineno)
+                    )
+
+        def _guarded(line: int) -> bool:
+            return any(a <= line <= b for a, b in guarded_ranges)
+
+        def _is_proxy_call(node) -> bool:
+            return (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "service_proxy"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            )
+
+        # Proxies bound to a name (`events_service = service_proxy("X")`):
+        # creating the lazy proxy is always safe, so hardness is decided by
+        # where the NAME is used, not where it is assigned.
+        assigned: dict[str, str] = {}  # var name -> service name
+        assigned_calls: set[ast.Call] = set()
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and _is_proxy_call(node.value)
+            ):
+                assigned[node.targets[0].id] = node.value.args[0].value
+                assigned_calls.add(node.value)
+
+        for node in ast.walk(tree):
+            if _is_proxy_call(node) and node not in assigned_calls:
+                target = names if not _guarded(node.lineno) else soft
+                target.add(node.args[0].value)
+            elif (
+                isinstance(node, ast.Name)
+                and isinstance(node.ctx, ast.Load)
+                and node.id in assigned
+            ):
+                target = names if not _guarded(node.lineno) else soft
+                target.add(assigned[node.id])
+    return names, soft - names
+
+
+def build_service_map(workspace: str) -> dict[str, str]:
+    """Map service class name → feature short, from every contract in reach.
+
+    Scans editable features at the workspace root and versioned snapshots in
+    ``.splent_cache``. Ambiguous names (provided by two different features)
+    are dropped — inference must never guess.
+    """
+    mapping: dict[str, str] = {}
+    ambiguous: set[str] = set()
+
+    def _add(svc: str, short: str) -> None:
+        if svc in mapping and mapping[svc] != short:
+            ambiguous.add(svc)
+        else:
+            mapping[svc] = short
+
+    ws = Path(workspace)
+    pyprojects = list(ws.glob("splent_feature_*/pyproject.toml")) + list(
+        ws.glob(".splent_cache/features/*/*/pyproject.toml")
+    )
+    for py_path in pyprojects:
+        feature_dir = py_path.parent
+        dir_name = feature_dir.name.split("@", 1)[0]
+        if not dir_name.startswith("splent_feature_"):
+            continue
+        short = dir_name.removeprefix("splent_feature_")
+
+        # Primary signal: register_service calls in the feature's __init__.py
+        # (what service_proxy can actually resolve). The contract's
+        # provides.services complements it for features without sources.
+        for init_path in feature_dir.glob(f"src/*/{dir_name}/__init__.py"):
+            for svc in _extract_registered_services(init_path):
+                _add(svc, short)
+
+        try:
+            data = tomllib.loads(py_path.read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        services = (
+            data.get("tool", {})
+            .get("splent", {})
+            .get("contract", {})
+            .get("provides", {})
+            .get("services", [])
+        )
+        for svc in services:
+            _add(svc, short)
+
+    return {k: v for k, v in mapping.items() if k not in ambiguous}
+
+
+def _default_service_map() -> dict[str, str]:
+    try:
+        return build_service_map(str(context.workspace()))
+    except SystemExit:
+        # No reachable workspace (e.g. unit tests) — degrade to imports-only.
+        return {}
+
+
+def infer_contract(
+    feature_path: str,
+    namespace: str,
+    feature_name: str,
+    service_map: dict[str, str] | None = None,
+) -> dict:
     feature_root = Path(feature_path)
     src_dir = feature_root / "src" / normalize_namespace(namespace) / feature_name
 
@@ -323,7 +491,10 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
     blueprints = _extract_blueprints(src_dir / "__init__.py")
     models = _extract_models(src_dir / "models.py")
     hooks = _extract_hooks(src_dir / "hooks.py")
-    services = _extract_services(src_dir / "services.py")
+    services = sorted(
+        set(_extract_services(src_dir / "services.py"))
+        | set(_extract_registered_services(src_dir / "__init__.py"))
+    )
     templates = _extract_templates(src_dir)
     template_hook_slots = _extract_template_hook_slots(src_dir)
     commands = _extract_commands(src_dir / "commands.py")
@@ -333,7 +504,35 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
     signals_provided, signals_required = _extract_signals(src_dir / "signals.py")
     translations = _extract_translations(src_dir / "translations")
 
+    # Cross-feature usage via the service locator: resolve every
+    # service_proxy("XService") call against the other features' contracts.
+    if service_map is None:
+        service_map = _default_service_map()
+    own_short = feature_name.removeprefix("splent_feature_")
+    own_services = set(services)
+    hard_proxies, soft_proxies = _extract_service_proxies(src_dir)
+    for svc in hard_proxies:
+        if svc in own_services:
+            continue
+        dep_short = service_map.get(svc)
+        if dep_short and dep_short != own_short and dep_short not in req_features:
+            req_features.append(dep_short)
+    req_features = sorted(req_features)
+    req_optional: list[str] = []
+    for svc in soft_proxies:
+        if svc in own_services:
+            continue
+        dep_short = service_map.get(svc)
+        if (
+            dep_short
+            and dep_short != own_short
+            and dep_short not in req_features
+            and dep_short not in req_optional
+        ):
+            req_optional.append(dep_short)
+
     return {
+        "archetype": detect_archetype(str(src_dir)),
         "routes": routes,
         "blueprints": blueprints,
         "models": models,
@@ -344,6 +543,7 @@ def infer_contract(feature_path: str, namespace: str, feature_name: str) -> dict
         "translations": translations,
         "docker": docker,
         "requires_features": req_features,
+        "requires_features_optional": sorted(req_optional),
         "env_vars": env_vars,
         "requires_signals": signals_required,
         "extensible_services": services,
@@ -361,6 +561,9 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
 
     existing_description = f"{feature_name} feature"
     existing_env = None
+    existing_category = None
+    existing_tags: list[str] = []
+    manual_requires: list[str] = []
     try:
         data = tomllib.loads(text)
         splent_contract = data.get("tool", {}).get("splent", {}).get("contract", {})
@@ -368,8 +571,27 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         if desc:
             existing_description = desc
         existing_env = splent_contract.get("env")
+        existing_category = splent_contract.get("category")
+        existing_tags = splent_contract.get("tags", [])
+        # Manually declared feature dependencies live in their own preserved
+        # key (features_manual): some real dependencies are invisible to
+        # static analysis (e.g. team storing photos through the media admin
+        # UI). Keeping them separate lets auto-inferred entries in `features`
+        # expire when the code stops using them.
+        manual_requires = splent_contract.get("requires", {}).get(
+            "features_manual", []
+        )
     except Exception:
         pass
+
+    merged_requires = sorted(
+        set(contract.get("requires_features", [])) | set(manual_requires)
+    )
+    contract = {
+        **contract,
+        "requires_features": merged_requires,
+        "requires_features_manual": sorted(set(manual_requires)),
+    }
 
     # Preserve any refinement section that comes after the contract
     refinement_block = ""
@@ -385,7 +607,10 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
     if not match:
         match = re.search(r"^\[tool\.splent\.contract\b", text, re.MULTILINE)
     if match:
-        text = text[: match.start()].rstrip()
+        text = text[: match.start()]
+    # Normalize trailing whitespace on both paths so a first write and a
+    # rewrite produce byte-identical output.
+    text = text.rstrip()
 
     def _toml_list(items: list[str]) -> str:
         if not items:
@@ -399,12 +624,24 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
     ext_hooks = contract.get("extensible_hooks", [])
     ext_routes = contract.get("extensible_routes", False)
 
+    def _fmt_tags(tags: list[str]) -> str:
+        return "[" + ", ".join(f'"{t}"' for t in tags) + "]"
+
     contract_block = (
         "\n\n"
         "# ── Feature Contract (auto-generated) ────────────────────────────────────────\n"
         "# Do not edit manually — re-run `splent feature:contract --write` to refresh.\n"
+        "# Preserved across refreshes: description, category, tags, env, and\n"
+        "# requires.features_manual (dependencies invisible to static analysis).\n"
         "[tool.splent.contract]\n"
         f'description = "{existing_description}"\n'
+        + (
+            f'archetype = "{contract["archetype"]}"\n'
+            if contract.get("archetype")
+            else ""
+        )
+        + (f'category = "{existing_category}"\n' if existing_category else "")
+        + (f"tags = {_fmt_tags(existing_tags)}\n" if existing_tags else "")
         + (f'env = "{existing_env}"\n' if existing_env else "")
         + "\n"
         "[tool.splent.contract.provides]\n"
@@ -420,7 +657,17 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         "\n"
         "[tool.splent.contract.requires]\n"
         f"features = {_toml_list(contract['requires_features'])}\n"
-        f"env_vars = {_toml_list(contract['env_vars'])}\n"
+        + (
+            f"features_manual = {_toml_list(contract['requires_features_manual'])}\n"
+            if contract.get("requires_features_manual")
+            else ""
+        )
+        + (
+            f"features_optional = {_toml_list(contract['requires_features_optional'])}\n"
+            if contract.get("requires_features_optional")
+            else ""
+        )
+        + f"env_vars = {_toml_list(contract['env_vars'])}\n"
         f"signals  = {_toml_list(contract.get('requires_signals', []))}\n"
         "\n"
         "[tool.splent.contract.extensible]\n"

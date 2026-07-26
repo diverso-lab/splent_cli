@@ -254,7 +254,7 @@ class TestMissingToolCleanMessage:
         runner = CliRunner(mix_stderr=False)
         with (
             patch(
-                "splent_cli.commands.feature.feature_clone._get_latest_tag",
+                "splent_cli.services.registry.latest_semver_tag",
                 return_value="v1.0.0",
             ),
             patch(

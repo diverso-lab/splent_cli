@@ -109,6 +109,9 @@ class SPLENTCLI(click.Group):
             "🧬 SPL & Variability": [
                 cmd for cmd in all_cmds if cmd.startswith(("spl:", "uvl:"))
             ],
+            "🛒 Marketplace": [
+                cmd for cmd in all_cmds if cmd.startswith("marketplace:")
+            ],
             "🧱 Database": [cmd for cmd in all_cmds if cmd.startswith("db:")],
             "💾 Cache": [cmd for cmd in all_cmds if cmd.startswith("cache:")],
             "🔍 Checks": [cmd for cmd in all_cmds if cmd.startswith("check:")],

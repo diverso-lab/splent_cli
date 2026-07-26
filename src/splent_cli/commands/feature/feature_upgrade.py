@@ -1,14 +1,11 @@
-import json
 import os
 import tomllib
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import click
 from packaging.version import Version, InvalidVersion
 
-from splent_cli.services import context
+from splent_cli.services import context, registry
 from splent_cli.utils.feature_utils import (
     normalize_namespace,
     read_features_from_data,
@@ -18,45 +15,25 @@ from splent_cli.utils.feature_utils import (
 # ── GitHub helpers ────────────────────────────────────────────────────────────
 
 
-def _github_headers(token: str | None) -> dict:
-    h = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "splent-cli",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        h["Authorization"] = f"token {token}"
-    return h
-
-
 def _latest_remote_version(org: str, repo: str, token: str | None) -> str | None:
     """Return the latest tag from GitHub, or None if the repo has no tags."""
-    headers = _github_headers(token)
-    url = f"https://api.github.com/repos/{org}/{repo}/tags?per_page=1&page=1"
-    req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            batch = json.loads(resp.read().decode())
-        return batch[0]["name"] if batch else None
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None
-        if e.code == 403:
+        tags = registry.list_tags(org, repo, token, max_pages=1)
+    except registry.RegistryError as e:
+        if e.status == 403 or e.rate_limited:
             # Most commonly GitHub rate-limiting an unauthenticated request.
             click.secho(
-                f"  ⚠  GitHub rate limit hit for {repo} (HTTP 403); skipping. "
+                f"  ⚠  GitHub rate limit hit for {repo} (HTTP {e.status or 403}); skipping. "
                 "Set GITHUB_TOKEN to raise the limit.",
                 fg="yellow",
             )
             return None
-        click.secho(
-            f"  ⚠  GitHub error fetching {repo} (HTTP {e.code}); skipping.",
-            fg="yellow",
-        )
+        click.secho(f"  ⚠  {e} fetching {repo}; skipping.", fg="yellow")
         return None
-    except urllib.error.URLError as e:
-        click.secho(f"  ⚠  Network error fetching {repo}: {e.reason}", fg="yellow")
+    if not tags:
         return None
+    ordered = registry.semver_sorted(tags)
+    return ordered[0] if ordered else tags[0]
 
 
 # ── Pyproject helpers ─────────────────────────────────────────────────────────

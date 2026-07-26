@@ -1,112 +1,47 @@
-import urllib.request
-import urllib.error
-import json
+"""
+feature:search — Find features in the marketplace index (or live on GitHub).
+
+With an index available (built via `marketplace:index` or fetched from
+SPLENT_INDEX_URL) the search is instant, works offline, and can filter by
+what features actually ARE (category, archetype, tags) and by their
+contracts (--provides, --requires). Passing --org or --all switches to the
+historical live GitHub listing.
+"""
+
 import os
+
 import click
 
-
-def _github_request(url: str, token: str | None) -> dict | list | None:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "splent-cli",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        headers["Authorization"] = f"token {token}"
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None
-        if e.code in (403, 429):
-            remaining = e.headers.get("X-RateLimit-Remaining") if e.headers else None
-            if e.code == 429 or remaining == "0":
-                click.secho("❌ GitHub API rate limit exceeded.", fg="red")
-                if not token:
-                    click.secho(
-                        "💡 Set GITHUB_TOKEN to raise your rate limit and access private repos.",
-                        fg="yellow",
-                    )
-                raise SystemExit(1)
-            click.secho(f"❌ GitHub API access forbidden (HTTP {e.code}).", fg="red")
-            if not token:
-                click.secho(
-                    "💡 Set GITHUB_TOKEN to access private repos and raise rate limits.",
-                    fg="yellow",
-                )
-            raise SystemExit(1)
-        click.secho(f"❌ GitHub API error (HTTP {e.code}).", fg="red")
-        raise SystemExit(1)
-    except urllib.error.URLError as e:
-        click.secho(f"❌ Network error: {e.reason}", fg="red")
-        raise SystemExit(1)
+from splent_cli.services import context, marketplace, registry
 
 
-def _latest_tag(org: str, repo: str, token: str | None) -> str | None:
-    data = _github_request(
-        f"https://api.github.com/repos/{org}/{repo}/releases/latest", token
-    )
-    if data and data.get("tag_name"):
-        return data["tag_name"]
-    # fall back to tags
-    tags = _github_request(f"https://api.github.com/repos/{org}/{repo}/tags", token)
-    if tags and isinstance(tags, list) and tags:
-        return tags[0].get("name")
-    return None
+# ── Live GitHub fallback ──────────────────────────────────────────────
 
 
-@click.command("feature:search", short_help="Search for available features on GitHub.")
-@click.argument("query", required=False)
-@click.option(
-    "--org",
-    default="splent-io",
-    show_default=True,
-    help="GitHub organisation to search in.",
-)
-@click.option(
-    "--all",
-    "show_all",
-    is_flag=True,
-    help="Show all repos, not just splent_feature_* ones.",
-)
-def feature_search(query, org, show_all):
-    """
-    List available features from a GitHub organisation.
-
-    \b
-    By default searches the splent-io org and filters by repos that match
-    the splent_feature_* naming convention.
-    Optionally filter by QUERY (partial name match).
-
-    Examples:
-        splent feature:search
-        splent feature:search auth
-        splent feature:search --org my-org
-    """
-    token = os.getenv("GITHUB_TOKEN")
-
+def _live_search(query: str | None, org: str, show_all: bool, token: str | None):
+    """List repos of a GitHub organisation (the pre-index behavior)."""
     click.echo(click.style(f"\n🔍 Searching features in {org}...\n", fg="cyan"))
 
-    # Paginate through all repos
-    repos = []
-    page = 1
-    while True:
-        url = f"https://api.github.com/orgs/{org}/repos?per_page=100&page={page}&type=public"
-        batch = _github_request(url, token)
-        if not batch:
-            break
-        repos.extend(batch)
-        if len(batch) < 100:
-            break
-        page += 1
+    try:
+        repos = registry.list_org_repos(org, token)
+    except registry.RegistryError as e:
+        if e.rate_limited:
+            click.secho("❌ GitHub API rate limit exceeded.", fg="red")
+        elif e.status == 403:
+            click.secho("❌ GitHub API access forbidden (HTTP 403).", fg="red")
+        else:
+            click.secho(f"❌ {e}.", fg="red")
+        if not token:
+            click.secho(
+                "💡 Set GITHUB_TOKEN to raise your rate limit and access private repos.",
+                fg="yellow",
+            )
+        raise SystemExit(1)
 
     if repos is None:
         click.secho(f"❌ Organisation '{org}' not found or not accessible.", fg="red")
         raise SystemExit(1)
 
-    # Filter
     if not show_all:
         repos = [r for r in repos if "feature" in r.get("name", "").lower()]
     if query:
@@ -125,7 +60,7 @@ def feature_search(query, org, show_all):
     for repo in sorted(repos, key=lambda r: r["name"]):
         name = repo["name"]
         desc = repo.get("description") or ""
-        latest = _latest_tag(org, name, token)
+        latest = registry.latest_semver_tag(org, name, token)
         version_label = (
             click.style(latest, fg="green")
             if latest
@@ -139,6 +74,165 @@ def feature_search(query, org, show_all):
             "💡 Set GITHUB_TOKEN to avoid rate limits and access private repos.",
             fg="yellow",
         )
+
+
+# ── Index-backed search ───────────────────────────────────────────────
+
+
+def _product_feature_shorts() -> set[str]:
+    product = context.active_app()
+    if not product:
+        return set()
+    try:
+        from splent_cli.utils.feature_utils import load_product_features
+
+        entries = load_product_features(
+            os.path.join(str(context.workspace()), product), os.getenv("SPLENT_ENV")
+        )
+    except (FileNotFoundError, SystemExit):
+        return set()
+    return {
+        e.split("@")[0].split("/")[-1].removeprefix("splent_feature_")
+        for e in entries
+    }
+
+
+def _index_search(index, origin, query, category, archetype, tag, provides, requires):
+    results = marketplace.search_features(
+        index,
+        query,
+        category=category,
+        archetype=archetype,
+        tag=tag,
+        provides=provides,
+        requires=requires,
+    )
+
+    click.echo()
+    criteria = [
+        f"'{query}'" if query else None,
+        f"category={category}" if category else None,
+        f"archetype={archetype}" if archetype else None,
+        f"tag={tag}" if tag else None,
+        f"provides={provides}" if provides else None,
+        f"requires={requires}" if requires else None,
+    ]
+    criteria_label = " ".join(c for c in criteria if c)
+    title = "  Marketplace search" + (f" — {criteria_label}" if criteria_label else "")
+    click.echo(click.style(title, bold=True))
+    click.echo(click.style(f"  {'─' * 72}", fg="bright_black"))
+
+    if not results:
+        click.secho("  No features match.", fg="yellow")
+        click.echo()
+        return
+
+    installed = _product_feature_shorts()
+
+    col_name = max(len(e["short"]) for e in results) + 2
+    for e in results:
+        version = e.get("version") or e.get("project_version") or "—"
+        arch = e.get("archetype") or "?"
+        desc = e.get("description") or ""
+        if len(desc) > 56:
+            desc = desc[:53] + "…"
+        mark = click.style("● ", fg="green") if e["short"] in installed else "  "
+        click.echo(
+            f"  {mark}{e['short']:<{col_name}}"
+            + click.style(f"{version:<10}", fg="green")
+            + click.style(f"{arch:<9}", fg="cyan")
+            + desc
+        )
+
+    click.echo()
+    click.echo(
+        click.style(
+            f"  {len(results)} feature(s) · index from {origin} · "
+            "details: splent feature:info <name>",
+            fg="bright_black",
+        )
+    )
+    click.echo()
+
+
+# ── Command ───────────────────────────────────────────────────────────
+
+
+@click.command(
+    "feature:search",
+    short_help="Search features in the marketplace index (or live on GitHub).",
+)
+@click.argument("query", required=False)
+@click.option(
+    "--org",
+    default=None,
+    help="Search this GitHub organisation live instead of the index.",
+)
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Live mode: show all repos, not just splent_feature_* ones.",
+)
+@click.option("--category", default=None, help="Filter by contract category.")
+@click.option(
+    "--archetype",
+    default=None,
+    type=click.Choice(["full", "light", "service", "config"]),
+    help="Filter by feature archetype.",
+)
+@click.option("--tag", default=None, help="Filter by contract tag.")
+@click.option(
+    "--provides",
+    default=None,
+    help="Filter by provided route/service/model/hook/signal (exact name).",
+)
+@click.option(
+    "--requires",
+    default=None,
+    help="Filter by required feature short name (e.g. auth).",
+)
+@click.option("--refresh", is_flag=True, help="Re-fetch the index from SPLENT_INDEX_URL.")
+def feature_search(
+    query, org, show_all, category, archetype, tag, provides, requires, refresh
+):
+    """
+    Search for available features.
+
+    \b
+    Uses the marketplace index when one is available (marketplace:index or
+    SPLENT_INDEX_URL); otherwise lists the GitHub organisation live.
+
+    \b
+    Examples:
+        splent feature:search
+        splent feature:search auth
+        splent feature:search --archetype service
+        splent feature:search --provides MediaService
+        splent feature:search --requires auth
+        splent feature:search --org my-org        # live GitHub listing
+    """
+    token = registry.github_token()
+
+    # Explicit --org / --all always means the live GitHub listing.
+    if org or show_all:
+        _live_search(query, org or "splent-io", show_all, token)
+        return
+
+    workspace = str(context.workspace())
+    index, origin = marketplace.resolve_index(workspace, refresh=refresh)
+
+    if index is None:
+        # No index anywhere — behave like the historical live search.
+        _live_search(query, "splent-io", show_all, token)
+        click.secho(
+            "💡 Build a local index for instant, filterable search: "
+            "splent marketplace:index",
+            fg="yellow",
+        )
+        return
+
+    _index_search(index, origin, query, category, archetype, tag, provides, requires)
 
 
 cli_command = feature_search

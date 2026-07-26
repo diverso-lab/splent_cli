@@ -6,13 +6,10 @@ All release commands delegate to these functions instead of reimplementing
 git, PyPI, or GitHub logic.
 """
 
-import json
 import os
 import re
 import sys
 import subprocess
-import urllib.error
-import urllib.request
 
 import click
 import requests
@@ -334,37 +331,9 @@ def fetch_latest_tag(org: str, repo_name: str) -> str | None:
 
     Fetches up to 100 tags and sorts by semver (not creation date).
     """
-    token = os.getenv("GITHUB_TOKEN")
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "splent-cli",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        headers["Authorization"] = f"token {token}"
+    from splent_cli.services import registry
 
-    url = f"https://api.github.com/repos/{org}/{repo_name}/tags?per_page=100"
-    try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            batch = json.loads(resp.read().decode())
-        if not batch:
-            return None
-
-        versions = []
-        for tag in batch:
-            name = tag.get("name", "")
-            m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", name)
-            if m:
-                versions.append(
-                    (int(m.group(1)), int(m.group(2)), int(m.group(3)), name)
-                )
-        if not versions:
-            return batch[0]["name"]
-        versions.sort(reverse=True)
-        return versions[0][3]
-    except Exception:
-        return None
+    return registry.latest_semver_tag(org, repo_name)
 
 
 def bump(version_str: str, bump_type: str) -> str:

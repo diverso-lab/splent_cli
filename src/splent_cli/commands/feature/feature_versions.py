@@ -1,50 +1,9 @@
-import json
 import os
-import urllib.error
-import urllib.request
 
 import click
 
-from splent_cli.services import compose
+from splent_cli.services import compose, registry
 from splent_cli.utils.feature_utils import load_product_features
-
-
-# ── HTTP helpers ──────────────────────────────────────────────────────────────
-
-
-def _github_headers(token: str | None) -> dict:
-    h = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "splent-cli",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        h["Authorization"] = f"token {token}"
-    return h
-
-
-def _get_json(url: str, headers: dict) -> list | dict | None:
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None
-        if e.code in (403, 429):
-            hint = ""
-            if "Authorization" not in headers:
-                hint = " Set GITHUB_TOKEN to raise the limit."
-            click.secho(
-                f"⚠️  GitHub API rate limit or access denied (HTTP {e.code}).{hint}",
-                fg="yellow",
-            )
-            return None
-        click.secho(f"❌ GitHub API error (HTTP {e.code}).", fg="red")
-        raise SystemExit(1)
-    except urllib.error.URLError as e:
-        click.secho(f"❌ Network error: {e.reason}", fg="red")
-        raise SystemExit(1)
 
 
 # ── Source fetchers ───────────────────────────────────────────────────────────
@@ -52,44 +11,23 @@ def _get_json(url: str, headers: dict) -> list | dict | None:
 
 def _github_versions(org: str, repo: str, token: str | None) -> list[str]:
     """Return all tag names from the GitHub repo, newest first."""
-    headers = _github_headers(token)
-    tags = []
-    MAX_PAGES = 50  # safety cap: 50 * 100 = 5000 tags
-    for page in range(1, MAX_PAGES + 1):
-        url = f"https://api.github.com/repos/{org}/{repo}/tags?per_page=100&page={page}"
-        batch = _get_json(url, headers)
-        if not batch:
-            break
-        tags.extend(t.get("name", "") for t in batch if t.get("name"))
-        if len(batch) < 100:
-            break
-    return tags
+    try:
+        return registry.list_tags(org, repo, token)
+    except registry.RegistryError as e:
+        if e.rate_limited or e.status in (403, 429):
+            hint = "" if token else " Set GITHUB_TOKEN to raise the limit."
+            click.secho(
+                f"⚠️  GitHub API rate limit or access denied (HTTP {e.status}).{hint}",
+                fg="yellow",
+            )
+            return []
+        click.secho(f"❌ {e}.", fg="red")
+        raise SystemExit(1)
 
 
 def _pypi_versions(package: str) -> list[str]:
     """Return all PyPI release versions, newest first."""
-    url = f"https://pypi.org/pypi/{package}/json"
-    req = urllib.request.Request(url, headers={"User-Agent": "splent-cli"})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-        releases = data.get("releases", {})
-        versions = list(releases.keys())
-
-        def _latest_upload(v):
-            files = releases.get(v) or []
-            if not files:
-                return ""
-            return max(f.get("upload_time", "") for f in files)
-
-        return sorted(versions, key=_latest_upload, reverse=True)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return []
-        click.secho(f"⚠️  PyPI API error (HTTP {e.code}).", fg="yellow")
-        return []
-    except urllib.error.URLError:
-        return []
+    return registry.pypi_versions(package)
 
 
 # ── Version helpers ───────────────────────────────────────────────────────────
@@ -160,15 +98,7 @@ def _pypi_version_exists(package: str, version: str) -> bool:
     The main /json endpoint is CDN-cached and may lag after a fresh release.
     The per-version endpoint is always up to date.
     """
-    url = f"https://pypi.org/pypi/{package}/{version}/json"
-    req = urllib.request.Request(url, headers={"User-Agent": "splent-cli"})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status == 200
-    except urllib.error.HTTPError as e:
-        return e.code != 404
-    except urllib.error.URLError:
-        return False
+    return registry.pypi_version_exists(package, version)
 
 
 def _semver_sort_key(v: str) -> tuple:

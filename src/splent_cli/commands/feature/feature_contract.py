@@ -90,6 +90,9 @@ def _read_current_contract(pyproject_path: Path) -> dict:
     raw = data.get("tool", {}).get("splent", {}).get("contract", {})
     ext = raw.get("extensible", {})
     return {
+        "archetype": raw.get("archetype"),
+        "category": raw.get("category"),
+        "tags": raw.get("tags", []),
         "routes": raw.get("provides", {}).get("routes", []),
         "blueprints": raw.get("provides", {}).get("blueprints", []),
         "models": raw.get("provides", {}).get("models", []),
@@ -100,6 +103,12 @@ def _read_current_contract(pyproject_path: Path) -> dict:
         "translations": raw.get("provides", {}).get("translations", []),
         "docker": raw.get("provides", {}).get("docker", []),
         "requires_features": raw.get("requires", {}).get("features", []),
+        "requires_features_manual": raw.get("requires", {}).get(
+            "features_manual", []
+        ),
+        "requires_features_optional": raw.get("requires", {}).get(
+            "features_optional", []
+        ),
         "env_vars": raw.get("requires", {}).get("env_vars", []),
         "requires_signals": raw.get("requires", {}).get("signals", []),
         "extensible_services": ext.get("services", []),
@@ -135,6 +144,10 @@ def _print_contract(contract: dict, feature_name: str) -> None:
         return "[" + ", ".join(f'"{i}"' for i in items) + "]"
 
     click.echo()
+    if contract.get("archetype"):
+        click.echo(click.style("  [tool.splent.contract]", fg="bright_black"))
+        click.echo(f"  archetype  = \"{contract['archetype']}\"")
+        click.echo()
     click.echo(click.style("  [tool.splent.contract.provides]", fg="bright_black"))
     click.echo(f"  routes     = {_fmt(contract['routes'])}")
     click.echo(f"  blueprints = {_fmt(contract['blueprints'])}")
@@ -148,6 +161,9 @@ def _print_contract(contract: dict, feature_name: str) -> None:
     click.echo()
     click.echo(click.style("  [tool.splent.contract.requires]", fg="bright_black"))
     click.echo(f"  features   = {_fmt(contract['requires_features'])}")
+    click.echo(
+        f"  features_optional = {_fmt(contract.get('requires_features_optional', []))}"
+    )
     click.echo(f"  env_vars   = {_fmt(contract['env_vars'])}")
     click.echo(f"  signals    = {_fmt(contract.get('requires_signals', []))}")
     click.echo()
@@ -190,6 +206,7 @@ def _print_diff(current: dict, inferred: dict) -> bool:
         ("services", "services"),
         ("docker", "docker"),
         ("requires_features", "requires.features"),
+        ("requires_features_optional", "requires.features_optional"),
         ("env_vars", "requires.env_vars"),
         ("signals", "provides.signals"),
         ("translations", "provides.translations"),
@@ -205,6 +222,17 @@ def _print_diff(current: dict, inferred: dict) -> bool:
     ]
 
     diff_lines = []
+
+    # archetype is a scalar, not a list — compare it directly
+    old_arch = current.get("archetype")
+    new_arch = inferred.get("archetype")
+    if new_arch and old_arch != new_arch:
+        if old_arch:
+            diff_lines.append(
+                click.style(f"    - archetype: {old_arch}", fg="red")
+            )
+        diff_lines.append(click.style(f"    + archetype: {new_arch}", fg="green"))
+
     for key, label in FIELDS:
         diff_lines.extend(
             _diff_field(label, current.get(key, []), inferred.get(key, []))
@@ -268,6 +296,22 @@ def feature_contract(feature_ref, write):
     click.echo("  🔍 Scanning source code…")
     inferred = infer_contract(str(cache_path), ns, name)
 
+    # Deps declared in requires.features_manual are preserved by
+    # write_contract; merge them here too so the dry-run diff shows exactly
+    # what --write would produce (including real drops of stale inferred deps).
+    current = _read_current_contract(pyproject_path)
+    manual = sorted(set(current.get("requires_features_manual", [])))
+    if manual:
+        inferred["requires_features"] = sorted(
+            set(inferred["requires_features"]) | set(manual)
+        )
+        click.echo(
+            click.style(
+                "  Preserving requires.features_manual: ", fg="bright_black"
+            )
+            + ", ".join(manual)
+        )
+
     # Show inferred contract
     click.echo(click.style("  Inferred contract:", bold=True))
     _print_contract(inferred, name)
@@ -280,7 +324,6 @@ def feature_contract(feature_ref, write):
     inferred["docker_networks"] = dc.get("networks", [])
 
     # Compare with current
-    current = _read_current_contract(pyproject_path)
     has_changes = _print_diff(current, inferred)
 
     if not has_changes:

@@ -1,9 +1,8 @@
 import os
 import re
 import shutil
-import requests
 import click
-from splent_cli.services import context
+from splent_cli.services import context, registry
 from splent_cli.utils.cache_utils import make_feature_readonly
 from splent_cli.utils.feature_utils import normalize_namespace
 from splent_cli.utils.proc import require_tool
@@ -15,38 +14,6 @@ DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
 # =====================================================================
 # UTILS
 # =====================================================================
-
-
-def _get_latest_tag(namespace, repo) -> str | None:
-    """Fetch the highest semver tag from GitHub. Returns None if unreachable or no tags."""
-    api_url = f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
-    # Authenticate when a token is present so version resolution also works for
-    # PRIVATE feature repos (an unauthenticated call 404s on those) and to raise
-    # the API rate limit.
-    headers = {}
-    token = os.getenv("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        r = requests.get(api_url, headers=headers, timeout=5)
-        r.raise_for_status()
-        tags = r.json()
-        if not tags:
-            return None
-        versions = []
-        for tag in tags:
-            name = tag.get("name", "")
-            m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", name)
-            if m:
-                versions.append(
-                    (int(m.group(1)), int(m.group(2)), int(m.group(3)), name)
-                )
-        if not versions:
-            return tags[0]["name"]
-        versions.sort(reverse=True)
-        return versions[0][3]
-    except (requests.RequestException, KeyError, IndexError, ValueError):
-        return None
 
 
 def _parse_full_name(full_name: str):
@@ -104,7 +71,7 @@ def feature_clone(full_name):
         click.echo(
             f"🔍 No version provided → fetching latest tag for {namespace}/{repo}..."
         )
-        version = _get_latest_tag(namespace, repo)
+        version = registry.latest_semver_tag(namespace, repo)
         if not version:
             click.secho(
                 f"❌ Could not fetch tags for {namespace}/{repo}. Is the repo reachable and does it have tags?",

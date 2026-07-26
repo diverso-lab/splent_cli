@@ -12,19 +12,15 @@ from pathlib import Path
 import click
 
 from splent_cli.services import context
+from splent_cli.utils.archetype import (  # noqa: F401  (re-exported for callers)
+    ARCHETYPES,
+    ARCHETYPE_LABELS,
+    detect_archetype as _detect_archetype,
+)
 from splent_cli.utils.feature_utils import normalize_namespace
 
 
 DEFAULT_NAMESPACE = os.getenv("SPLENT_DEFAULT_NAMESPACE", "splent_io")
-
-ARCHETYPES = ("full", "light", "config", "service")
-
-ARCHETYPE_LABELS = {
-    "full": "Complete domain feature (models, routes, services, templates, migrations)",
-    "light": "Lightweight UI feature (routes, hooks, templates)",
-    "config": "Infrastructure feature (config.py only)",
-    "service": "Backend service (services, config, commands, signals)",
-}
 
 # Files that are ALWAYS kept regardless of archetype
 PROTECTED = {"__init__.py"}
@@ -113,32 +109,6 @@ def _is_stub_dir(dirpath, dirname):
         return real == 0
 
     return False
-
-
-# ── Archetype detection ──────────────────────────────────────────────
-
-
-def _detect_archetype(src_dir):
-    """Detect the real archetype from source file contents."""
-    models = _read(os.path.join(src_dir, "models.py"))
-    routes = _read(os.path.join(src_dir, "routes.py"))
-    services = _read(os.path.join(src_dir, "services.py"))
-
-    has_models = models and re.search(r"db\.Column", models)
-    has_routes = routes and re.search(r"@\w+\.route\s*\(", routes)
-    has_services = services and re.search(
-        r"def\s+(?!__)\w+\s*\(.*\):\s*\n\s+(?!pass\b|\.\.\.|\s*#)",
-        services,
-        re.MULTILINE,
-    )
-
-    if has_models:
-        return "full"
-    if has_routes:
-        return "light"
-    if has_services:
-        return "service"
-    return "config"
 
 
 # ── Expected files per archetype ─────────────────────────────────────

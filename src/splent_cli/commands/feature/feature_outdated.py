@@ -8,9 +8,8 @@ import os
 import re
 
 import click
-import requests
 
-from splent_cli.services import context
+from splent_cli.services import context, registry
 from splent_cli.utils.feature_utils import parse_feature_entry
 from splent_cli.utils.io_utils import load_toml
 from splent_cli.utils.proc import run
@@ -18,32 +17,10 @@ from splent_cli.utils.proc import run
 
 def _fetch_latest_tag(namespace: str, repo: str) -> str | None:
     """Fetch the latest semver tag from GitHub, sorted properly."""
-    token = os.getenv("GITHUB_TOKEN")
-    headers = {"Accept": "application/vnd.github+json"}
-    if token:
-        headers["Authorization"] = f"token {token}"
-
-    url = f"https://api.github.com/repos/{namespace}/{repo}/tags?per_page=100"
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
-        r.raise_for_status()
-        tags = r.json()
-    except (requests.RequestException, ValueError):
-        return None
-
-    # Parse and sort by semver descending
-    versions = []
-    for tag in tags:
-        name = tag.get("name", "")
-        m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", name)
-        if m:
-            versions.append((int(m.group(1)), int(m.group(2)), int(m.group(3)), name))
-
-    if not versions:
-        return None
-
-    versions.sort(reverse=True)
-    return versions[0][3]
+    tags = registry.list_semver_tags(
+        namespace, repo, token=registry.github_token(), limit=1
+    )
+    return tags[0] if tags else None
 
 
 def _parse_semver(tag: str) -> tuple[int, ...] | None:
