@@ -13,7 +13,7 @@ import click
 from pathlib import Path
 
 from splent_cli.commands.feature.feature_attach import feature_attach
-from splent_cli.services import context, release
+from splent_cli.services import context, release, release_gate
 from splent_cli.utils.archetype import detect_archetype
 from splent_cli.utils.feature_utils import normalize_namespace
 from splent_cli.utils.proc import run
@@ -807,15 +807,47 @@ def create_versioned_snapshot(namespace, feature_name, version, workspace):
     is_flag=True,
     help="Skip the pre-release lint + tests gate (emergencies only).",
 )
+@click.option(
+    "--no-pypi",
+    is_flag=True,
+    help="Publish to GitHub only. The feature will NOT exist on PyPI for this version.",
+)
+@click.option(
+    "--no-github",
+    is_flag=True,
+    help="Publish to PyPI only. Nothing at all is pushed to GitHub for this version.",
+)
+@click.option(
+    "--allow-unfinished",
+    is_flag=True,
+    help="Release even though the previous version never finished publishing.",
+)
 @context.requires_product
-def feature_release(feature_ref, version, attach, skip_checks):
+def feature_release(
+    feature_ref, version, attach, skip_checks, no_pypi, no_github, allow_unfinished
+):
     workspace = str(context.workspace())
 
     feature_path, namespace, feature_name = resolve_feature_path(feature_ref, workspace)
     ns_github = namespace.replace("_", "-")
 
+    channels = release.resolve_channels(
+        feature_path, no_github=no_github, no_pypi=no_pypi
+    )
+    release.confirm_single_channel(channels, no_github=no_github, no_pypi=no_pypi)
+
     if not version:
-        version = release.semver_wizard(ns_github, feature_name)
+        version = release.semver_wizard(
+            ns_github,
+            feature_name,
+            package=release.read_project_name(
+                os.path.join(feature_path, "pyproject.toml")
+            )
+            or feature_name,
+            channels=channels,
+            resume_target=feature_name,
+            path=feature_path,
+        )
 
     normalized = version.lstrip("v")
     tag = f"v{normalized}"
@@ -829,7 +861,14 @@ def feature_release(feature_ref, version, attach, skip_checks):
 
     def _post_pypi(path, ver):
         _compile_before_release(feature_name)
-        create_versioned_snapshot(namespace, feature_name, tag, workspace)
+        if release_gate.GITHUB in channels:
+            create_versioned_snapshot(namespace, feature_name, tag, workspace)
+        else:
+            # The snapshot is a clone of the tag from GitHub, and with the
+            # GitHub channel off the tag never left this machine.
+            click.secho(
+                f"  snapshot SKIPPED, {tag} is local only (--no-github)", fg="yellow"
+            )
 
     release.run_release_pipeline(
         f"{namespace}/{feature_name}",
@@ -837,6 +876,9 @@ def feature_release(feature_ref, version, attach, skip_checks):
         version,
         kind="feature",
         skip_checks=skip_checks,
+        channels=channels,
+        resume_target=feature_name,
+        allow_unfinished=allow_unfinished,
         pre_commit_hook=_pre_commit,
         post_pypi_hook=_post_pypi,
     )

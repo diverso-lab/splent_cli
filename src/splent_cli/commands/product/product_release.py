@@ -4,7 +4,7 @@ product:release — Release a product with version bump, tag, GitHub/PyPI/Docker
 
 import os
 import click
-from splent_cli.services import context, release
+from splent_cli.services import context, release, release_gate
 from splent_cli.utils.proc import run, require_docker
 
 
@@ -31,8 +31,12 @@ def _guard_all_features_pinned(product_path: str):
     raise SystemExit(1)
 
 
-def _release_docker_image(product: str, version: str, docker_dir: str):
-    """Build and push Docker images to Docker Hub."""
+def release_docker_image(product: str, version: str, docker_dir: str):
+    """Build and push Docker images to Docker Hub.
+
+    Public because release:resume has to be able to finish this channel too:
+    the image is pushed last, after GitHub and PyPI are already irreversible.
+    """
     require_docker()
 
     username = os.getenv("DOCKERHUB_USERNAME")
@@ -95,8 +99,30 @@ def _release_docker_image(product: str, version: str, docker_dir: str):
     is_flag=True,
     help="Skip the pre-release lint + tests gate (emergencies only).",
 )
+@click.option(
+    "--no-pypi",
+    is_flag=True,
+    help="Publish to GitHub only. The product will NOT exist on PyPI for this version.",
+)
+@click.option(
+    "--no-github",
+    is_flag=True,
+    help="Publish to PyPI only. Nothing at all is pushed to GitHub for this version.",
+)
+@click.option(
+    "--no-docker",
+    is_flag=True,
+    help="Do not build or push the Docker image for this version.",
+)
+@click.option(
+    "--allow-unfinished",
+    is_flag=True,
+    help="Release even though the previous version never finished publishing.",
+)
 @context.requires_product
-def product_release(version, product, skip_checks):
+def product_release(
+    version, product, skip_checks, no_pypi, no_github, no_docker, allow_unfinished
+):
     product = product or os.getenv("SPLENT_APP")
     if not product:
         click.secho("  error: no product specified and SPLENT_APP not set", fg="red")
@@ -123,19 +149,52 @@ def product_release(version, product, skip_checks):
         raise SystemExit(1)
     org, repo_name = parts
 
+    # Docker Hub is a third channel, and it is the one that publishes LAST, so
+    # it is the one most able to diverge. It goes through the gate with the
+    # others instead of being discovered at the end.
+    channels = release.resolve_channels(
+        product_path,
+        no_github=no_github,
+        no_pypi=no_pypi,
+        extra=() if no_docker else (release_gate.DOCKER,),
+    )
+    release.confirm_single_channel(channels, no_github=no_github, no_pypi=no_pypi)
+    if no_docker:
+        click.secho(
+            "  WARNING  no Docker image will be published for this version "
+            "(--no-docker).",
+            fg="yellow",
+        )
+
     if not version:
-        version = release.semver_wizard(org, repo_name)
+        version = release.semver_wizard(
+            org,
+            repo_name,
+            package=release.read_project_name(
+                os.path.join(product_path, "pyproject.toml")
+            )
+            or product,
+            channels=channels,
+            resume_target="product",
+            path=product_path,
+        )
 
     def _docker_hook(_path, ver):
-        _release_docker_image(product, ver, docker_dir)
+        if release_gate.DOCKER in channels:
+            release_docker_image(product, ver, docker_dir)
 
     release.run_release_pipeline(
         product,
         product_path,
         version,
         kind="product",
-        require_docker=True,
+        require_docker=release_gate.DOCKER in channels,
         skip_checks=skip_checks,
+        channels=channels,
+        resume_target="product",
+        allow_unfinished=allow_unfinished,
+        docker_image=f"{os.getenv('DOCKERHUB_USERNAME', '')}/{product}".lstrip("/")
+        or None,
         post_pypi_hook=_docker_hook,
     )
 

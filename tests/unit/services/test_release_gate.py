@@ -1,9 +1,13 @@
 """Tests for the pre-release lint+tests gate in services/release.py.
 
 The gate must (1) run lint then tests for the released entity, (2) abort on
-either failure, (3) be skippable, and — most importantly — (4) run BEFORE any
+either failure, (3) be skippable, and, most importantly, (4) run BEFORE any
 irreversible step (version bump / commit / tag push / PyPI upload) so a failure
 leaves the repo and remotes untouched.
+
+The channel gate (services/release_gate.py) is mocked here: it runs even earlier
+in the pipeline and has its own tests in test_release_channel_gate.py. No test
+in this file is allowed to touch the network.
 """
 
 import os
@@ -14,11 +18,21 @@ from unittest.mock import patch
 
 import pytest
 
-from splent_cli.services import release
+from splent_cli.services import release, release_gate
 
 
 def _cp(returncode):
     return SimpleNamespace(returncode=returncode, stdout="", stderr="")
+
+
+def _passing_gate():
+    """A GateReport where both channels accept the release."""
+    return release_gate.GateReport(
+        statuses=[
+            release_gate.ChannelStatus(release_gate.GITHUB, ok=True, summary="ready"),
+            release_gate.ChannelStatus(release_gate.PYPI, ok=True, summary="ready"),
+        ]
+    )
 
 
 class TestRunPreReleaseChecks:
@@ -89,13 +103,14 @@ class TestPipelineGateOrdering:
         with (
             patch.object(release, "validate_release_env"),
             patch.object(release, "get_repo_from_path", return_value="org/repo"),
+            patch.object(release_gate, "run_gate", return_value=_passing_gate()),
             patch.object(
                 release,
                 "run_pre_release_checks",
                 side_effect=SystemExit(1),
             ) as gate,
             patch.object(release, "update_version") as upd,
-            patch.object(release, "commit_and_push") as commit,
+            patch.object(release, "commit_locally") as commit,
             patch.object(release, "create_and_push_tag") as tag,
             patch.object(release, "build_and_upload_pypi") as pypi,
         ):
@@ -112,11 +127,13 @@ class TestPipelineGateOrdering:
         with (
             patch.object(release, "validate_release_env"),
             patch.object(release, "get_repo_from_path", return_value="org/repo"),
+            patch.object(release_gate, "run_gate", return_value=_passing_gate()),
             patch.object(release, "run_pre_release_checks") as gate,
             patch.object(release, "update_version") as upd,
-            patch.object(release, "commit_and_push"),
+            patch.object(release, "commit_locally"),
+            patch.object(release, "push_main"),
             patch.object(release, "create_and_push_tag"),
-            patch.object(release, "create_github_release"),
+            patch.object(release, "create_github_release", return_value=None),
             patch.object(release, "build_and_upload_pypi"),
             patch("splent_cli.commands.clear.clear_build.clean_build_artifacts"),
         ):

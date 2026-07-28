@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 import pytest
 from splent_cli.services.release import (
-    commit_and_push,
+    commit_locally,
     create_and_push_tag,
     build_and_upload_pypi,
     extract_repo,
@@ -38,61 +38,53 @@ class TestCommitLocalChanges:
 
             @click.command()
             def cmd():
-                commit_and_push(str(tmp_path), "v1.0.0")
+                commit_locally(str(tmp_path), "v1.0.0")
 
             result = CliRunner().invoke(cmd)
             assert "clean" in result.output.lower()
             assert mock_run.call_count == 1  # only git status
 
-    def test_git_push_failure_exits_with_message(self, tmp_path):
+    def test_git_commit_failure_exits_with_message(self, tmp_path):
         with patch("splent_cli.services.release.subprocess.run") as mock_run:
-            with patch(
-                "splent_cli.services.release.click.confirm",
-                return_value=True,
-            ):
-                dirty_result = MagicMock()
-                dirty_result.stdout = "M pyproject.toml"
-                # status → dirty, add → ok, commit → ok, push → fail
-                error = subprocess.CalledProcessError(1, "git push")
-                error.stderr = "Permission denied"
-                mock_run.side_effect = [dirty_result, None, None, error]
+            dirty_result = MagicMock()
+            dirty_result.stdout = "M pyproject.toml"
+            # status → dirty, add → ok, commit → fail
+            error = subprocess.CalledProcessError(1, "git commit")
+            error.stderr = "Permission denied"
+            mock_run.side_effect = [dirty_result, None, error]
 
-                import click
+            import click
 
-                @click.command()
-                def cmd():
-                    commit_and_push(str(tmp_path), "v1.0.0")
+            @click.command()
+            def cmd():
+                commit_locally(str(tmp_path), "v1.0.0")
 
-                result = CliRunner(mix_stderr=False).invoke(cmd)
-                assert result.exit_code == 1
-                assert "failed" in result.output.lower()
-                assert "Traceback" not in result.output
+            result = CliRunner(mix_stderr=False).invoke(cmd)
+            assert result.exit_code == 1
+            assert "failed" in result.output.lower()
+            assert "Traceback" not in result.output
 
-    def test_git_push_failure_explains_partial_state(self, tmp_path):
+    def test_git_commit_failure_explains_partial_state(self, tmp_path):
         with patch("splent_cli.services.release.subprocess.run") as mock_run:
-            with patch(
-                "splent_cli.services.release.click.confirm",
-                return_value=True,
-            ):
-                dirty_result = MagicMock()
-                dirty_result.stdout = "M pyproject.toml"
-                error = subprocess.CalledProcessError(1, "git push")
-                error.stderr = "network error"
-                mock_run.side_effect = [dirty_result, None, None, error]
+            dirty_result = MagicMock()
+            dirty_result.stdout = "M pyproject.toml"
+            error = subprocess.CalledProcessError(1, "git commit")
+            error.stderr = "network error"
+            mock_run.side_effect = [dirty_result, None, error]
 
-                import click
+            import click
 
-                @click.command()
-                def cmd():
-                    commit_and_push(str(tmp_path), "v1.0.0")
+            @click.command()
+            def cmd():
+                commit_locally(str(tmp_path), "v1.0.0")
 
-                result = CliRunner(mix_stderr=False).invoke(cmd)
-                # Should mention that version was bumped but not committed
-                assert (
-                    "pyproject" in result.output.lower()
-                    or "version" in result.output.lower()
-                    or "committed" in result.output.lower()
-                )
+            result = CliRunner(mix_stderr=False).invoke(cmd)
+            # Should mention that version was bumped but not committed
+            assert (
+                "pyproject" in result.output.lower()
+                or "version" in result.output.lower()
+                or "committed" in result.output.lower()
+            )
 
 
 class TestCreateAndPushGitTag:

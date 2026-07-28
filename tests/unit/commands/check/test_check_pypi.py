@@ -136,6 +136,48 @@ class TestTokenFormat:
 # ---------------------------------------------------------------------------
 
 
+class TestUnusableAnswers:
+    """An answer that is not a verdict is not a pass.
+
+    The release gate refuses on the same input, and the command an operator
+    runs to decide whether to release must not be the more permissive of the
+    two.
+    """
+
+    @pytest.mark.parametrize("code", [500, 502, 503])
+    def test_exits_1_on_an_answer_that_proves_nothing(self, runner, monkeypatch, code):
+        monkeypatch.setenv("TWINE_USERNAME", "myuser")
+        monkeypatch.setenv("TWINE_PASSWORD", "mypassword123")
+
+        with patch("urllib.request.urlopen", side_effect=_http_error(code)):
+            result = runner.invoke(check_pypi, [])
+        assert result.exit_code == 1
+        assert "could NOT be confirmed" in result.output
+        assert "PyPI credentials OK" not in result.output
+
+    def test_exits_1_on_429_as_a_rate_limit(self, runner, monkeypatch):
+        monkeypatch.setenv("TWINE_USERNAME", "myuser")
+        monkeypatch.setenv("TWINE_PASSWORD", "mypassword123")
+
+        with patch("urllib.request.urlopen", side_effect=_http_error(429)):
+            result = runner.invoke(check_pypi, [])
+        assert result.exit_code == 1
+        assert "RATE LIMITING" in result.output
+
+
+class TestCredentialResolution:
+    def test_pypi_username_is_accepted_like_everywhere_else(self, runner, monkeypatch):
+        """check:pypi read TWINE_USERNAME only, so it disagreed with the gate."""
+        monkeypatch.delenv("TWINE_USERNAME", raising=False)
+        monkeypatch.delenv("TWINE_PASSWORD", raising=False)
+        monkeypatch.setenv("PYPI_USERNAME", "__token__")
+        monkeypatch.setenv("PYPI_PASSWORD", "pypi-" + "a" * 30)
+
+        with patch("urllib.request.urlopen", side_effect=_http_error(400)):
+            result = runner.invoke(check_pypi, [])
+        assert result.exit_code == 0
+
+
 class TestTestPyPI:
     def test_uses_testpypi_url(self, runner, monkeypatch):
         monkeypatch.setenv("TWINE_USERNAME", "myuser")
