@@ -78,7 +78,7 @@ def marketplace_index(orgs, repos, registry_file, local, output, no_pypi):
     The index is derived from:
       - [tool.splent.contract] of each feature at its latest released tag
         (or the workspace pyprojects with --local)
-      - the SPL catalog (splent_catalog): UVL structure and constraints
+      - every SPL model the workspace knows: UVL structure and constraints
       - computed relations: used_by (reverse deps) and provides collisions
 
     \b

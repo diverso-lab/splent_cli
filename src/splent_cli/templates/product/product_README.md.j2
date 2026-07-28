@@ -22,9 +22,10 @@ git clone https://github.com/diverso-lab/splent_cli.git
 git clone <url-of-this-repository>
 ```
 
-Those three are all you need to run the product. The SPL catalog
-(`splent_catalog`) is only required to create new products or to validate the
-variability model, and the features themselves are installed from PyPI.
+Those three are all you need to run the product. The variability model this
+product derives from is not one of them: `pyproject.toml` records its DOI under
+`[tool.splent.spl_model]`, so the CLI downloads it once from UVLHub and caches
+it under `.splent_cache/spls/`.
 
 ### 2. Check your Git config file
 
@@ -83,7 +84,8 @@ splent doctor             # full workspace diagnosis
 ```
 
 `splent product:validate` goes further and checks that the feature selection
-satisfies the variability model, so it needs the `splent_catalog` clone.
+satisfies the variability model, downloading the model first if this machine
+has never seen it.
 
 ## Documentation
 

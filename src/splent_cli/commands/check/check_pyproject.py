@@ -128,14 +128,24 @@ def check_pyproject():
     # SPL / UVL
     spl_name = splent.get("spl")
     if spl_name:
-        uvl_path = os.path.join(
-            workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
+        from splent_cli.services import spl_store
+
+        pin = spl_store.read_pin(workspace, spl_name, product=product)
+        uvl_path = spl_store.find_uvl(
+            workspace, spl_name, version=pin.version, doi=pin.doi
         )
-        if os.path.isfile(uvl_path):
-            _ok(f"SPL catalog: {spl_name} (UVL found)")
+        if uvl_path:
+            _ok(f"SPL model {spl_name} (UVL found at {uvl_path})")
+        elif pin.fetchable:
+            _warn(
+                f"SPL model {spl_name} not downloaded yet, run: "
+                f"splent spl:fetch {spl_name}"
+            )
         else:
             _fail(
-                f"SPL catalog: {spl_name} — UVL not found at splent_catalog/{spl_name}/{spl_name}.uvl"
+                f"SPL model {spl_name} has no UVL on disk and no DOI recorded. "
+                f"Add [tool.splent.spl_model] with the DOI, or run: "
+                f"splent spl:create {spl_name}"
             )
     else:
         # Legacy fallback

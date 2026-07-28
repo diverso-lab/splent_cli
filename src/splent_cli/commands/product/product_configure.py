@@ -274,16 +274,19 @@ def _parse_feature_cardinalities(uvl_path: str) -> dict[str, tuple[int, int]]:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _load_spl_model(catalog_dir: str, spl_name: str) -> SPLModel:
-    """Load UVL via Flamapy and build an abstract SPLModel."""
+def _load_spl_model(uvl_path: str, spl_name: str) -> SPLModel:
+    """Load UVL via Flamapy and build an abstract SPLModel.
+
+    Takes a path rather than a directory to look in: where a model lives is
+    :mod:`splent_cli.services.spl_store`'s decision, not this module's.
+    """
     from splent_cli.commands.uvl.uvl_utils import _require_flamapy
 
     _require_flamapy()
     from flamapy.core.discover import DiscoverMetamodels
 
-    uvl_path = os.path.join(catalog_dir, spl_name, f"{spl_name}.uvl")
     if not os.path.isfile(uvl_path):
-        raise click.ClickException(f"UVL not found: {uvl_path}")
+        raise click.ClickException(f"UVL not found for '{spl_name}': {uvl_path}")
 
     dm = DiscoverMetamodels()
     fm = dm.use_transformation_t2m(uvl_path, "fm")
@@ -907,8 +910,12 @@ def product_configure():
             "No SPL configured. Set [tool.splent].spl in pyproject.toml"
         )
 
-    catalog_dir = os.path.join(workspace, "splent_catalog")
-    model = _load_spl_model(catalog_dir, spl_name)
+    from splent_cli.services import spl_store
+
+    uvl_path = spl_store.resolve_uvl(
+        workspace, spl_name, pin=spl_store.pin_from_pyproject(data)
+    )
+    model = _load_spl_model(uvl_path, spl_name)
 
     # All features that are mandatory from root down
     mandatory = model.all_mandatory_recursive()

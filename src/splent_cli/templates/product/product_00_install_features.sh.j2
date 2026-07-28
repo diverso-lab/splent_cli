@@ -3,7 +3,19 @@
 # ---------------------------------------------------------------------------
 # Creative Commons CC BY 4.0 - SPLENT - Diverso Lab
 # ---------------------------------------------------------------------------
-# This script installs all features listed in the product's pyproject.toml.
+# This script installs the features listed in the product's pyproject.toml.
+#
+# It is the DEVELOPMENT install path, and it never contacts PyPI. Every install
+# below is `pip install -e` against a directory under
+# /workspace/{{ product_name }}/features/, which `splent product:resolve` fills
+# in: pinned features are cloned from GitHub at their tag into
+# .splent_cache/features/ and symlinked here, editable ones are symlinked
+# straight to the checkout at the workspace root.
+#
+# The production image does not run this script. entrypoints/entrypoint.dev.sh
+# is its only caller; the prod image installs features with pip from PyPI in
+# the builder stage of docker/Dockerfile.{{ product_name }}.prod.
+#
 # Pinned features: skip if already pip-installed at the correct version.
 # Editable features: skip if already installed from the same path.
 # ---------------------------------------------------------------------------

@@ -196,31 +196,36 @@ def check_deps():
     product = context.require_app()
     product_dir = os.path.join(workspace, product)
 
-    # Read UVL (catalog or legacy)
+    # Read the UVL: the named SPL model, or the legacy in-product file
+    from splent_cli.services import spl_store
+
     try:
         reader = PyprojectReader.for_product(product_dir)
-        # 1. Catalog: [tool.splent].spl
         spl_name = reader.splent_config.get("spl")
         if spl_name:
-            uvl_path = os.path.join(
-                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
-            )
+            uvl_path = spl_store.product_uvl(workspace, product, allow_fetch=True)
+            if not uvl_path:
+                click.secho(
+                    "  [x] " + spl_store.missing_model_message(workspace, spl_name),
+                    fg="red",
+                )
+                raise SystemExit(1)
         else:
             # 2. Legacy: [tool.splent.uvl].file
             uvl_file = reader.uvl_config.get("file")
             if not uvl_file:
                 click.secho(
-                    "  [✖] No UVL configured. Set [tool.splent].spl or [tool.splent.uvl].file.",
+                    "  [x] No UVL configured. Set [tool.splent].spl or [tool.splent.uvl].file.",
                     fg="red",
                 )
                 raise SystemExit(1)
             uvl_path = os.path.join(product_dir, "uvl", uvl_file)
     except (FileNotFoundError, RuntimeError) as e:
-        click.secho(f"  [✖] Cannot read pyproject.toml: {e}", fg="red")
+        click.secho(f"  [x] Cannot read pyproject.toml: {e}", fg="red")
         raise SystemExit(1)
 
     if not os.path.isfile(uvl_path):
-        click.secho(f"  [✖] UVL file not found: {uvl_path}", fg="red")
+        click.secho(f"  [x] UVL file not found: {uvl_path}", fg="red")
         raise SystemExit(1)
 
     package_map, allowed_deps = _parse_uvl_deps(uvl_path)

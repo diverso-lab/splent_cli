@@ -25,17 +25,15 @@ from splent_framework.utils.pyproject_reader import PyprojectReader
 
 
 def _uvl_path(product_dir: str, workspace: str) -> str | None:
+    from splent_cli.services import spl_store
+
     try:
-        reader = PyprojectReader.for_product(product_dir)
-        # 1. Catalog: [tool.splent].spl
-        spl_name = reader.splent_config.get("spl")
-        if spl_name:
-            catalog_uvl = os.path.join(
-                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
-            )
-            if os.path.isfile(catalog_uvl):
-                return catalog_uvl
+        # 1. The named SPL model, working copy then cache.
+        resolved = spl_store.product_uvl(workspace, os.path.basename(product_dir))
+        if resolved:
+            return resolved
         # 2. Legacy: [tool.splent.uvl].file
+        reader = PyprojectReader.for_product(product_dir)
         uvl_file = reader.uvl_config.get("file")
         if uvl_file:
             return os.path.join(product_dir, "uvl", uvl_file)

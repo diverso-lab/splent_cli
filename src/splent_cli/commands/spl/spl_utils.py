@@ -1,89 +1,91 @@
-"""
-Shared helpers for spl:* commands.
-"""
+"""Shared helpers for spl:* commands.
 
-import os
+The resolution rules themselves live in
+:mod:`splent_cli.services.spl_store`. What is left here is the thin,
+long-standing surface that the spl:* commands and a handful of product
+commands call.
+"""
 
 import click
-import requests
-import tomllib
 
-from splent_cli.services import context
+from splent_cli.services import context, spl_store
 
 
 def _resolve_spl_metadata(spl_name: str) -> dict:
-    """Load metadata.toml for the given SPL."""
+    """Everything known about an SPL, in the shape metadata.toml used to have.
+
+    Kept in the old shape because callers pass it straight to
+    :func:`_fetch_uvl`. The values no longer come from a catalog checkout:
+    they are merged from the product that pins the model, the working copy,
+    and the cache, in that order.
+    """
     workspace = str(context.workspace())
-    metadata_path = os.path.join(workspace, "splent_catalog", spl_name, "metadata.toml")
-    if not os.path.isfile(metadata_path):
-        raise click.ClickException(f"Metadata not found: {metadata_path}")
-    with open(metadata_path, "rb") as f:
-        return tomllib.load(f)
+    pin = spl_store.read_pin(workspace, spl_name)
+    return {
+        "spl": {
+            "name": pin.name,
+            "description": pin.description,
+            "uvl": {
+                "mirror": pin.mirror,
+                "doi": pin.doi or "",
+                "concept_doi": pin.concept_doi or "",
+                "version": pin.version or "",
+                "file": pin.remote_file,
+            },
+        }
+    }
+
+
+def _pin_from_metadata(spl_name: str, metadata: dict) -> spl_store.SplPin:
+    return spl_store.pin_from_metadata(spl_name, metadata)
 
 
 def _fetch_uvl(spl_name: str, metadata: dict, target: str) -> None:
-    """Download the UVL file from UVLHub into the catalog.
+    """Download an SPL model from UVLHub and write it to *target*.
 
-    Reads mirror/DOI/file from metadata and writes to *target*.
-    Raises ClickException on failure.
+    Raises ClickException when the metadata cannot say what to download or
+    when UVLHub does not answer with the file.
     """
     from splent_cli.commands.uvl.uvl_utils import resolve_uvlhub_raw_url
+    import os
 
-    uvl_cfg = metadata.get("spl", {}).get("uvl", {})
-    mirror = uvl_cfg.get("mirror")
-    doi = uvl_cfg.get("doi")
-    file = uvl_cfg.get("file")
+    import requests
 
-    if not mirror or not doi or not file:
+    from splent_cli.utils.io_utils import atomic_write
+
+    pin = spl_store.pin_from_metadata(spl_name, metadata)
+    if not pin.doi or not pin.mirror or not pin.file:
         raise click.ClickException(
-            f"Incomplete [spl.uvl] in metadata.toml for '{spl_name}'. "
-            f"Need mirror, doi, and file."
+            f"Incomplete UVL pointer for '{spl_name}'. Need mirror, doi, and file."
         )
 
-    url = resolve_uvlhub_raw_url(mirror, doi, file)
+    url = resolve_uvlhub_raw_url(pin.mirror, pin.doi, pin.file)
     click.echo(f"  Downloading UVL from {url}")
 
     try:
-        r = requests.get(url, timeout=20)
-    except requests.RequestException as e:
-        raise click.ClickException(f"Failed to download UVL: {e}")
+        response = requests.get(url, timeout=20)
+    except requests.RequestException as exc:
+        raise click.ClickException(f"Failed to download UVL: {exc}")
 
-    if r.status_code != 200:
-        raise click.ClickException(f"UVLHub returned {r.status_code} for {url}")
+    if response.status_code != 200:
+        raise click.ClickException(f"UVLHub returned {response.status_code} for {url}")
 
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    with open(target, "w", encoding="utf-8") as f:
-        f.write(r.text)
+    os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+    atomic_write(target, response.text)
 
     click.echo(f"  UVL saved to {target}")
 
 
 def _ensure_uvl(spl_name: str) -> str:
-    """Return the path to the SPL's UVL file, downloading it if missing.
+    """Path to the SPL's UVL, downloading it into the cache when missing.
 
-    This is the central function for on-demand UVL resolution.
+    Working copy, then cache, then UVLHub by DOI. This is what every command
+    that needs to read a model goes through.
     """
     workspace = str(context.workspace())
-    uvl_path = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
-
-    if os.path.isfile(uvl_path):
-        return uvl_path
-
-    # UVL not on disk — download from UVLHub
-    click.secho(
-        f"  UVL not found locally for '{spl_name}' — fetching from UVLHub...",
-        fg="yellow",
-    )
-    metadata = _resolve_spl_metadata(spl_name)
-    _fetch_uvl(spl_name, metadata, uvl_path)
-    return uvl_path
+    return spl_store.resolve_uvl(workspace, spl_name)
 
 
 def _resolve_spl(spl_name: str) -> tuple[str, str]:
-    """Resolve SPL name and UVL path, downloading the UVL if missing.
-
-    All spl:* commands use this to get the UVL file.
-    Returns (spl_name, uvl_path).
-    """
-    uvl_path = _ensure_uvl(spl_name)
-    return spl_name, uvl_path
+    """Resolve SPL name and UVL path, downloading the UVL if missing."""
+    return spl_name, _ensure_uvl(spl_name)

@@ -20,19 +20,14 @@ def _find_dependents(feature: str, product_dir: str) -> list[str]:
     Uses FeatureLoadOrderResolver's UVL parsing (same logic as feature:order).
     Returns list of dependent feature package names.
     """
+    from splent_cli.services import spl_store
+
     try:
         reader = PyprojectReader.for_product(product_dir)
         workspace = PathUtils.get_working_dir()
 
-        # Resolve UVL path (catalog first, legacy fallback)
-        uvl_path = None
-        spl_name = reader.splent_config.get("spl")
-        if spl_name:
-            candidate = os.path.join(
-                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
-            )
-            if os.path.isfile(candidate):
-                uvl_path = candidate
+        # Resolve the UVL from disk only: a rollback must not wait on UVLHub.
+        uvl_path = spl_store.product_uvl(workspace, os.path.basename(product_dir))
         if not uvl_path:
             uvl_file = reader.uvl_config.get("file")
             if uvl_file:

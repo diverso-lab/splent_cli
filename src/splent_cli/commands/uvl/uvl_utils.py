@@ -86,21 +86,24 @@ def resolve_uvl_path(workspace: str, app_name: str, data: dict) -> str:
     """Resolve the absolute path to the UVL file, downloading from UVLHub if missing.
 
     Resolution order:
-      1. SPL catalog: [tool.splent].spl → workspace/splent_catalog/{spl}/{spl}.uvl
-         If the UVL is not on disk, it is fetched automatically from UVLHub.
+      1. [tool.splent].spl → the working copy at splent_spl_<name>/, then the
+         cache at .splent_cache/spls/, then a download by the DOI the product
+         records under [tool.splent.spl_model].
       2. Legacy: [tool.splent.uvl].file → product_dir/uvl/{file}
 
     Raises ClickException if UVL not found and cannot be downloaded.
     """
+    from splent_cli.services import spl_store
+
     splent = data.get("tool", {}).get("splent", {})
     product_path = os.path.join(workspace, app_name)
 
-    # 1. Catalog resolution (with auto-fetch)
+    # 1. Named SPL model (with auto-fetch by DOI)
     spl_name = splent.get("spl")
     if spl_name:
-        from splent_cli.commands.spl.spl_utils import _ensure_uvl
-
-        return _ensure_uvl(spl_name)
+        return spl_store.resolve_uvl(
+            workspace, spl_name, pin=spl_store.pin_from_pyproject(data)
+        )
 
     # 2. Legacy: product/uvl/{file}
     uvl_cfg = splent.get("uvl", {})

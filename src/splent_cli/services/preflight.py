@@ -30,6 +30,13 @@ def _check_pypi_exists(package: str, version: str) -> bool:
 def _check_features_ready(workspace: str, product_dir: str, interactive: bool) -> bool:
     """Check that all prod features are versioned and published on PyPI.
 
+    This is not a formality. The production image installs features with pip
+    from PyPI (``splent feature:pip-install`` in the builder stage of
+    ``Dockerfile.<product>.prod``), so a feature that is not there cannot get
+    into the image, and one declared without a version is installed as a bare
+    package name, meaning pip serves whatever PyPI has rather than the code in
+    this workspace.
+
     Returns True if all features pass.
     """
     pyproject_path = os.path.join(product_dir, "pyproject.toml")
@@ -48,7 +55,13 @@ def _check_features_ready(workspace: str, product_dir: str, interactive: bool) -
 
         # Check versioned
         if "@" not in name:
-            issues.append((short, "not versioned — release it first"))
+            issues.append(
+                (
+                    short,
+                    "no version, so the image would install whatever PyPI has "
+                    "under that name. Release it first",
+                )
+            )
             continue
 
         version = name.split("@")[1]
@@ -142,14 +155,19 @@ def run_preflight(*, interactive: bool = True, build_mode: bool = False) -> bool
 
     spl_name = splent_cfg.get("spl")
     if spl_name:
-        uvl_check = os.path.join(
-            workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
-        )
-        if not os.path.isfile(uvl_check):
+        from splent_cli.services import spl_store
+
+        # Allowed to fetch: a fresh clone has the DOI in its pyproject and
+        # nothing on disk, and that has to be enough to derive.
+        if not spl_store.product_uvl(workspace, product, allow_fetch=True, quiet=False):
             if interactive:
                 click.secho(
-                    f"  pyproject SPL '{spl_name}' — UVL not found in catalog", fg="red"
+                    f"  pyproject SPL '{spl_name}' has no model available", fg="red"
                 )
+                for line in spl_store.missing_model_message(
+                    workspace, spl_name
+                ).splitlines():
+                    click.secho(f"           {line}", fg="bright_black")
             failed = True
 
     if failed:

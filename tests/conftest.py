@@ -99,3 +99,107 @@ def make_cache_entry(
     path = workspace_path / ".splent_cache" / "features" / namespace / dir_name
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _metadata_toml(
+    name: str,
+    *,
+    doi: str = "",
+    concept_doi: str = "",
+    version: str = "",
+    file: str | None = None,
+    description: str = "",
+) -> str:
+    return (
+        "[spl]\n"
+        f'name = "{name}"\n'
+        f'description = "{description}"\n'
+        "\n"
+        "[spl.uvl]\n"
+        'mirror = "uvlhub.io"\n'
+        f'doi = "{doi}"\n'
+        f'concept_doi = "{concept_doi}"\n'
+        f'version = "{version}"\n'
+        f'file = "{file or name + ".uvl"}"\n'
+    )
+
+
+def make_spl_working_copy(
+    workspace_path: Path,
+    name: str,
+    uvl_text: str,
+    *,
+    doi: str = "",
+    concept_doi: str = "",
+    version: str = "",
+    file: str | None = None,
+    description: str = "",
+) -> Path:
+    """The editable copy of an SPL model: workspace/splent_spl_<name>/.
+
+    This is where a model being authored lives, and it is the first place the
+    resolver looks. Mirrors ``splent_feature_<name>/``.
+    """
+    core = name[: -len("_spl")] if name.endswith("_spl") else name
+    path = workspace_path / f"splent_spl_{core}"
+    path.mkdir(parents=True, exist_ok=True)
+    (path / f"{name}.uvl").write_text(uvl_text, encoding="utf-8")
+    (path / "metadata.toml").write_text(
+        _metadata_toml(
+            name,
+            doi=doi,
+            concept_doi=concept_doi,
+            version=version,
+            file=file,
+            description=description,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def make_spl_cache_entry(
+    workspace_path: Path,
+    name: str,
+    uvl_text: str,
+    *,
+    version: str | None = None,
+    doi: str = "",
+    concept_doi: str = "",
+) -> Path:
+    """A consumed SPL model: workspace/.splent_cache/spls/<name>[@<version>]/.
+
+    Derived data. Deleting it must never lose anything the product pin cannot
+    recreate.
+    """
+    leaf = f"{name}@{version}" if version else name
+    path = workspace_path / ".splent_cache" / "spls" / leaf
+    path.mkdir(parents=True, exist_ok=True)
+    (path / f"{name}.uvl").write_text(uvl_text, encoding="utf-8")
+    (path / "metadata.toml").write_text(
+        _metadata_toml(name, doi=doi, concept_doi=concept_doi, version=version or ""),
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_product_spl_pin(
+    workspace_path: Path,
+    product: str,
+    name: str,
+    *,
+    doi: str = "",
+    concept_doi: str = "",
+    version: str = "",
+) -> Path:
+    """Append a ``[tool.splent.spl_model]`` block to a product's pyproject."""
+    path = workspace_path / product / "pyproject.toml"
+    block = (
+        "\n[tool.splent.spl_model]\n"
+        'mirror = "uvlhub.io"\n'
+        f'doi = "{doi}"\n'
+        f'concept_doi = "{concept_doi}"\n'
+        f'version = "{version}"\n'
+    )
+    path.write_text(path.read_text(encoding="utf-8") + block, encoding="utf-8")
+    return path

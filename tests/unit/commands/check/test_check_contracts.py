@@ -3,6 +3,7 @@
 from click.testing import CliRunner
 
 from splent_cli.commands.check.check_contracts import check_contracts
+from tests.conftest import make_spl_working_copy
 
 
 UVL = """features
@@ -19,18 +20,15 @@ constraints
 
 
 def _workspace(tmp_path, monkeypatch, contracts: dict[str, list[str]]):
-    """Create a catalog with one SPL plus feature dirs with given requires."""
-    spl = tmp_path / "splent_catalog" / "demo_spl"
-    spl.mkdir(parents=True)
-    (spl / "metadata.toml").write_text('[spl]\nname = "demo_spl"\n')
-    (spl / "demo_spl.uvl").write_text(UVL)
+    """Create a working copy of one SPL plus feature dirs with given requires."""
+    make_spl_working_copy(tmp_path, "demo_spl", UVL)
 
     for short, requires in contracts.items():
         feat = tmp_path / f"splent_feature_{short}"
         feat.mkdir()
         deps = ", ".join(f'"{d}"' for d in requires)
         (feat / "pyproject.toml").write_text(
-            "[tool.splent.contract.requires]\n" f"features = [{deps}]\n"
+            f"[tool.splent.contract.requires]\nfeatures = [{deps}]\n"
         )
 
     monkeypatch.setenv("WORKING_DIR", str(tmp_path))

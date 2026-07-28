@@ -36,7 +36,11 @@ RUN pip install --no-cache-dir --upgrade splent_cli
 RUN pip install --no-cache-dir ./splent_framework
 RUN pip install --no-cache-dir ./{{ product_name }}
 
-# Install all features from PyPI using the CLI
+# Install the features with pip, from PyPI. This is the ONLY place features are
+# installed in a production image: scripts/00_install_features.sh (pip install -e
+# against the local checkout) belongs to the dev entrypoint and never runs here.
+# A feature declared without a version becomes a bare package name, so pip picks
+# whatever PyPI serves rather than the code in the workspace.
 ENV SPLENT_APP={{ product_name }}
 ENV WORKING_DIR=/workspace
 RUN splent feature:pip-install

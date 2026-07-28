@@ -9,7 +9,7 @@ import zlib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from splent_cli.utils.path_utils import PathUtils
-from splent_cli.services import context
+from splent_cli.services import context, spl_store
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -45,31 +45,13 @@ def copy_raw_file(template_name, filename):
     shutil.copy(src, filename)
 
 
-def _has_uvl(spl_dir):
-    """Check if an SPL directory has a UVL file (direct or via metadata.toml)."""
-    # Direct: {name}/{name}.uvl
-    if (spl_dir / f"{spl_dir.name}.uvl").is_file():
-        return True
-    # Via metadata.toml → spl.uvl.file
-    meta = spl_dir / "metadata.toml"
-    if meta.is_file():
-        import tomllib
-
-        with open(meta, "rb") as f:
-            data = tomllib.load(f)
-        uvl_file = data.get("spl", {}).get("uvl", {}).get("file", "")
-        if uvl_file and (spl_dir / uvl_file).is_file():
-            return True
-        # metadata exists with a UVL reference — SPL is valid even if not yet fetched
-        if uvl_file:
-            return True
-    return False
-
-
 @click.command("product:create", short_help="Create a new product in the workspace.")
 @click.argument("name")
+@click.option("--spl", "spl_name", default=None, help="SPL model to derive from.")
 @click.option(
-    "--spl", "spl_name", default=None, help="SPL to derive from (from splent_catalog/)."
+    "--spl-doi",
+    default=None,
+    help="DOI of the SPL model, when this workspace has never seen it before.",
 )
 @click.option(
     "--features-file", type=click.Path(exists=True), help="Path to features.txt"
@@ -78,29 +60,22 @@ def _has_uvl(spl_dir):
     "--force", is_flag=True, help="Overwrite the product if it already exists."
 )
 @context.requires_detached
-def make_product(name, spl_name, features_file, force):
+def make_product(name, spl_name, spl_doi, features_file, force):
     workspace_path = context.workspace()
-    catalog_dir = workspace_path / "splent_catalog"
 
     if not spl_name:
-        if not catalog_dir.is_dir():
-            raise click.ClickException(
-                "No splent_catalog/ found in workspace. Clone it first."
-            )
-
-        available = sorted(
-            d.name
-            for d in catalog_dir.iterdir()
-            if d.is_dir() and not d.name.startswith(".") and _has_uvl(d)
-        )
+        available = spl_store.known_spls(str(workspace_path))
 
         if not available:
             raise click.ClickException(
-                "No SPLs found in splent_catalog/. Create one with: splent spl:create"
+                "This workspace knows no SPL models.\n"
+                "  Start one with: splent spl:create <name>\n"
+                "  Or name one you already know by DOI: "
+                "splent product:create <product> --spl <name> --spl-doi <doi>"
             )
 
         click.echo()
-        click.echo(click.style("  Available SPLs:", bold=True))
+        click.echo(click.style("  Available SPL models:", bold=True))
         for i, s in enumerate(available, 1):
             click.echo(f"    {i}. {s}")
         click.echo()
@@ -109,26 +84,39 @@ def make_product(name, spl_name, features_file, force):
         )
         spl_name = available[choice - 1]
 
-    # Ensure the UVL file is present — download from UVLHub if needed
-    spl_dir = catalog_dir / spl_name
-    uvl_file = spl_dir / f"{spl_name}.uvl"
-    if not uvl_file.is_file():
-        meta = spl_dir / "metadata.toml"
-        if meta.is_file():
-            try:
-                from splent_cli.commands.spl.spl_utils import (
-                    _resolve_spl_metadata,
-                    _fetch_uvl,
-                )
+    # Resolve the pin the product will record. Without it, a clone of this
+    # product could name the model but never fetch it.
+    pin = spl_store.read_pin(str(workspace_path), spl_name)
+    if spl_doi:
+        pin = spl_store.SplPin(
+            name=spl_name,
+            doi=spl_doi,
+            concept_doi=pin.concept_doi,
+            version=pin.version,
+            mirror=pin.mirror,
+            file=pin.file,
+        )
 
-                metadata = _resolve_spl_metadata(spl_name)
-                _fetch_uvl(spl_name, metadata, str(uvl_file))
-            except Exception as e:
-                click.secho(
-                    f"  ⚠️  Could not download UVL: {e}\n"
-                    f"     Run 'splent spl:fetch {spl_name}' manually.",
-                    fg="yellow",
-                )
+    # Make sure the model is readable, downloading it once if it is not.
+    try:
+        spl_store.resolve_uvl(str(workspace_path), spl_name, pin=pin)
+    except click.ClickException as e:
+        click.secho(f"  {e}", fg="yellow")
+        click.secho(
+            "  The product is still created. Fetch the model before deriving.",
+            fg="yellow",
+        )
+
+    if not pin.doi:
+        click.secho(
+            f"  No DOI recorded for '{spl_name}', so this product will only "
+            "derive on a machine that has the model on disk.",
+            fg="yellow",
+        )
+        click.echo(
+            f"  Publish the model (splent spl:publish {spl_name}) and then run "
+            "splent spl:pin."
+        )
 
     env = setup_jinja_env()
     offset = zlib.crc32(name.encode("utf-8")) % 1000  # 0–999
@@ -178,6 +166,15 @@ def make_product(name, spl_name, features_file, force):
         "cli_version": _CLI_VERSION,
         "network_name": "splent_network",
         "spl_name": spl_name or "",
+        "spl_mirror": pin.mirror,
+        "spl_doi": pin.doi or "",
+        "spl_concept_doi": pin.concept_doi or "",
+        "spl_version": pin.version or "",
+        # The filename on UVLHub is not derivable from the name
+        # (sample_splent_spl publishes sample_splent_app.uvl). Dropping it here
+        # made every product created this way fall back to "<name>.uvl" and
+        # 404, with nothing local left that knew the real name.
+        "spl_file": pin.file or "",
     }
 
     base_path = str(context.workspace() / name)

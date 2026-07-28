@@ -9,12 +9,15 @@ added during hardening:
     file is left untouched (or restored) rather than silently corrupted.
 
 No docker / git / network / DB. The commands resolve the UVL purely from disk
-(``WORKING_DIR``/splent_catalog/<spl>/<spl>.uvl), so once that file exists no
-network fetch happens. Both commands are @requires_detached → SPLENT_APP must
-be unset (the ``workspace`` fixture in conftest unsets it).
+(the working copy at ``WORKING_DIR``/splent_spl_<name>/<spl>.uvl, which is the
+first place the resolver looks), so once that file exists no network fetch
+happens. Both commands are @requires_detached → SPLENT_APP must be unset (the
+``workspace`` fixture in conftest unsets it).
 """
 
 import pytest
+
+from tests.conftest import make_spl_working_copy
 
 from splent_cli.commands.spl.spl_add_feature import (
     spl_add_feature,
@@ -47,11 +50,8 @@ constraints
 
 def _make_uvl(workspace, text, spl_name=SPL):
     """Write a UVL file at the location _resolve_spl expects and return its path."""
-    uvl_dir = workspace / "splent_catalog" / spl_name
-    uvl_dir.mkdir(parents=True, exist_ok=True)
-    uvl_path = uvl_dir / f"{spl_name}.uvl"
-    uvl_path.write_text(text, encoding="utf-8")
-    return uvl_path
+    copy = make_spl_working_copy(workspace, spl_name, text)
+    return copy / f"{spl_name}.uvl"
 
 
 def _make_feature(workspace, pkg, *, models_src="", py_src=""):

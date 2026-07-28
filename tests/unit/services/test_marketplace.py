@@ -1,9 +1,9 @@
 """Unit tests for services/marketplace.py — index building and querying."""
 
 import json
-from pathlib import Path
 
 from splent_cli.services import marketplace
+from tests.conftest import make_spl_cache_entry, make_spl_working_copy
 
 
 CONTRACT_TOML = """
@@ -170,56 +170,74 @@ file = "demo_spl.uvl"
 
 
 class TestBuildSpls:
-    """build_spls auto-fetches missing UVLs (spl:fetch logic) best-effort:
-    a fetch failure must warn — never fail the build, never stay silent —
-    and a locally present UVL must mean zero network."""
+    """build_spls auto-fetches missing UVLs best-effort: a fetch failure must
+    warn, never fail the build and never stay silent, and a locally present
+    UVL must mean zero network.
 
-    def _catalog_spl(self, tmp_path, name="demo_spl"):
-        spl_dir = tmp_path / "splent_catalog" / name
-        spl_dir.mkdir(parents=True)
-        (spl_dir / "metadata.toml").write_text(SPL_METADATA)
-        return spl_dir
+    The models come from the three homes spl_store knows about, so the index
+    covers a model being edited, one already cached, and one that only a
+    product's pin names.
+    """
+
+    def _pinning_product(self, tmp_path, name="demo_spl", doi="10.1234/demo"):
+        """A product that names the SPL and records its DOI, and nothing else.
+
+        This is the case the catalog used to be needed for, and the one that
+        proves it is not needed any more.
+        """
+        product = tmp_path / "demo_app"
+        product.mkdir(parents=True)
+        (product / "pyproject.toml").write_text(
+            '[project]\nname = "demo_app"\n\n'
+            "[tool.splent]\n"
+            f'spl = "{name}"\n\n'
+            "[tool.splent.spl_model]\n"
+            'mirror = "uvlhub.io"\n'
+            f'doi = "{doi}"\n'
+            'concept_doi = ""\n'
+            'version = ""\n'
+        )
+        return product
 
     def test_missing_uvl_invokes_fetch_and_failure_warns_without_propagating(
         self, tmp_path, monkeypatch, capsys
     ):
-        from splent_cli.commands.spl import spl_utils
+        from splent_cli.services import spl_store
 
-        spl_dir = self._catalog_spl(tmp_path)
+        self._pinning_product(tmp_path)
         calls = []
 
-        def _failing_fetch(spl_name, metadata, target):
-            calls.append((spl_name, target))
+        def _failing_fetch(workspace, pin, **kwargs):
+            calls.append((pin.name, pin.doi))
             raise RuntimeError("UVLHub is down")
 
-        monkeypatch.setattr(spl_utils, "_fetch_uvl", _failing_fetch)
+        monkeypatch.setattr(spl_store, "fetch_uvl", _failing_fetch)
 
         spls = marketplace.build_spls(str(tmp_path))
 
-        # The fetch WAS attempted, with the right SPL and target path.
-        assert calls == [("demo_spl", str(spl_dir / "demo_spl.uvl"))]
+        # The fetch WAS attempted, for the right SPL at the pinned DOI.
+        assert calls == [("demo_spl", "10.1234/demo")]
         # The failure did not propagate: the SPL is indexed without a model.
         assert len(spls) == 1
         assert spls[0]["name"] == "demo_spl"
         assert spls[0]["model"] is None
         assert spls[0]["uvl"]["doi"] == "10.1234/demo"
-        # And it was warned about — regressions never disappear silently.
+        # And it was warned about, so regressions never disappear silently.
         out = capsys.readouterr().out
         assert "could not fetch UVL for demo_spl" in out
         assert "UVLHub is down" in out
 
     def test_local_uvl_present_means_zero_network(self, tmp_path, monkeypatch):
-        from splent_cli.commands.spl import spl_utils
+        from splent_cli.services import spl_store
 
-        spl_dir = self._catalog_spl(tmp_path)
-        (spl_dir / "demo_spl.uvl").write_text(UVL_TEXT)
+        make_spl_working_copy(tmp_path, "demo_spl", UVL_TEXT, doi="10.1234/demo")
         calls = []
 
         def _boom(*args, **kwargs):
             calls.append(args)
             raise AssertionError("fetch attempted with a local UVL present")
 
-        monkeypatch.setattr(spl_utils, "_fetch_uvl", _boom)
+        monkeypatch.setattr(spl_store, "fetch_uvl", _boom)
 
         spls = marketplace.build_spls(str(tmp_path))
 
@@ -228,21 +246,32 @@ class TestBuildSpls:
         assert spls[0]["model"] is not None
         assert "theme" in spls[0]["model"]["features"]
 
-    def test_successful_fetch_writes_uvl_and_parses_model(
-        self, tmp_path, monkeypatch
-    ):
-        from splent_cli.commands.spl import spl_utils
-
-        spl_dir = self._catalog_spl(tmp_path)
-
-        def _fake_fetch(spl_name, metadata, target):
-            Path(target).write_text(UVL_TEXT)
-
-        monkeypatch.setattr(spl_utils, "_fetch_uvl", _fake_fetch)
+    def test_a_cached_model_is_indexed_without_any_working_copy(self, tmp_path):
+        make_spl_cache_entry(tmp_path, "demo_spl", UVL_TEXT, doi="10.1234/demo")
 
         spls = marketplace.build_spls(str(tmp_path))
 
-        assert (spl_dir / "demo_spl.uvl").is_file()
+        assert [s["name"] for s in spls] == ["demo_spl"]
+        assert spls[0]["model"] is not None
+
+    def test_successful_fetch_writes_uvl_and_parses_model(self, tmp_path, monkeypatch):
+        from splent_cli.services import spl_store
+
+        self._pinning_product(tmp_path)
+
+        def _fake_fetch(workspace, pin, **kwargs):
+            target = spl_store.cache_dir(workspace, pin.name, pin.version)
+            target.mkdir(parents=True, exist_ok=True)
+            path = target / spl_store.uvl_filename(pin.name)
+            path.write_text(UVL_TEXT)
+            return str(path)
+
+        monkeypatch.setattr(spl_store, "fetch_uvl", _fake_fetch)
+
+        spls = marketplace.build_spls(str(tmp_path))
+
+        cached = tmp_path / ".splent_cache" / "spls" / "demo_spl" / "demo_spl.uvl"
+        assert cached.is_file()
         assert len(spls) == 1
         model = spls[0]["model"]
         assert model is not None
@@ -301,7 +330,9 @@ class TestFindFeature:
 class TestPersistence:
     def test_save_and_load_roundtrip(self, tmp_path):
         index = marketplace.assemble_index(
-            [_entry("auth")], [], sources={"orgs": ["splent-io"], "repos": [], "workspace": False}
+            [_entry("auth")],
+            [],
+            sources={"orgs": ["splent-io"], "repos": [], "workspace": False},
         )
         path = tmp_path / "index.json"
         marketplace.save_index(index, path)
@@ -388,9 +419,7 @@ class TestBuildRemoteFeatures:
             "fetch_file",
             lambda org, repo, path, ref=None, token=None: files.get(repo),
         )
-        monkeypatch.setattr(
-            registry, "fetch_repo", lambda org, repo, token=None: None
-        )
+        monkeypatch.setattr(registry, "fetch_repo", lambda org, repo, token=None: None)
         monkeypatch.setattr(
             registry, "pypi_versions", lambda pkg: (pypi or {}).get(pkg, [])
         )

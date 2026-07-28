@@ -39,6 +39,7 @@ from splent_cli.commands.product.product_configure import (
     SPLModel,
     product_configure,
 )
+from tests.conftest import make_spl_working_copy
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +67,11 @@ def _make_model():
 
 
 def _setup_product(tmp_path):
-    """Create a workspace with a product pyproject.toml that has an SPL set."""
+    """Create a workspace with a product pyproject.toml that has an SPL set.
+
+    The model is resolved from disk before Flamapy is ever reached, so the
+    working copy has to exist even though ``_load_spl_model`` is stubbed out.
+    """
     workspace = tmp_path
     product = "test_app"
     product_path = workspace / product
@@ -77,6 +82,7 @@ def _setup_product(tmp_path):
         "tool": {"splent": {"spl": "MySpl", "features": ["stale/old@v0.0.1"]}},
     }
     pyproject.write_bytes(tomli_w.dumps(data).encode())
+    make_spl_working_copy(workspace, "MySpl", "features\n\tMyProduct\n")
     return workspace, product_path, pyproject
 
 
@@ -85,7 +91,7 @@ def _patch_flow(monkeypatch, model, *, selected, pip_run):
 
     Returns nothing; installs all patches via monkeypatch.
     """
-    monkeypatch.setattr(pc, "_load_spl_model", lambda catalog_dir, spl: model)
+    monkeypatch.setattr(pc, "_load_spl_model", lambda uvl_path, spl: model)
     monkeypatch.setattr(pc, "_configure_subtree", lambda *a, **k: None)
     # propagate(selected, model, mandatory, excluded=None) -> (selected, excluded)
     monkeypatch.setattr(

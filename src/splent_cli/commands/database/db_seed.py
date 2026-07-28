@@ -25,16 +25,13 @@ def _resolve_feature_order(features_raw: list[str]) -> list[str]:
 
     uvl_path = None
     if product_dir:
+        from splent_cli.services import spl_store
+
         try:
-            reader = PyprojectReader.for_product(product_dir)
-            spl_name = reader.splent_config.get("spl")
-            if spl_name:
-                candidate = os.path.join(
-                    working_dir, "splent_catalog", spl_name, f"{spl_name}.uvl"
-                )
-                if os.path.isfile(candidate):
-                    uvl_path = candidate
+            # Offline on purpose: seeding must not depend on UVLHub being up.
+            uvl_path = spl_store.product_uvl(working_dir, splent_app)
             if not uvl_path:
+                reader = PyprojectReader.for_product(product_dir)
                 uvl_file = reader.uvl_config.get("file")
                 if uvl_file:
                     uvl_path = os.path.join(product_dir, "uvl", uvl_file)

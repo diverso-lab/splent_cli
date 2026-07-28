@@ -52,8 +52,12 @@ UVL_TEXT = (
 
 
 def _make_spl(workspace, doi=""):
-    """Create splent_catalog/<spl>/ with metadata.toml and the local UVL."""
-    spl_dir = workspace / "splent_catalog" / SPL
+    """Create the working copy splent_spl_<name>/ with metadata and the model.
+
+    The working copy is what an author edits, so it is what gets published and
+    the only place a returned DOI is written back to.
+    """
+    spl_dir = workspace / "splent_spl_sample"
     spl_dir.mkdir(parents=True, exist_ok=True)
     (spl_dir / "metadata.toml").write_text(
         METADATA_TEMPLATE.format(doi=doi), encoding="utf-8"
@@ -241,15 +245,15 @@ class TestPreconditions:
 
         assert result.exit_code == 1
         out = _all_output(result)
-        assert "splent_catalog" in out
+        assert "splent_spl_sample" in out
         assert ".splent_cache" in out
         assert "spl:fetch" in out
         assert net.calls == []
 
-    def test_a_model_in_the_cache_is_published_without_a_catalog_entry(
+    def test_a_model_in_the_cache_is_published_without_a_working_copy(
         self, workspace, runner, net, logged_in
     ):
-        """splent_catalog is going away, so it cannot be a requirement."""
+        """A machine that only consumed the model can still push a fix."""
         cached = workspace / ".splent_cache" / "spls" / SPL
         cached.mkdir(parents=True)
         (cached / f"{SPL}.uvl").write_text(UVL_TEXT, encoding="utf-8")
@@ -259,6 +263,22 @@ class TestPreconditions:
 
         assert result.exit_code == 0, _all_output(result)
         assert len(net.calls) == 1
+
+    def test_a_cache_only_publish_says_the_doi_was_not_recorded_anywhere(
+        self, workspace, runner, net, logged_in
+    ):
+        """The cache is derived data, so a DOI written there would be lost."""
+        cached = workspace / ".splent_cache" / "spls" / SPL
+        cached.mkdir(parents=True)
+        (cached / f"{SPL}.uvl").write_text(UVL_TEXT, encoding="utf-8")
+        net.route("POST", f"/api/v1/spls/{SPL}/releases", _release_response())
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 0, _all_output(result)
+        assert "Nothing local records this DOI" in _all_output(result)
+        # Nothing was written into the cache directory.
+        assert not (cached / "metadata.toml").exists()
 
 
 # ===========================================================================
@@ -399,6 +419,73 @@ class TestHappyPaths:
         assert f'doi = "{DOI}"' in written
         # The hand-written comment survives a metadata edit.
         assert "hand-written comment" in written
+
+    def test_the_concept_doi_is_recorded_when_the_marketplace_reports_it(
+        self, workspace, runner, net, logged_in
+    ):
+        """It never changes across versions, so it is what makes drift visible.
+
+        Without it, a product pinned to v2 has no way to learn the line has
+        moved to v5 short of a directory service, which is the dependency the
+        catalog was removed to be rid of.
+        """
+        spl_dir = _make_spl(workspace)
+        net.route(
+            "POST",
+            "/releases",
+            _release_response(concept_doi="10.5281/zenodo.CONCEPT", version=4),
+        )
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 0, _all_output(result)
+        written = (spl_dir / "metadata.toml").read_text(encoding="utf-8")
+        assert 'concept_doi = "10.5281/zenodo.CONCEPT"' in written
+        assert 'version = "4"' in written
+        assert "Concept DOI" in _all_output(result)
+
+    def test_a_silent_server_does_not_erase_a_recorded_concept_doi(
+        self, workspace, runner, net, logged_in
+    ):
+        """An answer that says nothing must not be written down as nothing."""
+        spl_dir = _make_spl(workspace)
+        meta = spl_dir / "metadata.toml"
+        meta.write_text(
+            meta.read_text(encoding="utf-8")
+            + 'concept_doi = "10.5281/zenodo.KEEP"\n',
+            encoding="utf-8",
+        )
+        net.route("POST", "/releases", _release_response())
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 0, _all_output(result)
+        assert 'concept_doi = "10.5281/zenodo.KEEP"' in meta.read_text(
+            encoding="utf-8"
+        )
+
+    def test_products_still_on_the_old_model_are_named(
+        self, workspace, runner, net, logged_in
+    ):
+        """Minting a DOI moves no product onto it, and saying so is the point."""
+        _make_spl(workspace)
+        product = workspace / "demo_app"
+        product.mkdir()
+        (product / "pyproject.toml").write_text(
+            '[project]\nname = "demo_app"\n\n'
+            f'[tool.splent]\nspl = "{SPL}"\n\n'
+            "[tool.splent.spl_model]\n"
+            'doi = "10.5281/zenodo.OLD"\n'
+            'version = "v1"\n'
+        )
+        net.route("POST", "/releases", _release_response())
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        out = _all_output(result)
+        assert result.exit_code == 0, out
+        assert "demo_app" in out
+        assert "spl:pin" in out
 
     def test_the_file_name_written_down_is_the_one_the_server_reported(
         self, workspace, runner, net, logged_in

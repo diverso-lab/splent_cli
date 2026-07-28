@@ -326,14 +326,16 @@ def parse_uvl_structure(uvl_text: str) -> dict:
                 "org": org_m.group(1) if org_m else None,
                 "package": pkg_m.group(1),
                 "presence": "mandatory" if "mandatory" in group_kinds else "optional",
-                "group": parent_features[-1] if nearest_group in ("alternative", "or") else None,
-                "group_kind": nearest_group if nearest_group in ("alternative", "or") else None,
+                "group": parent_features[-1]
+                if nearest_group in ("alternative", "or")
+                else None,
+                "group_kind": nearest_group
+                if nearest_group in ("alternative", "or")
+                else None,
             }
             if nearest_group in ("alternative", "or") and parent_features:
                 owner = parent_features[-1]
-                group = next(
-                    (g for g in alt_groups if g["owner"] == owner), None
-                )
+                group = next((g for g in alt_groups if g["owner"] == owner), None)
                 if group is None:
                     group = {
                         "owner": owner,
@@ -353,42 +355,43 @@ def parse_uvl_structure(uvl_text: str) -> dict:
 
 
 def build_spls(workspace: str) -> list[dict]:
-    """Index every SPL in splent_catalog: metadata + parsed UVL structure."""
-    catalog = Path(workspace) / "splent_catalog"
+    """Index every SPL model the workspace knows: pointer + parsed structure.
+
+    The models come from the working copies, the cache and whatever the
+    products pin, which between them is everything the old catalog listed and
+    then some. A model that is not on disk is downloaded by DOI, best-effort:
+    an SPL with no published model is indexed without one and never fails the
+    build, but the failure is warned about rather than swallowed.
+    """
+    from splent_cli.services import spl_store
+
     spls = []
-    if not catalog.is_dir():
-        return spls
-    for metadata_path in sorted(catalog.glob("*/metadata.toml")):
-        spl_dir = metadata_path.parent
-        try:
-            metadata = tomllib.loads(metadata_path.read_text())
-        except (OSError, tomllib.TOMLDecodeError):
-            continue
-        spl_meta = metadata.get("spl", {})
+    for name in spl_store.known_spls(workspace):
+        pin = spl_store.read_pin(workspace, name)
         entry = {
-            "name": spl_dir.name,
-            "description": spl_meta.get("description", ""),
-            "uvl": spl_meta.get("uvl", {}),
+            "name": name,
+            "description": pin.description,
+            "uvl": {
+                "mirror": pin.mirror,
+                "doi": pin.doi or "",
+                "concept_doi": pin.concept_doi or "",
+                "version": pin.version or "",
+                "file": pin.remote_file,
+            },
             "model": None,
         }
-        uvl_path = spl_dir / f"{spl_dir.name}.uvl"
-        if not uvl_path.is_file():
-            # UVL files are not tracked in git — fetch from UVLHub (spl:fetch
-            # logic) when the metadata has a DOI. Best-effort: an SPL without
-            # a published model is indexed without one, never fails the build
-            # — but the failure is warned about, never swallowed silently.
+        uvl_path = spl_store.find_uvl(workspace, name, version=pin.version, doi=pin.doi)
+        if not uvl_path and pin.fetchable:
             try:
-                from splent_cli.commands.spl.spl_utils import _fetch_uvl
-
-                _fetch_uvl(spl_dir.name, metadata, str(uvl_path))
+                uvl_path = spl_store.fetch_uvl(workspace, pin)
             except Exception as e:  # noqa: BLE001 - best-effort indexing
                 click.secho(
-                    f"  ⚠  could not fetch UVL for {spl_dir.name}: {e}",
+                    f"  could not fetch UVL for {name}: {e}",
                     fg="yellow",
                 )
-        if uvl_path.is_file():
+        if uvl_path:
             try:
-                entry["model"] = parse_uvl_structure(uvl_path.read_text())
+                entry["model"] = parse_uvl_structure(Path(uvl_path).read_text())
             except OSError:
                 pass
         spls.append(entry)
@@ -398,9 +401,7 @@ def build_spls(workspace: str) -> list[dict]:
 # ── Assemble / persist / load ─────────────────────────────────────────
 
 
-def assemble_index(
-    features: list[dict], spls: list[dict], sources: dict
-) -> dict:
+def assemble_index(features: list[dict], spls: list[dict], sources: dict) -> dict:
     compute_used_by(features)
     features = sorted(features, key=lambda e: e["short"])
     try:

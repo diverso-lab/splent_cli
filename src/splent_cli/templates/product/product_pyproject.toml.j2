@@ -35,9 +35,26 @@ features_dev = []
 # Features active only in prod (e.g. monitoring, caching)
 features_prod = []
 
-# SPL reference — the product derives from this SPL's feature model (UVL).
-# The UVL file lives in splent_catalog/{spl_name}/, not inside the product.
+# SPL reference. The product derives from this SPL's feature model (UVL).
+# The model is not stored inside the product; it is resolved from the working
+# copy at splent_spl_<name>/, then from .splent_cache/spls/, then downloaded.
 spl = "{{ spl_name }}"
+
+# Where the SPL model itself comes from. The name above is not enough to
+# download anything, so the DOI travels with the product and any clone of this
+# repository can resolve the model from UVLHub alone, with no catalog and no
+# marketplace in the way.
+[tool.splent.spl_model]
+mirror = "{{ spl_mirror | default('uvlhub.io') }}"
+doi = "{{ spl_doi | default('') }}"
+# Same line, every version. Used to report that a newer model exists.
+concept_doi = "{{ spl_concept_doi | default('') }}"
+version = "{{ spl_version | default('') }}"
+{%- if spl_file %}
+# The model's filename on UVLHub, which is not always <name>.uvl. Without it
+# the download falls back to the SPL name and 404s.
+file = "{{ spl_file }}"
+{%- endif %}
 
 # Layout hooks declared in base_template.html.
 # Features register callbacks to these hooks via register_template_hook().

@@ -798,11 +798,9 @@ def export_puml(
             pydata = tomllib.load(f)
         spl_name = pydata.get("tool", {}).get("splent", {}).get("spl")
         if spl_name:
-            candidate = os.path.join(
-                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
-            )
-            if os.path.isfile(candidate):
-                uvl_path = candidate
+            from splent_cli.services import spl_store
+
+            uvl_path = spl_store.product_uvl(workspace, product, allow_fetch=True)
 
     # Legacy fallback: [tool.splent.uvl].file
     if not uvl_path:

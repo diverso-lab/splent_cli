@@ -318,15 +318,36 @@ def product_build(no_image, skip_preflight):
     pydata = load_toml(pyproject_path, what="pyproject.toml")
     declared_features = read_features_from_data(pydata, "prod")
 
-    # Check for editable (non-versioned) features — these can't be installed from PyPI
+    # Unversioned features, and what actually happens to them.
+    #
+    # This warning used to say the build would fail. It does not, and that is
+    # worse. The production image runs `splent feature:pip-install`, which
+    # turns each entry in [tool.splent].features into a pip requirement: with a
+    # version it becomes `name==version`, and WITHOUT one it becomes a bare
+    # `name`. A bare name resolves to whatever PyPI happens to be serving under
+    # that package, which is not the code in your workspace and may be years
+    # old. The image builds, the app starts, and it is running something else.
+    #
+    # The local checkout is not consulted here. Only the dev path installs from
+    # disk: scripts/00_install_features.sh does `pip install -e` against
+    # <product>/features/<org>/<name>, which product:resolve fills by cloning
+    # from GitHub at the tag, and entrypoint.dev.sh is the only thing that runs
+    # that script.
     editable = [f for f in declared_features if "@" not in f.split("/")[-1]]
     if editable:
         names = ", ".join(f.split("/")[-1] if "/" in f else f for f in editable)
         click.secho(
-            f"  The following features are editable (not versioned):\n"
+            f"  The following features are declared without a version:\n"
             f"    {names}\n\n"
-            f"  Production builds install features from PyPI. Editable features\n"
-            f"  have no published version and will fail during the Docker build.\n"
+            f"  The production image installs features with pip, from PyPI, in\n"
+            f"  the Dockerfile.{product}.prod builder stage. Without a version\n"
+            f"  the requirement is a bare package name, so pip installs whatever\n"
+            f"  PyPI already has under that name and NOT your local checkout.\n"
+            f"  If the name was never published, that step fails; if it was, the\n"
+            f"  image quietly ships a different version of the feature.\n\n"
+            f"  Your local code only reaches a container in dev, where\n"
+            f"  scripts/00_install_features.sh runs pip install -e against\n"
+            f"  {product}/features/, which product:resolve fills from GitHub.\n\n"
             f"  Release them first (splent feature:release) or remove them\n"
             f"  from the product (splent feature:remove).",
             fg="yellow",

@@ -68,10 +68,18 @@ def _get_feature_order(workspace, product_path, env):
         # Framework not available: fall back to declared feature order silently.
         return features
 
+    from splent_cli.services import spl_store
+
     spl_name = data.get("tool", {}).get("splent", {}).get("spl")
     if spl_name:
-        uvl = os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl")
-        if os.path.isfile(uvl):
+        pin = spl_store.pin_from_pyproject(data)
+        uvl = spl_store.find_uvl(
+            workspace,
+            spl_name,
+            version=pin.version if pin else None,
+            doi=pin.doi if pin else None,
+        )
+        if uvl:
             try:
                 return FeatureLoadOrderResolver().resolve(features, uvl)
             except Exception as e:

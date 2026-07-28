@@ -62,6 +62,20 @@ def _infer_parents(uvl_path: str, selected: set[str]) -> set[str]:
     return extra
 
 
+def _catalog_migration_hint(workspace):
+    """Name the migration when the workspace still depends on splent_catalog.
+
+    Before the pin existed the catalog held every DOI, so an unmigrated
+    workspace cannot resolve any model and every phase that needs one fails
+    for the same single reason.
+    """
+    from splent_cli.services import spl_store
+
+    if spl_store.catalog_migration_pending(workspace):
+        return spl_store.MIGRATE_HINT
+    return None
+
+
 def _run_sat_check(workspace, app_name, data, feature_list, print_config):
     """Run UVL SAT check. Returns (ok, selected, universe, uvl_path)."""
     local_uvl = _resolve_uvl_path(workspace, app_name, data)
@@ -131,13 +145,14 @@ def _run_deps_check(workspace, product):
 
     product_dir = os.path.join(workspace, product)
 
+    from splent_cli.services import spl_store
+
     try:
         reader = PyprojectReader.for_product(product_dir)
-        spl_name = reader.splent_config.get("spl")
-        if spl_name:
-            uvl_path = os.path.join(
-                workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"
-            )
+        if reader.splent_config.get("spl"):
+            uvl_path = spl_store.product_uvl(workspace, product, allow_fetch=True)
+            if not uvl_path:
+                return [], 0
         else:
             uvl_file = reader.uvl_config.get("file")
             if not uvl_file:
@@ -259,16 +274,33 @@ def product_validate(feature_list, pyproject, print_config, only):
             + click.style("  (UVL — splent product:validate --only config)  ", dim=True)
         )
 
+        sat_error = None
+        universe = set()
+        selected = set()
         try:
             sat_ok, selected, universe, uvl_path = _run_sat_check(
                 workspace, app_name, data, feature_list, print_config
             )
         except Exception as e:
-            click.secho(f"     ❌ {e}", fg="red")
+            sat_error = e
             sat_ok = False
-            selected = set()
 
-        if sat_ok:
+        if sat_error is not None:
+            # "NOT satisfiable" is a verdict from the solver. Nothing reached
+            # the solver here, so saying it would send the reader hunting a
+            # constraint bug when the real problem is usually that no model
+            # could be read at all.
+            click.secho(f"     ❌ {sat_error}", fg="red")
+            click.secho(
+                "     ❌ The configuration could not be checked, so nothing was "
+                "proved either way",
+                fg="red",
+            )
+            hint = _catalog_migration_hint(workspace)
+            if hint:
+                click.secho(f"     {hint}", fg="yellow")
+            failed = True
+        elif sat_ok:
             click.secho(
                 f"     ✅ Feature selection is satisfiable ({len(selected)} features)",
                 fg="green",

@@ -16,7 +16,7 @@ from pathlib import Path
 import click
 import tomllib
 
-from splent_cli.services import context, marketplace
+from splent_cli.services import context, marketplace, spl_store
 
 
 def _snapshot_version_key(pyproject_path: Path) -> tuple:
@@ -72,7 +72,7 @@ def _local_contract_requires(workspace: str, package: str) -> list[str] | None:
 def check_contracts(spl_name):
     """
     Cross-check requires.features in every contract against the UVL
-    constraints of each SPL in splent_catalog.
+    constraints of every SPL model this workspace knows.
 
     \b
     Examples:
@@ -80,40 +80,46 @@ def check_contracts(spl_name):
       splent check:contracts --spl cms_spl
     """
     workspace = str(context.workspace())
-    catalog = Path(workspace) / "splent_catalog"
 
     if spl_name:
-        spl_dirs = [catalog / spl_name]
-        if not spl_dirs[0].is_dir():
-            click.secho(f"❌ SPL not found: {spl_dirs[0]}", fg="red")
-            raise SystemExit(1)
+        spl_names = [spl_name]
     else:
-        spl_dirs = sorted(d for d in catalog.glob("*") if (d / "metadata.toml").is_file())
+        spl_names = spl_store.known_spls(workspace)
 
-    if not spl_dirs:
-        click.secho("❌ No SPLs found in splent_catalog.", fg="red")
+    if not spl_names:
+        click.secho("  No SPL models known to this workspace.", fg="red")
+        click.echo("  Start one with: splent spl:create <name>")
         raise SystemExit(1)
 
     total_errors = 0
     total_warnings = 0
 
-    for spl_dir in spl_dirs:
+    for name in spl_names:
         spl_errors = 0
         spl_warnings = 0
-        uvl_path = spl_dir / f"{spl_dir.name}.uvl"
+        pin = spl_store.read_pin(workspace, name)
+        uvl_path_str = spl_store.find_uvl(
+            workspace, name, version=pin.version, doi=pin.doi
+        )
         click.echo()
-        click.echo(click.style(f"  check:contracts — {spl_dir.name}", bold=True))
-        click.echo(click.style(f"  {'─' * 60}", fg="bright_black"))
+        click.echo(click.style(f"  check:contracts  {name}", bold=True))
+        click.echo(click.style(f"  {'-' * 60}", fg="bright_black"))
 
-        if not uvl_path.is_file():
-            click.secho(
-                f"  ⚠  UVL not on disk ({uvl_path.name}) — run: splent spl:fetch "
-                f"{spl_dir.name}",
-                fg="yellow",
-            )
+        if not uvl_path_str:
+            if pin.fetchable:
+                click.secho(
+                    f"  UVL not on disk, run: splent spl:fetch {name}",
+                    fg="yellow",
+                )
+            else:
+                click.secho(
+                    f"  No UVL and no DOI for '{name}', nothing to check against.",
+                    fg="yellow",
+                )
             total_warnings += 1
             continue
 
+        uvl_path = Path(uvl_path_str)
         model = marketplace.parse_uvl_structure(uvl_path.read_text())
         shorts = model["features"]  # short -> {package, org, ...}
         implications = {(a, b) for a, b in model["constraints"]}
@@ -132,7 +138,7 @@ def check_contracts(spl_name):
                     # cannot offer this feature safely without it.
                     click.secho(
                         f"  ✗ {short} requires '{dep}' (contract), but '{dep}' "
-                        f"is not a feature of {spl_dir.name}",
+                        f"is not a feature of {name}",
                         fg="red",
                     )
                     spl_errors += 1
@@ -146,7 +152,7 @@ def check_contracts(spl_name):
                         click.style(
                             f"      fix: add '{short} => {dep}' to the UVL "
                             f"constraints (splent spl:add-constraints "
-                            f"{spl_dir.name} is interactive)",
+                            f"{name} is interactive)",
                             fg="bright_black",
                         )
                     )
@@ -169,7 +175,7 @@ def check_contracts(spl_name):
                 )
                 click.echo(
                     click.style(
-                        f"      fix: add \"{b}\" to requires.features_manual in "
+                        f'      fix: add "{b}" to requires.features_manual in '
                         f"{shorts[a]['package']}/pyproject.toml (preserved on "
                         "regeneration), or confirm it is SPL-level policy",
                         fg="bright_black",
