@@ -90,9 +90,15 @@ class CredentialsError(Exception):
 
 @dataclass
 class Credential:
-    """A token plus where it came from (needed to explain CI vs laptop)."""
+    """A token plus where it came from (needed to explain CI vs laptop).
 
-    token: str
+    ``token`` is kept out of the repr on purpose. The default dataclass repr
+    would print the secret in any traceback that captures locals, in a pytest
+    assertion dump or in a stray debug print, and "never logged" has to hold
+    even when somebody is careless with this object.
+    """
+
+    token: str = field(repr=False)
     source: str  # "environment" or "file"
     source_label: str  # the env var name, or the store path
     entry: dict = field(default_factory=dict)

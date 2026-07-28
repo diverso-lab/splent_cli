@@ -85,6 +85,27 @@ def format_expiry(expires_at: str | None) -> str:
     return f"{raw} (in less than a day)"
 
 
+def retry_hint(retry_after: str | None) -> str:
+    """Turn a ``Retry-After`` value into an instruction, however it is spelled.
+
+    The header is either a number of seconds or an HTTP date. Anything else is
+    quoted verbatim rather than dropped, because a wrong-looking value the
+    developer can see beats a silent omission.
+    """
+    raw = (retry_after or "").strip()
+    if not raw:
+        return "Wait a moment and run the command again."
+    if raw.isdigit():
+        seconds = int(raw)
+        if seconds <= 1:
+            return "Wait a second and run the command again."
+        if seconds < 120:
+            return f"Wait {seconds} seconds and run the command again."
+        minutes = round(seconds / 60)
+        return f"Wait about {minutes} minutes and run the command again."
+    return f"The server asked to retry after {raw}."
+
+
 def credential_source_label(cred: credentials.Credential) -> str:
     if cred.from_environment:
         return f"environment variable {cred.source_label}"
@@ -141,8 +162,8 @@ def report_error(err: marketplace_api.MarketplaceError, *, url: str) -> None:
             "  Ask an administrator to activate the account, then run "
             "splent login again."
         )
-        if err.message:
-            click.secho(f"  Server said {err.message}", fg="bright_black")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
         return
 
     if code == api.CODE_TOKEN_EXPIRED:
@@ -158,8 +179,8 @@ def report_error(err: marketplace_api.MarketplaceError, *, url: str) -> None:
     if code == api.CODE_UNAUTHENTICATED:
         click.secho("  The marketplace rejected the token.", fg="red")
         click.echo("  Run splent login to authenticate again.")
-        if err.message:
-            click.secho(f"  Server said {err.message}", fg="bright_black")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
         return
 
     if code == api.CODE_FORBIDDEN:
@@ -168,8 +189,20 @@ def report_error(err: marketplace_api.MarketplaceError, *, url: str) -> None:
             "  Ask an administrator for the missing scope, then run "
             "splent login again to pick it up."
         )
-        if err.message:
-            click.secho(f"  Server said {err.message}", fg="bright_black")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
+        return
+
+    if code == api.CODE_RATE_LIMITED:
+        click.secho("  The marketplace is rate limiting this client.", fg="red")
+        click.echo(f"  {retry_hint(err.retry_after)}")
+        click.echo(
+            "  Nothing is wrong with your password or your token. Marketplaces "
+            "throttle repeated"
+        )
+        click.echo("  sign-in attempts, so this clears on its own.")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
         return
 
     if code == api.CODE_NOT_FOUND:
@@ -181,22 +214,37 @@ def report_error(err: marketplace_api.MarketplaceError, *, url: str) -> None:
         click.echo(
             "  server may be older than this CLI. Check the URL and the server version."
         )
-        if err.message:
-            click.secho(f"  Server said {err.message}", fg="bright_black")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
         return
 
     if code == api.CODE_INVALID_REQUEST:
         click.secho("  The marketplace rejected the request.", fg="red")
-        if err.message:
-            click.secho(f"  Server said {err.message}", fg="bright_black")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
         click.echo("  Fix the reported value and run the command again.")
         return
 
     if code == api.CODE_CONFLICT:
         click.secho("  The marketplace reported a conflict.", fg="red")
-        if err.message:
-            click.secho(f"  Server said {err.message}", fg="bright_black")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
         click.echo("  Reconcile the existing resource and run the command again.")
+        return
+
+    if code == api.CODE_PUBLISHING_DISABLED:
+        # Reported apart from a server error, which is what its 503 would
+        # otherwise be read as. Nothing is broken and retrying changes
+        # nothing: publishing is the one path that spends the marketplace's
+        # single key, and somebody has deliberately closed it.
+        click.secho("  This marketplace is not accepting publications.", fg="red")
+        click.echo(
+            "  Publishing is switched off there, so retrying will not help. "
+            "Reading the"
+        )
+        click.echo("  registry still works. Ask whoever runs it to arm publishing.")
+        if err.server_message:
+            click.secho(f"  Server said {err.server_message}", fg="bright_black")
         return
 
     if code == api.CODE_SERVER_ERROR:

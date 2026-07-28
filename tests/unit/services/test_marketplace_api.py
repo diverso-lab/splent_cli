@@ -19,9 +19,11 @@ BASE = "https://marketplace.splent.io"
 
 
 class _Response:
-    def __init__(self, status_code=200, payload=None, text=None):
+    def __init__(self, status_code=200, payload=None, text=None, headers=None):
         self.status_code = status_code
         self._payload = payload
+        if headers is not None:
+            self.headers = headers
         if text is not None:
             self.text = text
         elif payload is None:
@@ -287,7 +289,7 @@ class TestTransport:
         noisy = requests.ConnectionError(
             "HTTPConnectionPool(host='localhost', port=9999): Max retries "
             "exceeded with url: /api/v1/auth/whoami (Caused by "
-            "NewConnectionError(\"...: [Errno 111] Connection refused\"))"
+            'NewConnectionError("...: [Errno 111] Connection refused"))'
         )
         _install(monkeypatch, noisy)
         with pytest.raises(MarketplaceError) as exc:
@@ -445,3 +447,247 @@ class TestSpls:
             MarketplaceClient(BASE).publish_spl("cms_spl", b"x", "cms_spl.uvl")
         assert exc.value.code == marketplace_api.CODE_UNAUTHENTICATED
         assert recorder.calls == []
+
+
+# ── Rate limiting ───────────────────────────────────────────────────────────
+
+
+class TestRateLimit:
+    """A 429 is the marketplace throttling us, never a credential verdict.
+
+    The GitHub/PyPI boundary answers this question with RegistryError.
+    rate_limited; the marketplace boundary has to answer it the same way, or
+    every 429 reads as "unexpected error, report it" on the one endpoint that
+    servers throttle hardest, the login.
+    """
+
+    def test_429_is_classified_and_flagged(self, monkeypatch):
+        _install(monkeypatch, _Response(429, {"error": "slow down"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_RATE_LIMITED
+        assert exc.value.rate_limited is True
+        assert exc.value.status == 429
+
+    def test_retry_after_is_captured(self, monkeypatch):
+        _install(
+            monkeypatch,
+            _Response(429, {"error": "slow down"}, headers={"Retry-After": "30"}),
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.retry_after == "30"
+
+    def test_a_response_without_headers_is_tolerated(self, monkeypatch):
+        """Proxies throttle without saying for how long, and stubs have none."""
+        _install(monkeypatch, _Response(429, {"error": "slow down"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.retry_after is None
+
+    def test_rate_limited_is_never_a_dead_token(self, monkeypatch):
+        """Deleting the stored token over a 429 would lose a working credential."""
+        _install(monkeypatch, _Response(429, {"error": "slow down"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.dead_token is False
+
+    def test_a_throttled_login_is_not_reported_as_a_wrong_password(self, monkeypatch):
+        """The unauthenticated override must not swallow a throttle."""
+        _install(monkeypatch, _Response(429, {"error": "too many attempts"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE).login("a@b.c", "pw", "label")
+        assert exc.value.code == marketplace_api.CODE_RATE_LIMITED
+        assert exc.value.code != marketplace_api.CODE_INVALID_CREDENTIALS
+
+    def test_server_code_classifies_even_on_another_status(self, monkeypatch):
+        _install(monkeypatch, _Response(503, {"code": "too_many_requests"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_RATE_LIMITED
+
+    def test_other_errors_are_not_flagged_as_rate_limited(self, monkeypatch):
+        _install(monkeypatch, _Response(500, {"error": "boom"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.rate_limited is False
+
+
+# ── Non-API endpoints ───────────────────────────────────────────────────────
+
+HTML_404 = (
+    '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
+    "<title>Page not found | splent_marketplace_app</title>\n"
+    '<link rel="stylesheet" href="/static/css/app.css">\n</head>\n'
+    "<body><h1>Page not found</h1></body></html>\n"
+)
+
+
+class TestMarkupBodies:
+    """A registry URL that is not a SPLENT API answers with a whole web page.
+
+    Observed live against the dev marketplace before its /api/v1 routes
+    existed: the diagnosis was right, but 300 characters of raw HTML were
+    pasted underneath it and buried the advice.
+    """
+
+    def test_an_html_error_page_is_not_quoted_back(self, monkeypatch):
+        _install(monkeypatch, _Response(404, text=HTML_404))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE).get_spl("cms_spl")
+        assert "<!DOCTYPE" not in str(exc.value)
+        assert "stylesheet" not in str(exc.value)
+        assert exc.value.server_message == ""
+
+    def test_the_status_is_still_reported(self, monkeypatch):
+        _install(monkeypatch, _Response(404, text=HTML_404))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE).get_spl("cms_spl")
+        assert exc.value.code == marketplace_api.CODE_NOT_FOUND
+        assert "HTTP 404" in str(exc.value)
+
+    def test_an_xml_body_is_treated_the_same(self, monkeypatch):
+        _install(monkeypatch, _Response(403, text="<?xml version='1.0'?><Error/>"))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.server_message == ""
+
+    def test_a_plain_text_body_is_still_shown(self, monkeypatch):
+        """Only markup is noise, a text/plain message is the server talking."""
+        _install(monkeypatch, _Response(503, text="upstream down"))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.server_message == "upstream down"
+        assert "upstream down" in str(exc.value)
+
+    def test_a_json_message_is_still_shown(self, monkeypatch):
+        _install(monkeypatch, _Response(403, {"error": "missing scope spl:publish"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.server_message == "missing scope spl:publish"
+
+    def test_a_synthesized_message_is_never_attributed_to_the_server(self, monkeypatch):
+        _install(monkeypatch, _Response(500, text=""))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert "HTTP 500" in exc.value.message
+        assert exc.value.server_message == ""
+
+
+# ── The refusal contract the marketplace actually speaks ────────────────────
+#
+# apikeys reserves 401 for a request that carried NO token and answers 403 for
+# one that carried a token it will not accept: revoked, expired, or never
+# issued. The expired/revoked branches used to live inside `if status == 401`,
+# so against this server every one of them fell through to CODE_FORBIDDEN,
+# DEAD_TOKEN_CODES was unreachable, forget_dead_token() was dead code, and the
+# developer was advised to ask for a missing scope on a credential the server
+# had destroyed. Verified live: DELETE /api/v1/auth/tokens/current, then whoami
+# with the same token, answers 403 {"error": "This API token has been revoked"}.
+
+
+class TestTheServersRealRefusals:
+    def test_a_revoked_token_at_403_is_dead(self, monkeypatch):
+        _install(
+            monkeypatch,
+            _Response(403, {"error": "x", "code": "token_revoked"}),
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_TOKEN_REVOKED
+        assert exc.value.dead_token is True
+
+    def test_an_expired_token_at_403_is_dead(self, monkeypatch):
+        _install(
+            monkeypatch,
+            _Response(403, {"error": "x", "code": "token_expired"}),
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_TOKEN_EXPIRED
+        assert exc.value.dead_token is True
+
+    def test_a_token_nobody_issued_at_403_is_dead(self, monkeypatch):
+        _install(
+            monkeypatch,
+            _Response(403, {"error": "x", "code": "invalid_token"}),
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_UNAUTHENTICATED
+        assert exc.value.dead_token is True
+
+    def test_a_missing_scope_at_403_is_not_dead(self, monkeypatch):
+        """The distinction the whole thing turns on: this token is fine."""
+        _install(
+            monkeypatch,
+            _Response(403, {"error": "x", "code": "insufficient_scope"}),
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_FORBIDDEN
+        assert exc.value.dead_token is False
+
+    def test_a_403_with_no_recognisable_reason_keeps_the_credential(
+        self, monkeypatch
+    ):
+        _install(monkeypatch, _Response(403, {"error": "nope"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_FORBIDDEN
+        assert exc.value.dead_token is False
+
+
+class TestRefusalsWithoutACode:
+    """An older server that sends prose and no code is still understood.
+
+    English prose only, and that is the point of the codes above: the
+    marketplace negotiates Accept-Language on its API routes, so the moment a
+    Spanish translation lands these stop matching and the code is all there is.
+    """
+
+    def test_revoked_prose_at_403_is_still_read(self, monkeypatch):
+        _install(
+            monkeypatch,
+            _Response(403, {"error": "This API token has been revoked"}),
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_TOKEN_REVOKED
+
+    def test_expired_prose_at_403_is_still_read(self, monkeypatch):
+        _install(
+            monkeypatch, _Response(403, {"error": "This API token has expired"})
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_TOKEN_EXPIRED
+
+    def test_unknown_token_prose_at_403_is_still_read(self, monkeypatch):
+        _install(monkeypatch, _Response(403, {"error": "Invalid API token"}))
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_UNAUTHENTICATED
+
+    def test_a_translated_inactive_account_is_still_diagnosed_by_code(
+        self, monkeypatch
+    ):
+        """The best message in the product, made translation proof.
+
+        It used to be selected purely by matching the English substring "not
+        active" in a string produced by gettext.
+        """
+        _install(
+            monkeypatch,
+            _Response(
+                403,
+                {
+                    "error": "Esta cuenta todavía no está activa.",
+                    "code": "account_inactive",
+                },
+            ),
+        )
+        with pytest.raises(MarketplaceError) as exc:
+            MarketplaceClient(BASE, token="tok").whoami()
+        assert exc.value.code == marketplace_api.CODE_ACCOUNT_INACTIVE
+        assert exc.value.dead_token is False

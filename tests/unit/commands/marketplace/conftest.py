@@ -91,5 +91,7 @@ def api(monkeypatch):
     return fake
 
 
-def error(code, message="server said no", status=None):
-    return marketplace_api.MarketplaceError(message, status=status, code=code)
+def error(code, message="server said no", status=None, retry_after=None):
+    return marketplace_api.MarketplaceError(
+        message, status=status, code=code, retry_after=retry_after
+    )

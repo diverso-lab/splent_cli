@@ -1,11 +1,22 @@
 """
-spl:publish — Publish the local UVL model of an SPL to UVLHub.
+spl:publish — Publish the local UVL model of an SPL through the marketplace.
 
-Closes the UVL → UVLHub → spl:fetch cycle: the .uvl files are not tracked in
-git (UVLHub is the remote source of truth), so after editing a model locally
-this command uploads it, publishes it (new dataset or new version of the
-existing DOI), verifies the published raw file matches the local one
-byte-for-byte, and only then records the new doi/file in metadata.toml.
+    developer --(splent CLI, bearer token)--> MARKETPLACE --(one key)--> UVLHub
+
+The developer authenticates to the marketplace with the token `splent login`
+stored, sends the .uvl, and gets back the DOI the marketplace recorded. They
+never hold a UVLHub key and never need to know UVLHub is on the other side.
+
+This command used to talk to UVLHub directly. It required the developer's own
+UVLHUB_API_KEY and, when it was missing, printed "generate one at
+{UVLHUB_URL}/developer/api-keys" — instructions for obtaining the exact
+credential the marketplace exists to replace. The relay endpoint was live and
+validating the whole time and had no client at all, so the loop the two halves
+were built to close was never closed. Everything that used to happen here
+happens on the server now: the upload, the publish or the new version, the
+byte for byte verification of what UVLHub then serves, and the record of what
+was minted. What is left here is finding the local model, sending it, and
+saying what came back.
 """
 
 import os
@@ -13,152 +24,63 @@ import re
 import tomllib
 
 import click
-import requests
 
-from splent_cli.commands.spl.spl_utils import _resolve_spl_metadata
-from splent_cli.commands.uvl.uvl_utils import (
-    resolve_uvlhub_raw_url,
-    uvlhub_base_url,
+from splent_cli.commands.marketplace.marketplace_auth_utils import (
+    credential_source_label,
+    field,
+    handle_error,
+    resolve_target,
 )
-from splent_cli.services import context
+from splent_cli.services import context, credentials, marketplace_api
 from splent_cli.utils.io_utils import atomic_write, backup_file
 
-_TIMEOUT = 60
-
 
 # ---------------------------------------------------------------------------
-# UVLHub API boundary (all network I/O goes through these helpers)
+# Finding the local model
 # ---------------------------------------------------------------------------
 
 
-def _api_base() -> str:
-    """Base URL of the UVLHub instance (UVLHUB_URL env, default uvlhub.io).
+def _candidate_paths(workspace: str, spl_name: str) -> list[str]:
+    """Where a working copy of the model may live, best first.
 
-    Shared with resolve_uvlhub_raw_url so upload/publish and verification
-    always target the SAME instance.
+    splent_catalog is on its way out: the registry holds what its metadata.toml
+    files held, and the CLI reads it over HTTP. Working copies belong in
+    .splent_cache/spls/<name>/ from here on, so both are looked at and neither
+    is required.
     """
-    return uvlhub_base_url()
+    return [
+        os.path.join(workspace, "splent_catalog", spl_name, f"{spl_name}.uvl"),
+        os.path.join(workspace, ".splent_cache", "spls", spl_name, f"{spl_name}.uvl"),
+    ]
 
 
-def _server_message(response) -> str:
-    """Extract a human-readable error message from an API response."""
+def _find_local_uvl(workspace: str, spl_name: str) -> str | None:
+    for path in _candidate_paths(workspace, spl_name):
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _metadata_path(workspace: str, spl_name: str) -> str | None:
+    """The local metadata.toml, while there still is one."""
+    path = os.path.join(workspace, "splent_catalog", spl_name, "metadata.toml")
+    return path if os.path.isfile(path) else None
+
+
+def _local_description(metadata_path: str | None) -> str:
+    if not metadata_path:
+        return ""
     try:
-        data = response.json()
-    except Exception:  # noqa: BLE001 - any body that is not JSON
-        data = None
-    if isinstance(data, dict):
-        for key in ("error", "message", "detail"):
-            if data.get(key):
-                return str(data[key])
-    text = (getattr(response, "text", "") or "").strip()
-    return text[:300] if text else f"HTTP {response.status_code}"
-
-
-def _check_response(response, action: str) -> dict:
-    """Fail with the server's message on non-2xx; return the JSON body."""
-    if response.status_code not in (200, 201):
-        raise click.ClickException(
-            f"UVLHub rejected the {action} ({response.status_code}): "
-            f"{_server_message(response)}"
-        )
-    try:
-        data = response.json()
-    except Exception:  # noqa: BLE001
-        raise click.ClickException(
-            f"UVLHub returned an invalid response for the {action} (not JSON)"
-        )
-    if not isinstance(data, dict):
-        raise click.ClickException(
-            f"UVLHub returned an unexpected response for the {action}"
-        )
-    return data
-
-
-def _api_upload(base: str, api_key: str, uvl_path: str, title: str, description: str):
-    """POST /api/v1/datasets/upload — create a draft dataset with the UVL."""
-    try:
-        with open(uvl_path, "rb") as fh:
-            r = requests.post(
-                f"{base}/api/v1/datasets/upload",
-                headers={"X-API-Key": api_key},
-                data={"title": title, "description": description},
-                files={"uvl_file": (os.path.basename(uvl_path), fh)},
-                timeout=_TIMEOUT,
-            )
-    except requests.RequestException as e:
-        raise click.ClickException(f"Could not reach UVLHub at {base}: {e}")
-    return _check_response(r, "upload")
-
-
-def _api_publish(base: str, api_key: str, dataset_id) -> dict:
-    """POST /api/v1/datasets/<id>/publish — publish the draft (mints a DOI)."""
-    try:
-        r = requests.post(
-            f"{base}/api/v1/datasets/{dataset_id}/publish",
-            headers={"X-API-Key": api_key},
-            timeout=_TIMEOUT,
-        )
-    except requests.RequestException as e:
-        raise click.ClickException(f"Could not reach UVLHub at {base}: {e}")
-    return _check_response(r, "publish")
-
-
-def _api_lookup_doi(base: str, api_key: str, doi: str) -> dict:
-    """GET /api/v1/datasets/doi/<doi> — resolve a DOI to its dataset."""
-    try:
-        r = requests.get(
-            f"{base}/api/v1/datasets/doi/{doi}",
-            headers={"X-API-Key": api_key},
-            timeout=_TIMEOUT,
-        )
-    except requests.RequestException as e:
-        raise click.ClickException(f"Could not reach UVLHub at {base}: {e}")
-    return _check_response(r, "DOI lookup")
-
-
-def _api_new_version(base: str, api_key: str, dataset_id, uvl_path: str) -> dict:
-    """POST /api/v1/datasets/<id>/new-version — publish a new version."""
-    try:
-        with open(uvl_path, "rb") as fh:
-            r = requests.post(
-                f"{base}/api/v1/datasets/{dataset_id}/new-version",
-                headers={"X-API-Key": api_key},
-                files={"file": (os.path.basename(uvl_path), fh)},
-                timeout=_TIMEOUT,
-            )
-    except requests.RequestException as e:
-        raise click.ClickException(f"Could not reach UVLHub at {base}: {e}")
-    return _check_response(r, "new-version")
+        with open(metadata_path, "rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return ""
+    return str(data.get("spl", {}).get("description") or "").strip()
 
 
 # ---------------------------------------------------------------------------
-# Local helpers
+# Keeping the local metadata.toml honest, while it exists
 # ---------------------------------------------------------------------------
-
-
-def _pick_remote_file(files, local_name: str) -> tuple[str, str | None]:
-    """Return (name, raw_url) of the REAL remote file from the API's files list.
-
-    UVLHub may rename the upload (secure_filename / collision suffixes), so
-    the name the server reports is the one metadata.toml must point at. The
-    raw_url the server reports (built with the host that actually served the
-    publish) is the authoritative download location for verification.
-    """
-    if not isinstance(files, list) or not files:
-        raise click.ClickException(
-            "UVLHub response did not include the published files"
-        )
-    entries = [f for f in files if isinstance(f, dict) and f.get("name")]
-    if not entries:
-        raise click.ClickException(
-            "UVLHub response did not include the published file name"
-        )
-    chosen = next(
-        (f for f in entries if f["name"] == local_name),
-        next((f for f in entries if f["name"].endswith(".uvl")), entries[0]),
-    )
-    raw_url = chosen.get("raw_url")
-    return chosen["name"], raw_url if isinstance(raw_url, str) else None
 
 
 def _toml_str(value: str) -> str:
@@ -236,33 +158,28 @@ def _update_metadata_uvl(metadata_path: str, *, doi: str, file: str) -> None:
             bak.unlink()
 
 
-def _verify_published(
-    mirror: str,
-    doi: str,
-    remote_file: str,
-    local_bytes: bytes,
-    raw_url: str | None = None,
-):
-    """Download the published raw file and compare it byte-for-byte.
+# ---------------------------------------------------------------------------
+# Reading the marketplace's answer
+# ---------------------------------------------------------------------------
 
-    Prefers the absolute raw_url reported by the server (it carries the host
-    that actually served the publish); only falls back to the URL built from
-    mirror/doi/file. Follows redirects (the DOI mapping may 302 to the
-    versioned dataset). Returns (matches: bool, url: str).
-    """
-    if raw_url and raw_url.startswith(("http://", "https://")):
-        url = raw_url
-    else:
-        url = resolve_uvlhub_raw_url(mirror, doi, remote_file)
-    try:
-        r = requests.get(url, timeout=_TIMEOUT, allow_redirects=True)
-    except requests.RequestException as e:
-        raise click.ClickException(f"Verification download failed: {e}")
-    if r.status_code != 200:
-        raise click.ClickException(
-            f"Verification failed: UVLHub returned {r.status_code} for {url}"
-        )
-    return r.content == local_bytes, url
+#: How the registry spells the outcome of its own byte for byte check.
+#: Worded without naming what is behind the marketplace, because a developer
+#: publishing through it has no business having to know.
+VERIFICATION_WORDING = {
+    "match": "the published file matches the model that was sent",
+    "mismatch": "the published file DOES NOT match the model that was sent",
+    "pending": "not checked by the marketplace",
+    "unknown": "could not be checked",
+    "imported": "imported, never checked",
+}
+
+
+def _pointer(result: dict) -> tuple[str, str]:
+    """(doi, file) from the release response, flat or nested under uvl."""
+    uvl = result.get("uvl") if isinstance(result.get("uvl"), dict) else {}
+    doi = str(result.get("doi") or uvl.get("doi") or "").strip()
+    remote_file = str(uvl.get("file") or result.get("file") or "").strip()
+    return doi, remote_file
 
 
 # ---------------------------------------------------------------------------
@@ -272,162 +189,144 @@ def _verify_published(
 
 @click.command(
     "spl:publish",
-    short_help="Publish the local UVL model to UVLHub and update metadata.toml",
+    short_help="Publish the local UVL model through the SPLENT marketplace.",
 )
 @click.argument("spl_name")
+@click.option(
+    "--registry",
+    "registry_option",
+    default=None,
+    metavar="URL",
+    help="Marketplace to publish to. Defaults to SPLENT_MARKETPLACE_URL, "
+    "then https://marketplace.splent.io.",
+)
 @click.option(
     "--dry-run",
     is_flag=True,
     help="Show what would be done without touching the network or metadata.",
 )
 @context.requires_detached
-def spl_publish(spl_name, dry_run):
-    """Publish the local UVL model of the SPL to UVLHub.
+def spl_publish(spl_name, registry_option, dry_run):
+    """Publish the local UVL model of the SPL through the marketplace.
 
     \b
-    - Empty doi in metadata.toml → uploads a NEW dataset and publishes it.
-    - Existing doi → publishes a NEW VERSION of that dataset.
+    The marketplace decides what happens on the other side: a line it has
+    never seen becomes a new dataset, one it knows gets a new version of the
+    DOI it already holds, and identical bytes it has already published are
+    answered with that DOI instead of minting a second one.
 
-    After publishing, the raw file on UVLHub is downloaded and compared
-    byte-for-byte with the local UVL; only if they match are doi/file
-    written to splent_catalog/{spl}/metadata.toml.
-
-    Requires UVLHUB_API_KEY (generate one at {UVLHUB_URL}/developer/api-keys).
+    \b
+    Requires `splent login`. There is no UVLHub key here and there is not
+    meant to be: the marketplace holds one key for everybody.
     """
     workspace = str(context.workspace())
-    base = _api_base()
+    target = resolve_target(registry_option)
+    uvl_path = _find_local_uvl(workspace, spl_name)
+    metadata_path = _metadata_path(workspace, spl_name)
 
-    metadata = _resolve_spl_metadata(spl_name)
-    spl_cfg = metadata.get("spl", {})
-    uvl_cfg = spl_cfg.get("uvl", {})
-    mirror = uvl_cfg.get("mirror") or "uvlhub.io"
-    doi = (uvl_cfg.get("doi") or "").strip()
-
-    spl_dir = os.path.join(workspace, "splent_catalog", spl_name)
-    metadata_path = os.path.join(spl_dir, "metadata.toml")
-    uvl_path = os.path.join(spl_dir, f"{spl_name}.uvl")
-
-    if mirror != "uvlhub.io":
-        click.secho(
-            f"  ❌ Unsupported mirror '{mirror}' in metadata.toml "
-            f"(only 'uvlhub.io' can be published to).",
-            fg="red",
+    if uvl_path is None:
+        click.secho(f"  No local UVL model for '{spl_name}'.", fg="red")
+        click.echo("     Looked in:")
+        for candidate in _candidate_paths(workspace, spl_name):
+            click.echo(f"       {candidate}")
+        click.echo(
+            "     Build the model first (spl:create / spl:add-feature) or "
+            f"download it with: splent spl:fetch {spl_name}"
         )
         raise SystemExit(1)
 
-    if not os.path.isfile(uvl_path):
-        click.secho(f"  ❌ Local UVL not found: {uvl_path}", fg="red")
-        click.echo(
-            "     Nothing to publish. Build the model first "
-            "(spl:create / spl:add-feature)"
-        )
-        click.echo(
-            f"     or download the current version with: splent spl:fetch {spl_name}"
-        )
+    try:
+        cred = credentials.resolve(target.url)
+    except credentials.CredentialsError as e:
+        click.secho(f"  {e}", fg="red")
         raise SystemExit(1)
-
-    title = spl_cfg.get("name") or spl_name
-    description = (spl_cfg.get("description") or "").strip() or (
-        f"UVL variability model for the '{spl_name}' SPLENT product line."
-    )
 
     if dry_run:
         click.echo()
         click.echo(click.style(f"  spl:publish {spl_name} (dry run)", bold=True))
         click.echo()
-        click.echo(f"  Local UVL : {uvl_path}")
-        click.echo(f"  API base  : {base}")
-        click.echo()
-        if doi:
-            click.echo(f"  Would publish a NEW VERSION of the existing DOI {doi}:")
-            click.echo("    1. GET  /api/v1/datasets/doi/… (resolve dataset id)")
-            click.echo("    2. POST /api/v1/datasets/<id>/new-version (upload UVL)")
-        else:
-            click.echo("  Would upload a NEW dataset and publish it:")
-            click.echo(f"    1. POST /api/v1/datasets/upload (title: {title})")
-            click.echo("    2. POST /api/v1/datasets/<id>/publish (mints the DOI)")
-        click.echo(
-            "    3. Verify the published raw file matches the local UVL "
-            "byte-for-byte"
+        field("Local UVL", uvl_path)
+        field("Registry", f"{target.url} ({target.origin_label})")
+        field(
+            "Token",
+            credential_source_label(cred) if cred else "(not logged in)",
         )
-        click.echo(f"    4. Write doi/file into {metadata_path}")
-        if not os.getenv("UVLHUB_API_KEY"):
+        click.echo()
+        click.echo("  Would POST the model to /api/v1/spls/<name>/releases and:")
+        click.echo("    - let the marketplace publish or version it on its own key")
+        click.echo("    - let it verify the published file byte for byte")
+        click.echo("    - record the DOI it reports")
+        if metadata_path:
+            click.echo(f"    - write doi/file into {metadata_path}")
+        if cred is None:
             click.echo()
             click.secho(
-                "  ⚠ UVLHUB_API_KEY is not set — a real run would fail.",
+                "  Not logged in, so a real run would fail. Run splent login.",
                 fg="yellow",
             )
         click.echo()
-        click.secho("  ✅ Dry run: nothing was changed.", fg="green")
+        click.secho("  Dry run: nothing was changed.", fg="green")
         return
 
-    api_key = os.getenv("UVLHUB_API_KEY")
-    if not api_key:
-        click.secho("  ❌ UVLHUB_API_KEY is not set.", fg="red")
-        click.echo(f"     Generate an API key at {base}/developer/api-keys")
-        click.echo("     and export it before publishing:")
-        click.echo("       export UVLHUB_API_KEY=<your-key>")
+    if cred is None:
+        click.secho(f"  Not logged in to {target.url}", fg="red")
+        click.echo("     Run splent login and try again.")
         raise SystemExit(1)
 
-    with open(uvl_path, "rb") as f:
-        local_bytes = f.read()
-    local_name = os.path.basename(uvl_path)
+    with open(uvl_path, "rb") as handle:
+        local_bytes = handle.read()
 
     click.echo()
-    click.echo(click.style(f"  Publishing {spl_name} to {base}", bold=True))
+    click.echo(click.style(f"  Publishing {spl_name} to {target.url}", bold=True))
     click.echo()
 
-    if doi:
-        click.echo(f"  Existing DOI {doi} — creating a new version...")
-        dataset = _api_lookup_doi(base, api_key, doi)
-        dataset_id = dataset.get("dataset_id")
-        if not dataset_id:
-            raise click.ClickException(
-                f"UVLHub DOI lookup for {doi} did not return a dataset_id"
+    client = marketplace_api.MarketplaceClient(target.url, token=cred.token)
+    try:
+        result = client.publish_spl(
+            spl_name,
+            local_bytes,
+            os.path.basename(uvl_path),
+            description=_local_description(metadata_path),
+        )
+    except marketplace_api.MarketplaceError as e:
+        handle_error(e, url=target.url, forget=not cred.from_environment)
+        if cred.from_environment and e.dead_token:
+            click.secho(
+                f"  The token comes from {credentials.TOKEN_ENV}, so unset or "
+                "replace it there.",
+                fg="yellow",
             )
-        result = _api_new_version(base, api_key, dataset_id, uvl_path)
-    else:
-        click.echo("  No DOI in metadata.toml — uploading a new dataset...")
-        uploaded = _api_upload(base, api_key, uvl_path, title, description)
-        dataset_id = uploaded.get("dataset_id")
-        if not dataset_id:
-            raise click.ClickException(
-                "UVLHub upload did not return a dataset_id"
-            )
-        click.echo(f"  📤 Draft dataset created (id {dataset_id}) — publishing...")
-        result = _api_publish(base, api_key, dataset_id)
+        click.echo()
+        raise SystemExit(1)
 
-    new_doi = (result.get("doi") or "").strip()
-    if not new_doi:
-        raise click.ClickException("UVLHub did not return a DOI after publishing")
-    remote_file, raw_url = _pick_remote_file(result.get("files"), local_name)
-    click.echo(f"  🌐 Published as DOI {new_doi} (file: {remote_file})")
-
-    click.echo("  Verifying published content against the local UVL...")
-    matches, url = _verify_published(
-        mirror, new_doi, remote_file, local_bytes, raw_url
-    )
-    if not matches:
+    doi, remote_file = _pointer(result)
+    if not doi:
         click.secho(
-            "  ❌ Verification failed: the published content differs from "
-            "the local UVL.",
-            fg="red",
+            "  The marketplace accepted the release but reported no DOI.", fg="red"
         )
-        click.echo(f"     URL: {url}")
-        click.echo(
-            "     metadata.toml was NOT modified — it still points to the "
-            "previous version."
-        )
+        click.echo("     Check the product line page before publishing again.")
         raise SystemExit(1)
 
-    _update_metadata_uvl(metadata_path, doi=new_doi, file=remote_file)
+    if result.get("idempotent"):
+        click.secho(
+            "  This exact model was already published, so nothing was sent on.",
+            fg="yellow",
+        )
+    field("DOI", doi)
+    if result.get("version"):
+        field("Version", str(result["version"]))
+    if remote_file:
+        field("File", remote_file)
+    verification = str(result.get("verification") or "").strip()
+    if verification:
+        field("Checked", VERIFICATION_WORDING.get(verification, verification))
+
+    if metadata_path and remote_file:
+        _update_metadata_uvl(metadata_path, doi=doi, file=remote_file)
+        field("Recorded", metadata_path)
 
     click.echo()
-    click.secho(
-        f"  ✅ '{spl_name}' published to UVLHub (DOI {new_doi}).", fg="green"
-    )
-    if doi and new_doi != doi:
-        click.echo(f"     metadata.toml updated: doi {doi} → {new_doi}")
+    click.secho(f"  '{spl_name}' published (DOI {doi}).", fg="green")
     click.echo()
 
 

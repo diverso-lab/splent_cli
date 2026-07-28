@@ -192,3 +192,77 @@ class TestNoTokenOption:
         result = CliRunner().invoke(login, ["--help"])
         assert "--token-stdin" in result.output
         assert "--token " not in result.output
+
+
+# ── Throttled ───────────────────────────────────────────────────────────────
+
+
+class TestRateLimited:
+    """Login is the endpoint servers throttle hardest, against password guessing.
+
+    The developer must be told to wait, not that their password is wrong and
+    not to report a bug.
+    """
+
+    def test_says_to_wait_and_stores_nothing(self, api):
+        api.login_error = error(
+            marketplace_api.CODE_RATE_LIMITED, "too many attempts", status=429
+        )
+
+        result = _run()
+
+        assert result.exit_code == 1
+        assert "rate limiting" in result.output
+        assert credentials.get(PROD) is None
+
+    def test_uses_the_retry_after_the_server_sent(self, api):
+        api.login_error = error(
+            marketplace_api.CODE_RATE_LIMITED,
+            "slow down",
+            status=429,
+            retry_after="45",
+        )
+
+        result = _run()
+
+        assert "Wait 45 seconds" in result.output
+
+    def test_does_not_blame_the_password(self, api):
+        api.login_error = error(
+            marketplace_api.CODE_RATE_LIMITED, "slow down", status=429
+        )
+
+        result = _run()
+
+        assert "Nothing is wrong with your password" in result.output
+        assert "rejected that e-mail and password" not in result.output
+
+    def test_does_not_ask_the_developer_to_report_a_bug(self, api):
+        api.login_error = error(
+            marketplace_api.CODE_RATE_LIMITED, "slow down", status=429
+        )
+
+        result = _run()
+
+        assert "report it if it happens again" not in result.output
+
+
+# ── A URL that is not a SPLENT marketplace ──────────────────────────────────
+
+
+class TestNonApiEndpoint:
+    def test_no_html_is_pasted_into_the_terminal(self, api):
+        """Observed live: the advice was buried under an HTML error page."""
+        api.login_error = marketplace_api.MarketplaceError(
+            "The marketplace answered HTTP 404.",
+            status=404,
+            code=marketplace_api.CODE_NOT_FOUND,
+            server_message="",
+        )
+
+        result = _run()
+
+        assert "<!DOCTYPE" not in result.output
+        assert "Server said" not in result.output
+        assert "nothing at that address" in result.output
+        assert credentials.get(PROD) is None

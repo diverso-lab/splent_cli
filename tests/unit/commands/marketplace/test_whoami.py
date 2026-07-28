@@ -191,3 +191,58 @@ class TestDeadToken:
         result = _run(["--registry", "ftp://example.com"])
         assert result.exit_code == 1
         assert "http or https" in result.output
+
+
+# ── Marketplace throttling ──────────────────────────────────────────────────
+
+
+class TestRateLimited:
+    """A 429 means we could not ask, exactly like being offline.
+
+    The stored credential is untouched and still valid, so whoami must not
+    read like a logout and must never delete the token.
+    """
+
+    def test_shows_the_cached_identity_and_keeps_the_token(self, api):
+        credentials.save(
+            PROD,
+            token="tok-123",
+            identity="dev@example.com",
+            scopes=["spl:publish"],
+        )
+        api.whoami_error = error(
+            marketplace_api.CODE_RATE_LIMITED, "slow down", status=429
+        )
+
+        result = _run()
+
+        assert result.exit_code == 1
+        assert "rate limiting" in result.output
+        assert "dev@example.com (cached)" in result.output
+        assert "this is not a logout" in result.output
+        assert "Not logged in" not in result.output
+        assert credentials.get(PROD)["token"] == "tok-123"
+
+    def test_reports_the_retry_after(self, api):
+        credentials.save(PROD, token="tok-123", identity="dev@example.com")
+        api.whoami_error = error(
+            marketplace_api.CODE_RATE_LIMITED,
+            "slow down",
+            status=429,
+            retry_after="60",
+        )
+
+        result = _run()
+
+        assert "Wait 60 seconds" in result.output
+
+    def test_the_next_run_still_has_the_credential(self, api):
+        credentials.save(PROD, token="tok-123", identity="dev@example.com")
+        api.whoami_error = error(
+            marketplace_api.CODE_RATE_LIMITED, "slow down", status=429
+        )
+
+        _run()
+        second = _run()
+
+        assert "Not logged in" not in second.output

@@ -1,16 +1,19 @@
-"""Adversarial tests for spl:publish — publishing the local UVL to UVLHub.
+"""Adversarial tests for spl:publish — publishing the local UVL model.
 
-The network is mocked at the boundary (the ``requests`` module inside
-``spl_publish``), so no real HTTP ever happens. The invariant under test:
+The command relays through the SPLENT marketplace, which holds the one UVLHub
+key. It used to talk to UVLHub itself with the DEVELOPER's key and, when that
+key was missing, printed instructions for generating one at
+{UVLHUB_URL}/developer/api-keys — the exact credential the marketplace exists
+so that nobody has to hold. The relay endpoint was live the whole time and had
+no client, so the loop the two halves were built to close was never closed.
 
-    metadata.toml must NEVER end up pointing at content that differs from
-    the local UVL, and must stay byte-identical on every failure path.
+The invariants under test:
 
-Covers: missing API key (clean error + hint, zero network), server-side 400
-on upload (server message surfaced, metadata intact), publish failing midway
-(metadata intact), divergent verification (exit 1, metadata intact), the
-happy paths for a new DOI and for a new version of an existing DOI, and
---dry-run touching neither network nor disk.
+    * no request ever reaches UVLHub, and nothing here ever asks for or
+      mentions a UVLHub key;
+    * the stored marketplace token is the credential that is used;
+    * metadata.toml stays byte-identical on every failure path, and only ever
+      records what the MARKETPLACE reported.
 """
 
 import json
@@ -19,14 +22,14 @@ import pytest
 import requests as real_requests
 
 import splent_cli.commands.spl.spl_publish as mod
+import splent_cli.services.marketplace_api as api_mod
 from splent_cli.commands.spl.spl_publish import spl_publish
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+from splent_cli.services import credentials
+from splent_cli.services.marketplace_url import REGISTRY_URL_ENV
 
 SPL = "sample_spl"
+REGISTRY = "http://localhost:5818"
+DOI = "10.5281/zenodo.4242"
 
 METADATA_TEMPLATE = """\
 # hand-written comment that must survive metadata edits
@@ -42,7 +45,7 @@ file = "sample_spl.uvl"
 
 UVL_TEXT = (
     "features\n"
-    "\tSamplePlatform\n"
+    "\tsample_spl\n"
     "\t\tmandatory\n"
     "\t\t\tauth {org 'splent-io', package 'splent_feature_auth'}\n"
 )
@@ -64,16 +67,16 @@ def _all_output(result) -> str:
 
 
 class FakeResponse:
-    def __init__(self, status_code=200, json_data=None, content=b"", text=None):
+    def __init__(self, status_code=200, json_data=None, text=None, headers=None):
         self.status_code = status_code
         self._json = json_data
-        self.content = content
+        self.headers = headers or {}
         if text is not None:
             self.text = text
         elif json_data is not None:
             self.text = json.dumps(json_data)
         else:
-            self.text = content.decode("utf-8", errors="replace")
+            self.text = ""
 
     def json(self):
         if self._json is None:
@@ -82,14 +85,15 @@ class FakeResponse:
 
 
 class FakeNet:
-    """Stands in for the ``requests`` module inside spl_publish.
+    """Stands in for the ``requests`` module inside the marketplace client.
 
-    Routes are (method, url-substring) → FakeResponse | Exception. Any
-    request that matches no route is an unexpected network access and fails
-    the test loudly.
+    Any request that matches no route is an unexpected network access and
+    fails the test loudly, which is also how "did anything reach UVLHub" is
+    answered: nothing routes there, so anything that tried would blow up here.
     """
 
     RequestException = real_requests.RequestException
+    Timeout = real_requests.Timeout
 
     def __init__(self):
         self.calls = []  # (method, url, kwargs)
@@ -98,7 +102,7 @@ class FakeNet:
     def route(self, method, substring, response):
         self.routes.append((method, substring, response))
 
-    def _dispatch(self, method, url, **kwargs):
+    def request(self, method, url, **kwargs):
         self.calls.append((method, url, kwargs))
         for m, sub, resp in self.routes:
             if m == method and sub in url:
@@ -107,25 +111,103 @@ class FakeNet:
                 return resp
         raise AssertionError(f"Unexpected network access: {method} {url}")
 
-    def post(self, url, **kwargs):
-        return self._dispatch("POST", url, **kwargs)
-
-    def get(self, url, **kwargs):
-        return self._dispatch("GET", url, **kwargs)
-
 
 @pytest.fixture(autouse=True)
-def _clean_uvlhub_env(monkeypatch):
-    """Never leak a real key/URL from the developer's environment."""
+def _clean_env(tmp_path, monkeypatch):
+    """No real key, no real registry, no real credential store."""
     monkeypatch.delenv("UVLHUB_API_KEY", raising=False)
     monkeypatch.delenv("UVLHUB_URL", raising=False)
+    monkeypatch.delenv(credentials.TOKEN_ENV, raising=False)
+    monkeypatch.setenv(REGISTRY_URL_ENV, REGISTRY)
+    monkeypatch.setenv(
+        credentials.CREDENTIALS_ENV, str(tmp_path / ".splent" / "credentials.json")
+    )
 
 
 @pytest.fixture
 def net(monkeypatch):
     fake = FakeNet()
-    monkeypatch.setattr(mod, "requests", fake)
+    monkeypatch.setattr(api_mod, "requests", fake)
     return fake
+
+
+@pytest.fixture
+def logged_in():
+    credentials.save(REGISTRY, token="splent_testtoken", identity="dev@example.com")
+
+
+def _release_body(doi=DOI, **extra):
+    body = {
+        "name": SPL,
+        "version": 1,
+        "doi": doi,
+        "uvl": {"mirror": "uvlhub.io", "doi": doi, "file": f"{SPL}.uvl"},
+        "state": "published",
+        "verification": "match",
+        "idempotent": False,
+    }
+    body.update(extra)
+    return body
+
+
+def _release_response(doi=DOI, **extra):
+    return FakeResponse(201, _release_body(doi, **extra))
+
+
+# ===========================================================================
+# The model: no UVLHub key, ever
+# ===========================================================================
+
+
+class TestTheModel:
+    def test_no_uvlhub_key_is_needed_or_mentioned(
+        self, workspace, runner, net, logged_in
+    ):
+        """The whole point of the relay, in one assertion.
+
+        A developer following the old guidance obtained a personal UVLHub key
+        and published directly, which is the exact flow the marketplace was
+        built to replace. They are not told UVLHub exists, so the word does not
+        appear: not in a prompt, not in a hint, not in the wording of the
+        verification result.
+        """
+        _make_spl(workspace)
+        net.route("POST", f"/api/v1/spls/{SPL}/releases", _release_response())
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 0, _all_output(result)
+        # The temporary directory pytest built is named after this test, so the
+        # paths the command echoes carry the word by accident. Only what the
+        # command actually wrote is under test.
+        out = "\n".join(
+            line
+            for line in _all_output(result).splitlines()
+            if str(workspace) not in line
+        )
+        assert "UVLHUB_API_KEY" not in out
+        assert "developer/api-keys" not in out
+        assert "uvlhub" not in out.lower()
+
+    def test_the_help_text_names_login_and_not_uvlhub(self):
+        assert "UVLHUB_API_KEY" not in (spl_publish.__doc__ or "")
+        assert "splent login" in (spl_publish.__doc__ or "")
+
+    def test_the_only_request_is_to_the_marketplace_release_endpoint(
+        self, workspace, runner, net, logged_in
+    ):
+        _make_spl(workspace)
+        net.route("POST", f"/api/v1/spls/{SPL}/releases", _release_response())
+
+        runner.invoke(spl_publish, [SPL])
+
+        assert len(net.calls) == 1
+        method, url, kwargs = net.calls[0]
+        assert method == "POST"
+        assert url == f"{REGISTRY}/api/v1/spls/{SPL}/releases"
+        assert kwargs["headers"]["Authorization"] == "Bearer splent_testtoken"
+        assert kwargs["files"]["file"][0] == f"{SPL}.uvl"
+        assert kwargs["files"]["file"][1] == UVL_TEXT.encode("utf-8")
 
 
 # ===========================================================================
@@ -134,11 +216,9 @@ def net(monkeypatch):
 
 
 class TestPreconditions:
-    def test_missing_api_key_clean_error_with_hint_no_network(
+    def test_not_logged_in_is_a_clean_error_with_no_network(
         self, workspace, runner, net
     ):
-        """Without UVLHUB_API_KEY: exit 1, a hint pointing at
-        /developer/api-keys, zero network calls, metadata untouched."""
         spl_dir = _make_spl(workspace)
         before = (spl_dir / "metadata.toml").read_bytes()
 
@@ -146,23 +226,14 @@ class TestPreconditions:
 
         assert result.exit_code == 1
         out = _all_output(result)
-        assert "UVLHUB_API_KEY" in out
-        assert "/developer/api-keys" in out
+        assert "splent login" in out
         assert "Traceback" not in out
         assert net.calls == []
         assert (spl_dir / "metadata.toml").read_bytes() == before
 
-    def test_missing_metadata_clean_error(self, workspace, runner, net):
-        """No splent_catalog/<spl>/metadata.toml → clean error, no network."""
-        result = runner.invoke(spl_publish, [SPL])
-
-        assert result.exit_code == 1
-        assert "Metadata not found" in _all_output(result)
-        assert net.calls == []
-
-    def test_missing_local_uvl_actionable_error(self, workspace, runner, net):
-        """metadata.toml exists but the local .uvl does not → the error names
-        the missing path and suggests spl:fetch; no network access."""
+    def test_missing_local_uvl_names_every_place_it_looked(
+        self, workspace, runner, net, logged_in
+    ):
         spl_dir = _make_spl(workspace)
         (spl_dir / f"{SPL}.uvl").unlink()
 
@@ -170,9 +241,24 @@ class TestPreconditions:
 
         assert result.exit_code == 1
         out = _all_output(result)
-        assert f"{SPL}.uvl" in out
+        assert "splent_catalog" in out
+        assert ".splent_cache" in out
         assert "spl:fetch" in out
         assert net.calls == []
+
+    def test_a_model_in_the_cache_is_published_without_a_catalog_entry(
+        self, workspace, runner, net, logged_in
+    ):
+        """splent_catalog is going away, so it cannot be a requirement."""
+        cached = workspace / ".splent_cache" / "spls" / SPL
+        cached.mkdir(parents=True)
+        (cached / f"{SPL}.uvl").write_text(UVL_TEXT, encoding="utf-8")
+        net.route("POST", f"/api/v1/spls/{SPL}/releases", _release_response())
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 0, _all_output(result)
+        assert len(net.calls) == 1
 
 
 # ===========================================================================
@@ -181,403 +267,282 @@ class TestPreconditions:
 
 
 class TestServerFailures:
-    def test_upload_400_shows_server_message_metadata_intact(
-        self, workspace, runner, net, monkeypatch
+    def test_a_rejected_model_shows_the_marketplace_message(
+        self, workspace, runner, net, logged_in
     ):
-        """An invalid UVL rejected by the server (400): the server's own
-        message is visible to the user and metadata is untouched."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="")
+        spl_dir = _make_spl(workspace)
         before = (spl_dir / "metadata.toml").read_bytes()
-
         net.route(
             "POST",
-            "/api/v1/datasets/upload",
-            FakeResponse(400, {"error": "UVL file does not parse: line 3"}),
-        )
-
-        result = runner.invoke(spl_publish, [SPL])
-
-        assert result.exit_code == 1
-        out = _all_output(result)
-        assert "UVL file does not parse: line 3" in out
-        assert "Traceback" not in out
-        assert (spl_dir / "metadata.toml").read_bytes() == before
-        # It stopped at the upload — publish was never attempted.
-        assert len(net.calls) == 1
-
-    def test_publish_fails_midway_metadata_intact(
-        self, workspace, runner, net, monkeypatch
-    ):
-        """Upload succeeds but publish blows up (500): the error is surfaced
-        and metadata is untouched — no half-published state recorded."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="")
-        before = (spl_dir / "metadata.toml").read_bytes()
-
-        net.route(
-            "POST", "/api/v1/datasets/upload", FakeResponse(200, {"dataset_id": 7})
-        )
-        net.route(
-            "POST",
-            "/api/v1/datasets/7/publish",
-            FakeResponse(500, {"error": "Zenodo deposition failed"}),
-        )
-
-        result = runner.invoke(spl_publish, [SPL])
-
-        assert result.exit_code == 1
-        out = _all_output(result)
-        assert "Zenodo deposition failed" in out
-        assert "Traceback" not in out
-        assert (spl_dir / "metadata.toml").read_bytes() == before
-
-    def test_network_error_during_upload_clean_message(
-        self, workspace, runner, net, monkeypatch
-    ):
-        """A connection failure is reported cleanly, not as a traceback."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="")
-        before = (spl_dir / "metadata.toml").read_bytes()
-
-        net.route(
-            "POST",
-            "/api/v1/datasets/upload",
-            real_requests.ConnectionError("connection refused"),
-        )
-
-        result = runner.invoke(spl_publish, [SPL])
-
-        assert result.exit_code == 1
-        out = _all_output(result)
-        assert "Could not reach UVLHub" in out
-        assert "Traceback" not in out
-        assert (spl_dir / "metadata.toml").read_bytes() == before
-
-
-# ===========================================================================
-# Verification — never point metadata at content that differs from local
-# ===========================================================================
-
-
-class TestVerification:
-    def test_divergent_content_exits_1_metadata_intact(
-        self, workspace, runner, net, monkeypatch
-    ):
-        """Publish succeeds but the raw file on UVLHub differs from the local
-        UVL byte-for-byte → red error, exit 1, metadata untouched."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="")
-        before = (spl_dir / "metadata.toml").read_bytes()
-
-        net.route(
-            "POST", "/api/v1/datasets/upload", FakeResponse(200, {"dataset_id": 7})
-        )
-        net.route(
-            "POST",
-            "/api/v1/datasets/7/publish",
+            "/releases",
             FakeResponse(
-                200,
+                400,
+                {"error": "The model does not parse. line 3", "code": "invalid_uvl"},
+            ),
+        )
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 1
+        assert "does not parse" in _all_output(result)
+        assert (spl_dir / "metadata.toml").read_bytes() == before
+
+    def test_a_quota_refusal_is_reported_as_throttling_not_as_a_bad_token(
+        self, workspace, runner, net, logged_in
+    ):
+        _make_spl(workspace)
+        net.route(
+            "POST",
+            "/releases",
+            FakeResponse(
+                429,
+                {"error": "Try later.", "code": "quota_exceeded"},
+                headers={"Retry-After": "3600"},
+            ),
+        )
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 1
+        assert "rate limiting" in _all_output(result)
+        # A 429 says nothing about the token, so the credential survives.
+        assert credentials.get(REGISTRY) is not None
+
+    def test_a_dead_token_is_dropped_from_the_store(
+        self, workspace, runner, net, logged_in
+    ):
+        """The marketplace answers 403 for a revoked token, not 401."""
+        _make_spl(workspace)
+        net.route(
+            "POST",
+            "/releases",
+            FakeResponse(
+                403,
+                {"error": "This API token has been revoked", "code": "token_revoked"},
+            ),
+        )
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 1
+        out = _all_output(result)
+        assert "revoked" in out
+        assert "missing scope" not in out
+        assert credentials.get(REGISTRY) is None
+
+    def test_an_undetermined_release_is_never_presented_as_retryable(
+        self, workspace, runner, net, logged_in
+    ):
+        spl_dir = _make_spl(workspace)
+        before = (spl_dir / "metadata.toml").read_bytes()
+        net.route(
+            "POST",
+            "/releases",
+            FakeResponse(
+                502,
                 {
-                    "doi": "10.5281/zenodo.99",
-                    "deposition_id": 99,
-                    "files": [{"name": "sample_spl.uvl", "raw_url": "x"}],
+                    "error": "The publication was sent but UVLHub did not report back",
+                    "code": "release_undetermined",
                 },
             ),
         )
-        net.route(
-            "GET",
-            "/files/raw/",
-            FakeResponse(200, content=b"features\n\tSomethingElse\n"),
-        )
 
         result = runner.invoke(spl_publish, [SPL])
 
         assert result.exit_code == 1
-        out = _all_output(result)
-        assert "differs" in out
-        assert "NOT modified" in out
         assert (spl_dir / "metadata.toml").read_bytes() == before
-        # No stray backup left behind either.
-        assert not (spl_dir / "metadata.toml.bak").exists()
 
-    def test_verification_http_error_exits_1_metadata_intact(
-        self, workspace, runner, net, monkeypatch
+    def test_an_unreachable_marketplace_leaves_metadata_alone(
+        self, workspace, runner, net, logged_in
     ):
-        """The raw URL 404s after publishing → exit 1, metadata untouched."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="")
+        spl_dir = _make_spl(workspace)
         before = (spl_dir / "metadata.toml").read_bytes()
-
         net.route(
-            "POST", "/api/v1/datasets/upload", FakeResponse(200, {"dataset_id": 7})
+            "POST", "/releases", real_requests.ConnectionError("Connection refused")
         )
-        net.route(
-            "POST",
-            "/api/v1/datasets/7/publish",
-            FakeResponse(
-                200,
-                {
-                    "doi": "10.5281/zenodo.99",
-                    "files": [{"name": "sample_spl.uvl", "raw_url": "x"}],
-                },
-            ),
-        )
-        net.route("GET", "/files/raw/", FakeResponse(404, text="Not Found"))
 
         result = runner.invoke(spl_publish, [SPL])
 
         assert result.exit_code == 1
-        assert "404" in _all_output(result)
+        assert "Could not reach the marketplace" in _all_output(result)
+        assert (spl_dir / "metadata.toml").read_bytes() == before
+
+    def test_an_accepted_release_with_no_doi_is_refused(
+        self, workspace, runner, net, logged_in
+    ):
+        spl_dir = _make_spl(workspace, doi="10.5281/zenodo.OLD")
+        before = (spl_dir / "metadata.toml").read_bytes()
+        net.route("POST", "/releases", FakeResponse(201, {"name": SPL, "version": 1}))
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 1
         assert (spl_dir / "metadata.toml").read_bytes() == before
 
 
 # ===========================================================================
-# Happy paths
+# Happy paths — only what the marketplace reported is written down
 # ===========================================================================
 
 
 class TestHappyPaths:
-    def test_new_doi_uploads_publishes_verifies_and_writes_metadata(
-        self, workspace, runner, net, monkeypatch
+    def test_the_reported_doi_is_written_into_metadata(
+        self, workspace, runner, net, logged_in
     ):
-        """Empty doi → upload + publish; metadata gets the minted DOI and the
-        REAL remote filename (renamed by the server), preserving the rest of
-        the file (comments, description, mirror)."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="")
-        local_bytes = (spl_dir / f"{SPL}.uvl").read_bytes()
-
-        net.route(
-            "POST", "/api/v1/datasets/upload", FakeResponse(200, {"dataset_id": 7})
-        )
-        net.route(
-            "POST",
-            "/api/v1/datasets/7/publish",
-            FakeResponse(
-                200,
-                {
-                    "doi": "10.5281/zenodo.99",
-                    "deposition_id": 99,
-                    # Server renamed the file (secure_filename / collision).
-                    "files": [{"name": "sample_spl_1.uvl", "raw_url": "x"}],
-                },
-            ),
-        )
-        net.route("GET", "/files/raw/", FakeResponse(200, content=local_bytes))
+        spl_dir = _make_spl(workspace)
+        net.route("POST", "/releases", _release_response())
 
         result = runner.invoke(spl_publish, [SPL])
 
         assert result.exit_code == 0, _all_output(result)
-        assert "10.5281/zenodo.99" in result.output
+        written = (spl_dir / "metadata.toml").read_text(encoding="utf-8")
+        assert f'doi = "{DOI}"' in written
+        # The hand-written comment survives a metadata edit.
+        assert "hand-written comment" in written
 
-        # Upload request: API key header + title/description + uvl_file part.
-        method, url, kwargs = net.calls[0]
-        assert (method, "/api/v1/datasets/upload" in url) == ("POST", True)
-        assert kwargs["headers"]["X-API-Key"] == "test-key"
-        assert kwargs["data"]["title"] == "sample_spl"
-        assert kwargs["data"]["description"] == "A sample SPL used in tests"
-        assert "uvl_file" in kwargs["files"]
-
-        # Verification hit the resolved raw URL with the RENAMED file.
-        get_calls = [c for c in net.calls if c[0] == "GET"]
-        assert len(get_calls) == 1
-        assert "10.5281/zenodo.99" in get_calls[0][1]
-        assert "sample_spl_1.uvl" in get_calls[0][1]
-
-        # metadata.toml: doi + real remote filename written, rest preserved.
-        text = (spl_dir / "metadata.toml").read_text()
-        assert 'doi = "10.5281/zenodo.99"' in text
-        assert 'file = "sample_spl_1.uvl"' in text
-        assert "# hand-written comment that must survive metadata edits" in text
-        assert 'description = "A sample SPL used in tests"' in text
-        assert 'mirror = "uvlhub.io"' in text
-        assert not (spl_dir / "metadata.toml.bak").exists()
-        # The local UVL itself is never touched.
-        assert (spl_dir / f"{SPL}.uvl").read_bytes() == local_bytes
-
-    def test_existing_doi_publishes_new_version_and_updates_doi(
-        self, workspace, runner, net, monkeypatch
+    def test_the_file_name_written_down_is_the_one_the_server_reported(
+        self, workspace, runner, net, logged_in
     ):
-        """Existing doi → DOI lookup + new-version (no upload/publish); the
-        new DOI replaces the old one in metadata.toml."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="10.5281/zenodo.10")
-        local_bytes = (spl_dir / f"{SPL}.uvl").read_bytes()
+        """UVLHub may rename an upload, and the marketplace reports the truth."""
+        spl_dir = _make_spl(workspace)
+        body = _release_body()
+        body["uvl"]["file"] = "sample_spl_1.uvl"
+        net.route("POST", "/releases", FakeResponse(201, body))
 
-        net.route(
-            "GET",
-            "/api/v1/datasets/doi/10.5281/zenodo.10",
-            FakeResponse(
-                200,
-                {
-                    "dataset_id": 5,
-                    "doi": "10.5281/zenodo.10",
-                    "title": "sample_spl",
-                    "files": [{"name": "sample_spl.uvl"}],
-                },
-            ),
+        runner.invoke(spl_publish, [SPL])
+
+        assert 'file = "sample_spl_1.uvl"' in (spl_dir / "metadata.toml").read_text(
+            encoding="utf-8"
         )
-        net.route(
-            "POST",
-            "/api/v1/datasets/5/new-version",
-            FakeResponse(
-                200,
-                {
-                    "doi": "10.5281/zenodo.11",
-                    "version": 2,
-                    "files": [{"name": "sample_spl.uvl", "raw_url": "x"}],
-                },
-            ),
-        )
-        net.route("GET", "/files/raw/", FakeResponse(200, content=local_bytes))
+
+    def test_an_idempotent_answer_says_nothing_was_sent_on(
+        self, workspace, runner, net, logged_in
+    ):
+        _make_spl(workspace)
+        net.route("POST", "/releases", _release_response(idempotent=True))
 
         result = runner.invoke(spl_publish, [SPL])
 
         assert result.exit_code == 0, _all_output(result)
-        assert "10.5281/zenodo.11" in result.output
+        assert "already published" in _all_output(result)
 
-        # The new-dataset endpoints were never touched.
-        urls = [url for _, url, _ in net.calls]
-        assert not any("/datasets/upload" in u for u in urls)
-        assert not any("/publish" in u for u in urls)
+    def test_a_mismatch_reported_by_the_marketplace_is_shown(
+        self, workspace, runner, net, logged_in
+    ):
+        _make_spl(workspace)
+        net.route("POST", "/releases", _release_response(verification="mismatch"))
 
-        # Verification used the NEW doi.
-        raw_calls = [u for u in urls if "/files/raw/" in u]
-        assert len(raw_calls) == 1
-        assert "10.5281/zenodo.11" in raw_calls[0]
+        result = runner.invoke(spl_publish, [SPL])
 
-        text = (spl_dir / "metadata.toml").read_text()
-        assert 'doi = "10.5281/zenodo.11"' in text
-        assert "10.5281/zenodo.10" not in text
-        assert 'file = "sample_spl.uvl"' in text
+        assert result.exit_code == 0, _all_output(result)
+        assert "DOES NOT match" in _all_output(result)
+
+    def test_the_local_description_travels_with_the_model(
+        self, workspace, runner, net, logged_in
+    ):
+        _make_spl(workspace)
+        net.route("POST", "/releases", _release_response())
+
+        runner.invoke(spl_publish, [SPL])
+
+        _method, _url, kwargs = net.calls[0]
+        assert kwargs["data"] == {"description": "A sample SPL used in tests"}
 
 
 # ===========================================================================
-# Custom UVLHUB_URL — verification must target the configured instance
-# ===========================================================================
-
-
-class TestCustomUvlhubUrl:
-    def test_verification_get_starts_exactly_with_configured_base(
-        self, workspace, runner, net, monkeypatch
-    ):
-        """With UVLHUB_URL pointing at another instance (and no raw_url in
-        the response), the verification GET is anchored on EXACTLY that base
-        — never on production uvlhub.io. Otherwise a publish to a custom
-        instance verifies against production, 404s, and every retry mints a
-        duplicate dataset."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        monkeypatch.setenv("UVLHUB_URL", "https://staging.example")
-        spl_dir = _make_spl(workspace, doi="")
-        local_bytes = (spl_dir / f"{SPL}.uvl").read_bytes()
-
-        net.route(
-            "POST", "/api/v1/datasets/upload", FakeResponse(200, {"dataset_id": 7})
-        )
-        net.route(
-            "POST",
-            "/api/v1/datasets/7/publish",
-            FakeResponse(
-                200,
-                {
-                    "doi": "10.5281/zenodo.99",
-                    # No raw_url — the constructed fallback URL is exercised.
-                    "files": [{"name": "sample_spl.uvl"}],
-                },
-            ),
-        )
-        net.route("GET", "/files/raw/", FakeResponse(200, content=local_bytes))
-
-        result = runner.invoke(spl_publish, [SPL])
-
-        assert result.exit_code == 0, _all_output(result)
-        get_calls = [c for c in net.calls if c[0] == "GET"]
-        assert len(get_calls) == 1
-        # Full-prefix assertion — not a substring check.
-        assert get_calls[0][1].startswith(
-            "https://staging.example/doi/10.5281/zenodo.99/files/raw/"
-        )
-        assert "uvlhub.io" not in get_calls[0][1]
-        # Every request (upload, publish, verify) hit the SAME instance.
-        for _, url, _ in net.calls:
-            assert url.startswith("https://staging.example/")
-        # And the publish completed: metadata records the minted DOI.
-        text = (spl_dir / "metadata.toml").read_text()
-        assert 'doi = "10.5281/zenodo.99"' in text
-
-    def test_server_reported_raw_url_is_preferred_for_verification(
-        self, workspace, runner, net, monkeypatch
-    ):
-        """When the publish response carries an absolute raw_url (built by
-        the server with the host that actually served the publish), the
-        verification GET uses it verbatim — no constructed URL."""
-        monkeypatch.setenv("UVLHUB_API_KEY", "test-key")
-        spl_dir = _make_spl(workspace, doi="")
-        local_bytes = (spl_dir / f"{SPL}.uvl").read_bytes()
-
-        raw_url = "https://mirror.example/dataset/42/download/sample_spl.uvl"
-        net.route(
-            "POST", "/api/v1/datasets/upload", FakeResponse(200, {"dataset_id": 7})
-        )
-        net.route(
-            "POST",
-            "/api/v1/datasets/7/publish",
-            FakeResponse(
-                200,
-                {
-                    "doi": "10.5281/zenodo.99",
-                    "files": [{"name": "sample_spl.uvl", "raw_url": raw_url}],
-                },
-            ),
-        )
-        net.route("GET", raw_url, FakeResponse(200, content=local_bytes))
-
-        result = runner.invoke(spl_publish, [SPL])
-
-        assert result.exit_code == 0, _all_output(result)
-        get_calls = [c for c in net.calls if c[0] == "GET"]
-        assert len(get_calls) == 1
-        assert get_calls[0][1] == raw_url
-
-        text = (spl_dir / "metadata.toml").read_text()
-        assert 'doi = "10.5281/zenodo.99"' in text
-        assert 'file = "sample_spl.uvl"' in text
-
-
-# ===========================================================================
-# --dry-run — reports the plan, touches nothing
+# --dry-run — no network, no disk
 # ===========================================================================
 
 
 class TestDryRun:
-    def test_dry_run_new_dataset_touches_nothing(self, workspace, runner, net):
-        """--dry-run with an empty doi: reports the upload+publish plan,
-        performs zero network calls, writes nothing, needs no API key."""
-        spl_dir = _make_spl(workspace, doi="")
-        before_meta = (spl_dir / "metadata.toml").read_bytes()
-        before_uvl = (spl_dir / f"{SPL}.uvl").read_bytes()
-
-        result = runner.invoke(spl_publish, [SPL, "--dry-run"])
-
-        assert result.exit_code == 0, _all_output(result)
-        assert "dry run" in result.output.lower()
-        assert "/api/v1/datasets/upload" in result.output
-        assert net.calls == []
-        assert (spl_dir / "metadata.toml").read_bytes() == before_meta
-        assert (spl_dir / f"{SPL}.uvl").read_bytes() == before_uvl
-
-    def test_dry_run_existing_doi_reports_new_version_plan(
-        self, workspace, runner, net
+    def test_dry_run_touches_neither_network_nor_disk(
+        self, workspace, runner, net, logged_in
     ):
-        """--dry-run with an existing doi reports the new-version plan."""
-        spl_dir = _make_spl(workspace, doi="10.5281/zenodo.10")
-        before_meta = (spl_dir / "metadata.toml").read_bytes()
+        spl_dir = _make_spl(workspace)
+        before = (spl_dir / "metadata.toml").read_bytes()
 
         result = runner.invoke(spl_publish, [SPL, "--dry-run"])
 
         assert result.exit_code == 0, _all_output(result)
-        assert "10.5281/zenodo.10" in result.output
-        assert "new-version" in result.output
         assert net.calls == []
-        assert (spl_dir / "metadata.toml").read_bytes() == before_meta
+        assert (spl_dir / "metadata.toml").read_bytes() == before
+        assert "nothing was changed" in _all_output(result)
+
+    def test_dry_run_says_so_when_there_is_no_token(self, workspace, runner, net):
+        _make_spl(workspace)
+
+        result = runner.invoke(spl_publish, [SPL, "--dry-run"])
+
+        assert result.exit_code == 0, _all_output(result)
+        assert "Not logged in" in _all_output(result)
+        assert net.calls == []
+
+
+# ===========================================================================
+# metadata.toml editing — the helper, on its own
+# ===========================================================================
+
+
+class TestMetadataEditing:
+    def test_a_missing_uvl_section_is_added(self, tmp_path):
+        path = tmp_path / "metadata.toml"
+        path.write_text('[spl]\nname = "x"\n', encoding="utf-8")
+
+        mod._update_metadata_uvl(str(path), doi=DOI, file="x.uvl")
+
+        written = path.read_text(encoding="utf-8")
+        assert "[spl.uvl]" in written
+        assert f'doi = "{DOI}"' in written
+
+    def test_a_file_that_cannot_be_written_is_restored(self, tmp_path, monkeypatch):
+        path = tmp_path / "metadata.toml"
+        original = '[spl]\nname = "x"\n\n[spl.uvl]\ndoi = ""\nfile = ""\n'
+        path.write_text(original, encoding="utf-8")
+
+        calls = []
+
+        def once_then_restore(target, text):
+            calls.append(target)
+            if len(calls) == 1:
+                raise OSError("disk full")
+            path.write_text(text, encoding="utf-8")
+
+        monkeypatch.setattr(mod, "atomic_write", once_then_restore)
+        with pytest.raises(OSError):
+            mod._update_metadata_uvl(str(path), doi=DOI, file="x.uvl")
+
+        assert path.read_text(encoding="utf-8") == original
+
+
+class TestAPausedMarketplace:
+    def test_a_disabled_relay_is_not_reported_as_a_broken_server(
+        self, workspace, runner, net, logged_in
+    ):
+        """Publishing spends the one shared key, so it defaults to off.
+
+        A 503 with no more said reads as "the server fell over, retry in a
+        moment", which is the opposite of the truth: nothing is broken and
+        retrying changes nothing until somebody arms it.
+        """
+        _make_spl(workspace)
+        net.route(
+            "POST",
+            "/releases",
+            FakeResponse(
+                503,
+                {
+                    "error": "Publishing is paused on this marketplace right now.",
+                    "code": "publishing_disabled",
+                },
+            ),
+        )
+
+        result = runner.invoke(spl_publish, [SPL])
+
+        assert result.exit_code == 1
+        out = _all_output(result)
+        assert "not accepting publications" in out
+        assert "retrying will not help" in out
+        assert "retry in a moment" not in out
+        # Nothing about the token is wrong, so it stays.
+        assert credentials.get(REGISTRY) is not None

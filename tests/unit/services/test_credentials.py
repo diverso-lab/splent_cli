@@ -232,3 +232,34 @@ class TestDelete:
         store.write_text("{not json")
         assert credentials.delete(PROD) is True
         assert credentials.load_store()["registries"] == {}
+
+
+class TestTokenIsNeverRendered:
+    """ "Never logged" has to survive a careless print or a traceback."""
+
+    def test_the_token_is_kept_out_of_the_repr(self):
+        cred = credentials.Credential(
+            token="super-secret-token",
+            source="file",
+            source_label="/workspace/.splent/credentials.json",
+        )
+        assert "super-secret-token" not in repr(cred)
+        assert "super-secret-token" not in str(cred)
+
+    def test_the_provenance_is_still_visible(self):
+        """Hiding the secret must not hide the fields whoami explains itself with."""
+        cred = credentials.Credential(
+            token="t", source="environment", source_label="SPLENT_MARKETPLACE_TOKEN"
+        )
+        assert "environment" in repr(cred)
+        assert "SPLENT_MARKETPLACE_TOKEN" in repr(cred)
+
+    def test_the_token_is_still_readable_by_the_client(self):
+        cred = credentials.Credential(token="t", source="file", source_label="p")
+        assert cred.token == "t"
+
+    def test_a_resolved_credential_does_not_render_its_token(self, store):
+        credentials.save("https://marketplace.splent.io", token="super-secret-token")
+        cred = credentials.resolve("https://marketplace.splent.io")
+        assert "super-secret-token" not in repr(cred)
+        assert cred.token == "super-secret-token"

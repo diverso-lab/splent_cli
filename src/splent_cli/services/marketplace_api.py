@@ -56,6 +56,8 @@ CODE_FORBIDDEN = "forbidden"
 CODE_NOT_FOUND = "not_found"
 CODE_INVALID_REQUEST = "invalid_request"
 CODE_CONFLICT = "conflict"
+CODE_RATE_LIMITED = "rate_limited"
+CODE_PUBLISHING_DISABLED = "publishing_disabled"
 CODE_SERVER_ERROR = "server_error"
 CODE_BAD_RESPONSE = "bad_response"
 CODE_UNEXPECTED = "unexpected"
@@ -82,10 +84,26 @@ _SERVER_CODE_ALIASES = {
     "forbidden": CODE_FORBIDDEN,
     "insufficient_scope": CODE_FORBIDDEN,
     "not_found": CODE_NOT_FOUND,
+    "unknown_spl": CODE_NOT_FOUND,
     "conflict": CODE_CONFLICT,
     "already_exists": CODE_CONFLICT,
+    "release_in_flight": CODE_CONFLICT,
+    "release_undetermined": CODE_CONFLICT,
+    "rate_limited": CODE_RATE_LIMITED,
+    "ratelimit": CODE_RATE_LIMITED,
+    "rate_limit_exceeded": CODE_RATE_LIMITED,
+    "too_many_requests": CODE_RATE_LIMITED,
+    "throttled": CODE_RATE_LIMITED,
+    "quota_exceeded": CODE_RATE_LIMITED,
+    "invalid_request": CODE_INVALID_REQUEST,
+    "publishing_disabled": CODE_PUBLISHING_DISABLED,
 }
 
+# Fallbacks for a server that sends no ``code`` at all. They match ENGLISH
+# prose, so they are a last resort and never the primary path: the marketplace
+# negotiates Accept-Language on its API routes, which means the same refusal
+# arrives in Spanish for a Spanish client and every one of these stops matching.
+# The codes above are the contract; these only keep an older server usable.
 _INACTIVE_HINTS = (
     "inactive",
     "not active",
@@ -95,10 +113,17 @@ _INACTIVE_HINTS = (
     "activated by an admin",
 )
 
+_EXPIRED_HINTS = ("expired",)
+_REVOKED_HINTS = ("revoked",)
+_UNKNOWN_TOKEN_HINTS = ("invalid api token", "invalid token", "unknown token")
+
 #: Codes that mean "the credential you sent is dead". Commands delete the
 #: stored entry when they see one, so the next command says "not logged in"
 #: instead of repeating the same failure for ever. An inactive ACCOUNT is
 #: deliberately not in here: the token is fine, the account is not activated.
+#: Neither is CODE_RATE_LIMITED, and that one matters: a 429 says nothing at
+#: all about the token, so treating it as dead would throw away a perfectly
+#: good credential just because the developer ran a command too often.
 DEAD_TOKEN_CODES = frozenset(
     {CODE_UNAUTHENTICATED, CODE_TOKEN_EXPIRED, CODE_TOKEN_REVOKED}
 )
@@ -119,18 +144,35 @@ class MarketplaceError(Exception):
         code: str | None = None,
         *,
         reason: str | None = None,
+        retry_after: str | None = None,
+        server_message: str | None = None,
     ):
         super().__init__(message)
         self.message = message
         self.status = status
         self.code = code or CODE_UNEXPECTED
+        #: What the SERVER actually said, empty when this message was
+        #: synthesized here. Commands quote only this, so they never echo our
+        #: own wording back as if the marketplace had produced it.
+        self.server_message = (server_message or "").strip()
         #: Short cause ("Connection refused"), when there is one worth showing
         #: on its own line. Keeps commands from reprinting the whole message.
         self.reason = reason
+        #: The ``Retry-After`` header, verbatim, when the server sent one.
+        self.retry_after = retry_after
 
     @property
     def unreachable(self) -> bool:
         return self.code == CODE_UNREACHABLE
+
+    @property
+    def rate_limited(self) -> bool:
+        """The registry is throttling us, which is not a credential problem.
+
+        Mirrors ``RegistryError.rate_limited`` on the GitHub/PyPI boundary, so
+        both registries answer the same question the same way.
+        """
+        return self.code == CODE_RATE_LIMITED
 
     @property
     def dead_token(self) -> bool:
@@ -166,6 +208,23 @@ def _transport_reason(error: Exception) -> str:
     return text[:200]
 
 
+def _retry_after(response) -> str | None:
+    """The ``Retry-After`` header, when the server sent a usable one.
+
+    Tolerant of responses that carry no headers at all (test stand-ins, and
+    proxies that throttle without saying for how long), mirroring how the
+    GitHub/PyPI boundary reads its own rate-limit headers.
+    """
+    headers = getattr(response, "headers", None)
+    if not hasattr(headers, "get"):
+        return None
+    value = headers.get("Retry-After")
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _payload(response) -> object:
     """Parsed JSON body, or None when the body is empty or not JSON."""
     if response is None:
@@ -177,6 +236,11 @@ def _payload(response) -> object:
         return response.json()
     except Exception:  # noqa: BLE001 - any body that is not JSON
         return None
+
+
+def _looks_like_markup(text: str) -> bool:
+    """Whether a body is an HTML/XML document rather than a message."""
+    return text.lstrip().startswith("<")
 
 
 def _error_fields(payload: object, response) -> tuple[str, str | None]:
@@ -210,33 +274,53 @@ def _error_fields(payload: object, response) -> tuple[str, str | None]:
 
     if not message:
         text = (getattr(response, "text", "") or "").strip()
-        message = text[:300] if text else ""
+        # A markup body is an error PAGE, not an error message: a URL that is
+        # not a SPLENT API answers 404 with a whole HTML document, and pasting
+        # 300 characters of it at the developer buries the actionable advice
+        # under noise. A plain-text body is still worth showing.
+        message = "" if _looks_like_markup(text) else text[:300]
 
     return message, code
 
 
 def _classify(status: int, message: str, server_code: str | None) -> str:
-    """Map an HTTP failure onto one of the CODE_* constants."""
+    """Map an HTTP failure onto one of the CODE_* constants.
+
+    A dead credential is 403 here, not 401. The marketplace reserves 401 for a
+    request that carried no token at all and answers 403 for one that carried a
+    token it will not accept, whether that token was revoked, has expired or was
+    never issued. An earlier version read the expired/revoked wording only under
+    401, so against this server every one of those collapsed to
+    ``CODE_FORBIDDEN``: the credential was never dropped from the store and the
+    developer was told to ask for a missing scope on a token the server had
+    destroyed. The reason is read for both statuses now, and the status only
+    decides the fallback when nothing else identifies the failure.
+    """
     if server_code:
         mapped = _SERVER_CODE_ALIASES.get(server_code.strip().lower())
         if mapped:
             return mapped
 
     lowered = (message or "").lower()
-    if status in (401, 403) and any(h in lowered for h in _INACTIVE_HINTS):
-        return CODE_ACCOUNT_INACTIVE
-    if status == 401:
-        if "expired" in lowered:
+    if status in (401, 403):
+        if any(h in lowered for h in _INACTIVE_HINTS):
+            return CODE_ACCOUNT_INACTIVE
+        if any(h in lowered for h in _EXPIRED_HINTS):
             return CODE_TOKEN_EXPIRED
-        if "revoked" in lowered:
+        if any(h in lowered for h in _REVOKED_HINTS):
             return CODE_TOKEN_REVOKED
-        return CODE_UNAUTHENTICATED
-    if status == 403:
-        return CODE_FORBIDDEN
+        if any(h in lowered for h in _UNKNOWN_TOKEN_HINTS):
+            return CODE_UNAUTHENTICATED
+        # 401 means no usable credential was presented, so there is nothing to
+        # keep. 403 with no recognisable reason is a permission problem on a
+        # token that is otherwise fine, and throwing it away would be wrong.
+        return CODE_UNAUTHENTICATED if status == 401 else CODE_FORBIDDEN
     if status == 404:
         return CODE_NOT_FOUND
     if status == 409:
         return CODE_CONFLICT
+    if status == 429:
+        return CODE_RATE_LIMITED
     if status in (400, 422):
         return CODE_INVALID_REQUEST
     if status >= 500:
@@ -358,6 +442,7 @@ class MarketplaceClient:
         auth: bool = False,
         json_body: dict | None = None,
         files: dict | None = None,
+        data: dict | None = None,
         timeout: int | None = None,
         unauthenticated_code: str | None = None,
     ):
@@ -374,6 +459,7 @@ class MarketplaceClient:
                 headers=self._headers(auth=auth),
                 json=json_body,
                 files=files,
+                data=data,
                 timeout=timeout or self.timeout,
             )
         except requests.Timeout:
@@ -400,9 +486,16 @@ class MarketplaceClient:
         code = _classify(status, message, server_code)
         if code == CODE_UNAUTHENTICATED and unauthenticated_code:
             code = unauthenticated_code
+        server_message = message
         if not message:
             message = f"The marketplace answered HTTP {status}."
-        raise MarketplaceError(message, status=status, code=code)
+        raise MarketplaceError(
+            message,
+            status=status,
+            code=code,
+            retry_after=_retry_after(response),
+            server_message=server_message,
+        )
 
     def _expect_dict(self, payload, what: str) -> dict:
         if not isinstance(payload, dict):
@@ -512,11 +605,19 @@ class MarketplaceClient:
             )
         return body
 
-    def publish_spl(self, name: str, uvl_bytes: bytes, filename: str) -> dict:
+    def publish_spl(
+        self,
+        name: str,
+        uvl_bytes: bytes,
+        filename: str,
+        description: str = "",
+    ) -> dict:
         """Upload a new release of *name* with the given UVL model.
 
-        Authenticated multipart upload. The client capability exists now; the
-        ``spl:publish`` command is deliberately NOT wired to it yet.
+        Authenticated multipart upload, and the one call in this client that
+        spends anything: on the far side the marketplace relays it to UVLHub
+        with its own key and a DOI may be minted. ``splent spl:publish`` is its
+        only caller and there is meant to be exactly one.
         """
         files = {
             UVL_FIELD_NAME: (filename, uvl_bytes, "text/plain"),
@@ -526,6 +627,7 @@ class MarketplaceClient:
             f"/api/v1/spls/{name}/releases",
             auth=True,
             files=files,
+            data={"description": description} if description else None,
             timeout=UPLOAD_TIMEOUT,
         )
         if payload is None:

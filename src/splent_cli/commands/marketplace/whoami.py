@@ -20,6 +20,7 @@ from splent_cli.commands.marketplace.marketplace_auth_utils import (
     format_scopes,
     handle_error,
     resolve_target,
+    retry_hint,
 )
 from splent_cli.services import credentials, marketplace_api
 
@@ -75,9 +76,20 @@ def whoami(registry_option):
     try:
         identity = client.whoami()
     except marketplace_api.MarketplaceError as e:
-        if e.unreachable:
-            click.secho(f"  Marketplace unreachable at {target.url}", fg="yellow")
-            detail(e)
+        # Unreachable and rate limited are the same situation for this command:
+        # the stored credential is untouched, we simply could not ask. Falling
+        # through to the generic report would read like a logout.
+        if e.unreachable or e.rate_limited:
+            if e.rate_limited:
+                click.secho(
+                    f"  The marketplace at {target.url} is rate limiting this "
+                    "client.",
+                    fg="yellow",
+                )
+                click.echo(f"  {retry_hint(e.retry_after)}")
+            else:
+                click.secho(f"  Marketplace unreachable at {target.url}", fg="yellow")
+                detail(e)
             click.echo("  You are still logged in locally, this is not a logout.")
             click.echo()
             field("Registry", f"{target.url} ({target.origin_label})")
