@@ -46,17 +46,35 @@ def https_url(namespace: str, repo: str) -> tuple[str, str]:
     return display, display
 
 
+def namespace_spellings(namespace: str) -> list[str]:
+    """The namespace as written, then the hosting spelling of it.
+
+    A feature entry carries the PYTHON namespace (``splent_io``) while the
+    repository lives under the hosting org (``splent-io``), and the two are
+    the same thing: normalize_namespace() turns one into the other for cache
+    paths. A pinned entry therefore names an org that does not exist as
+    written, so the underscore spelling is tried first, as given, and the
+    hyphen spelling after it.
+    """
+    spellings = [namespace]
+    hyphenated = namespace.replace("_", "-")
+    if hyphenated != namespace:
+        spellings.append(hyphenated)
+    return spellings
+
+
 def candidate_urls(namespace: str, repo: str) -> list[tuple[str, str, str]]:
-    """Ordered clone candidates: SSH first, then HTTPS.
+    """Ordered clone candidates: SSH first, then HTTPS, per namespace spelling.
 
     Each item is (real_url, display_url, transport).
     """
-    ssh = ssh_url(namespace, repo)
-    https_real, https_display = https_url(namespace, repo)
-    return [
-        (ssh, ssh, "ssh"),
-        (https_real, https_display, "https"),
-    ]
+    candidates: list[tuple[str, str, str]] = []
+    for spelling in namespace_spellings(namespace):
+        ssh = ssh_url(spelling, repo)
+        https_real, https_display = https_url(spelling, repo)
+        candidates.append((ssh, ssh, "ssh"))
+        candidates.append((https_real, https_display, "https"))
+    return candidates
 
 
 # ---------------------------------------------------------------------------
