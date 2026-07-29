@@ -185,6 +185,96 @@ def parse_feature_entry(entry: str) -> tuple[str, str, str | None]:
     return normalize_namespace(ns_raw), name, version or None
 
 
+# Every list a feature entry may be declared in, in declaration order.
+FEATURE_LIST_KEYS = ("features", "features_dev", "features_prod")
+
+
+def read_feature_list(data: dict, key: str = "features") -> list[str]:
+    """Return a single feature list from a parsed pyproject dict (no env merge).
+
+    Unlike read_features_from_data(), this never merges the base list with an
+    env-specific one — callers that edit one list need to see it in isolation.
+    """
+    return _read_list(data, key)
+
+
+def entry_matches_feature(entry: str, name: str, namespace: str | None = None) -> bool:
+    """Return True when *entry* declares the feature (namespace, name).
+
+    The namespace spelling is normalized on both sides, so ``splent-io`` (the
+    GitHub org) and ``splent_io`` (the Python namespace) are the same namespace.
+    The pinned version is ignored, so ``x``, ``ns/x`` and ``ns/x@v1`` all match
+    the same feature.  Pass ``namespace=None`` to match on the name alone.
+    """
+    entry_ns, entry_name, _ = parse_feature_entry(entry)
+    if entry_name != name:
+        return False
+    if namespace is None:
+        return True
+    return entry_ns == normalize_namespace(namespace)
+
+
+def find_feature_entries(
+    data: dict,
+    name: str,
+    namespace: str | None = None,
+    keys: tuple[str, ...] = FEATURE_LIST_KEYS,
+) -> list[tuple[str, str]]:
+    """Return every declaration of a feature as ``(features_key, entry)`` pairs.
+
+    A feature is expected to be declared exactly once; more than one pair means
+    the product declares it twice (e.g. once per namespace spelling).
+    """
+    found: list[tuple[str, str]] = []
+    for key in keys:
+        for entry in _read_list(data, key):
+            if entry_matches_feature(entry, name, namespace):
+                found.append((key, entry))
+    return found
+
+
+def drop_feature_entries(
+    data: dict,
+    name: str,
+    namespace: str | None = None,
+    keys: tuple[str, ...] = FEATURE_LIST_KEYS,
+) -> list[tuple[str, str]]:
+    """Remove every declaration of a feature from *data* (modified in-place).
+
+    Returns the removed ``(features_key, entry)`` pairs so the caller can also
+    clean up whatever each declaration created (symlink, manifest entry).
+    """
+    removed: list[tuple[str, str]] = []
+    for key in keys:
+        entries = _read_list(data, key)
+        kept = [e for e in entries if not entry_matches_feature(e, name, namespace)]
+        if kept != entries:
+            removed.extend((key, e) for e in entries if e not in kept)
+            write_features_to_data(data, kept, key=key)
+    return removed
+
+
+def remove_feature_link(
+    product_path: str,
+    namespace: str,
+    name: str,
+    version: str | None = None,
+) -> bool:
+    """Remove the product symlink created for one feature declaration.
+
+    Returns True when a symlink was removed.  Real directories are left alone —
+    they are not ours to delete.
+    """
+    leaf = f"{name}@{version}" if version else name
+    link_path = os.path.join(
+        product_path, "features", normalize_namespace(namespace), leaf
+    )
+    if os.path.islink(link_path) or os.path.isfile(link_path):
+        os.unlink(link_path)
+        return True
+    return False
+
+
 def load_product_pyproject(product_dir: str) -> dict:
     """Load and return the parsed pyproject.toml dict for a product directory.
 

@@ -2,9 +2,18 @@ import os
 import tomli_w
 import click
 from splent_cli.services import context
-from splent_cli.utils.feature_utils import normalize_namespace, hot_reinstall
+from splent_cli.utils.feature_utils import (
+    drop_feature_entries,
+    find_feature_entries,
+    hot_reinstall,
+    normalize_namespace,
+    parse_feature_entry,
+    read_feature_list,
+    remove_feature_link,
+    write_features_to_data,
+)
 from splent_cli.utils.io_utils import load_toml, atomic_write
-from splent_cli.utils.manifest import feature_key, set_feature_state
+from splent_cli.utils.manifest import feature_key, remove_feature, set_feature_state
 
 
 @click.command(
@@ -85,24 +94,33 @@ def feature_add(full_name, env_scope):
 
     data = load_toml(pyproject_path, what="pyproject.toml")
 
-    from splent_cli.utils.feature_utils import (
-        read_features_from_data,
-        write_features_to_data,
-    )
-
     features_key = f"features_{env_scope}" if env_scope else "features"
-    features = (
-        read_features_from_data(data)
-        if not env_scope
-        else (data.get("tool", {}).get("splent", {}).get(features_key, []))
-    )
-
     short = feature_name.replace("splent_feature_", "")
 
-    if full_name in features:
+    product_path = os.path.join(workspace, product)
+
+    # Every previous declaration of this feature, wherever it lives and however
+    # its namespace is spelled (splent-io and splent_io are the same namespace).
+    declared = find_feature_entries(data, feature_name, namespace=org_safe)
+    stale = [pair for pair in declared if pair != (features_key, full_name)]
+
+    if declared and not stale:
         click.echo(f"  {short} already in {features_key}.")
         return
 
+    # Drop the stale declarations (other list, pinned version, other spelling of
+    # the namespace) together with what each one created, so the feature ends up
+    # declared exactly once and with a single symlink.
+    for stale_key, stale_entry in stale:
+        _, stale_name, stale_version = parse_feature_entry(stale_entry)
+        remove_feature_link(product_path, org_safe, stale_name, stale_version)
+        remove_feature(
+            product_path, product, feature_key(org_safe, stale_name, stale_version)
+        )
+        click.echo(click.style(f"  replacing {stale_entry} in {stale_key}", dim=True))
+
+    drop_feature_entries(data, feature_name, namespace=org_safe)
+    features = read_feature_list(data, features_key)
     features.append(full_name)
     write_features_to_data(data, features, key=features_key)
     atomic_write(pyproject_path, tomli_w.dumps(data))
@@ -123,7 +141,6 @@ def feature_add(full_name, env_scope):
         os.symlink(rel_target, link_path)
 
     # ── Update manifest ───────────────────────────────────────────────
-    product_path = os.path.join(workspace, product)
     key = feature_key(namespace, feature_name)
     set_feature_state(
         product_path,

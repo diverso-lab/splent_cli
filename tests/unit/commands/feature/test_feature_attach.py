@@ -1,5 +1,7 @@
 """Tests for the feature:attach command."""
 
+import tomllib
+
 import pytest
 from click.testing import CliRunner
 
@@ -121,3 +123,98 @@ class TestSymlinkReplacement:
         # Invoke again — should replace symlink without error
         result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
         assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Namespace spelling: splent-io (GitHub org) and splent_io (Python namespace)
+# are the same namespace, so attaching must never declare the feature twice.
+# ---------------------------------------------------------------------------
+
+
+class TestNamespaceSpelling:
+    def _setup_cache(self, workspace, name="theme", version="v0.2.1"):
+        cache_dir = (
+            workspace / ".splent_cache" / "features" / "splent_io" / f"{name}@{version}"
+        )
+        cache_dir.mkdir(parents=True)
+        return cache_dir
+
+    def _write_pyproject(self, workspace, features=None, dev=None, prod=None):
+        splent = {}
+        for key, value in (
+            ("features", features),
+            ("features_dev", dev),
+            ("features_prod", prod),
+        ):
+            if value is not None:
+                splent[key] = "[" + ", ".join(f'"{v}"' for v in value) + "]"
+        body = '[project]\nname = "test_app"\nversion = "1.0.0"\n[tool.splent]\n'
+        body += "".join(f"{k} = {v}\n" for k, v in splent.items())
+        path = workspace / "test_app" / "pyproject.toml"
+        path.write_text(body)
+        return path
+
+    def _lists(self, pyproject):
+        with open(pyproject, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("tool", {}).get("splent", {})
+
+    def test_dash_entry_is_replaced_not_duplicated(self, runner, product_workspace):
+        pyproject = self._write_pyproject(
+            product_workspace, features=["splent-io/theme"]
+        )
+        self._setup_cache(product_workspace)
+
+        result = runner.invoke(feature_attach, ["splent_io/theme", "v0.2.1"])
+        assert result.exit_code == 0
+
+        lists = self._lists(pyproject)
+        assert lists["features"] == ["splent_io/theme@v0.2.1"]
+
+    def test_replaces_entry_declared_in_another_list(self, runner, product_workspace):
+        pyproject = self._write_pyproject(
+            product_workspace, features=[], dev=["splent-io/theme@v0.1.0"]
+        )
+        self._setup_cache(product_workspace)
+
+        result = runner.invoke(feature_attach, ["splent_io/theme", "v0.2.1"])
+        assert result.exit_code == 0
+
+        lists = self._lists(pyproject)
+        assert lists["features"] == ["splent_io/theme@v0.2.1"]
+        assert lists["features_dev"] == []
+
+    def test_reports_the_replaced_entry(self, runner, product_workspace):
+        self._write_pyproject(product_workspace, features=["splent-io/theme"])
+        self._setup_cache(product_workspace)
+
+        result = runner.invoke(feature_attach, ["splent_io/theme", "v0.2.1"])
+        assert "replacing splent-io/theme" in result.output
+
+    def test_stale_symlink_is_cleaned_up(self, runner, product_workspace):
+        self._write_pyproject(product_workspace, features=["splent-io/theme"])
+        self._setup_cache(product_workspace)
+
+        link_dir = product_workspace / "test_app" / "features" / "splent_io"
+        link_dir.mkdir(parents=True)
+        target = product_workspace / "theme"
+        target.mkdir()
+        stale_link = link_dir / "theme"
+        stale_link.symlink_to(target)
+
+        runner.invoke(feature_attach, ["splent_io/theme", "v0.2.1"])
+
+        assert not stale_link.is_symlink()
+        assert (link_dir / "theme@v0.2.1").is_symlink()
+
+    def test_other_namespace_is_left_alone(self, runner, product_workspace):
+        pyproject = self._write_pyproject(
+            product_workspace, features=["drorganvidez/theme"]
+        )
+        self._setup_cache(product_workspace)
+
+        runner.invoke(feature_attach, ["splent_io/theme", "v0.2.1"])
+
+        lists = self._lists(pyproject)
+        assert "drorganvidez/theme" in lists["features"]
+        assert "splent_io/theme@v0.2.1" in lists["features"]

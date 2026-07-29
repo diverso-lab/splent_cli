@@ -3,8 +3,12 @@ import click
 import tomli_w
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import (
+    FEATURE_LIST_KEYS,
+    entry_matches_feature,
     hot_uninstall,
     parse_feature_entry,
+    read_feature_list,
+    remove_feature_link,
     write_features_to_data,
 )
 from splent_cli.utils.io_utils import load_toml, atomic_write
@@ -79,15 +83,20 @@ def feature_detach(feature_identifier, version, force):
     data = load_toml(pyproject_path, what="pyproject.toml")
 
     changed = False
-    for features_key in ("features", "features_dev", "features_prod"):
-        features = data.get("tool", {}).get("splent", {}).get(features_key, [])
+    for features_key in FEATURE_LIST_KEYS:
+        features = read_feature_list(data, features_key)
         if not features:
             continue
 
         updated = []
         for entry in features:
             _, name, entry_version = parse_feature_entry(entry)
-            if name == feature_name and entry_version == version:
+            # Namespace spelling is normalized on both sides, so an entry written
+            # as splent-io/… is detached by splent_io/… and vice versa.
+            if (
+                entry_matches_feature(entry, feature_name, namespace_fs)
+                and entry_version == version
+            ):
                 # Drop the @version pin → revert to editable entry.
                 ns_raw = entry.split("/", 1)[0] if "/" in entry else None
                 updated.append(f"{ns_raw}/{name}" if ns_raw else name)
@@ -104,11 +113,7 @@ def feature_detach(feature_identifier, version, force):
     click.echo(f"  {short}@{version} removed from pyproject.toml")
 
     # ── Remove symlink ────────────────────────────────────────────────
-    product_features_dir = os.path.join(product_path, "features", namespace_fs)
-    link_path = os.path.join(product_features_dir, f"{feature_name}@{version}")
-
-    if os.path.islink(link_path):
-        os.unlink(link_path)
+    remove_feature_link(product_path, namespace_fs, feature_name, version)
 
     # ── Update manifest ───────────────────────────────────────────────
     key = feature_key(namespace_fs, feature_name, version)

@@ -2,9 +2,17 @@ import os
 import tomli_w
 import click
 from splent_cli.services import context, compose
-from splent_cli.utils.feature_utils import hot_reinstall
+from splent_cli.utils.feature_utils import (
+    drop_feature_entries,
+    find_feature_entries,
+    hot_reinstall,
+    parse_feature_entry,
+    read_feature_list,
+    remove_feature_link,
+    write_features_to_data,
+)
 from splent_cli.utils.io_utils import load_toml, atomic_write
-from splent_cli.utils.manifest import feature_key, set_feature_state
+from splent_cli.utils.manifest import feature_key, remove_feature, set_feature_state
 
 
 @click.command(
@@ -84,29 +92,36 @@ def feature_attach(feature_identifier, version, env_scope):
 
     # ── Update pyproject.toml ─────────────────────────────────────────
     full_name = f"{namespace}/{feature_name}@{version}"
-    bare_name = f"{namespace}/{feature_name}"
 
     data = load_toml(pyproject_path, what="pyproject.toml")
 
-    from splent_cli.utils.feature_utils import (
-        read_features_from_data,
-        write_features_to_data,
-    )
-
     features_key = f"features_{env_scope}" if env_scope else "features"
-    features = (
-        read_features_from_data(data)
-        if not env_scope
-        else (data.get("tool", {}).get("splent", {}).get(features_key, []))
-    )
 
-    if full_name in features:
+    # Every previous declaration of this feature, wherever it lives and however
+    # its namespace is spelled (splent-io and splent_io are the same namespace).
+    declared = find_feature_entries(data, feature_name, namespace=namespace_fs)
+    stale = [pair for pair in declared if pair != (features_key, full_name)]
+
+    if declared and not stale:
         click.echo(f"  {short}@{version} already in {features_key}.")
     else:
-        # Replace bare entry or old versioned entry if present
-        features = [
-            f for f in features if f != bare_name and not f.startswith(f"{bare_name}@")
-        ]
+        # Drop the stale declarations (other list, other version, other spelling
+        # of the namespace) together with what each one created, so the feature
+        # ends up declared exactly once and with a single symlink.
+        for stale_key, stale_entry in stale:
+            _, stale_name, stale_version = parse_feature_entry(stale_entry)
+            remove_feature_link(product_path, namespace_fs, stale_name, stale_version)
+            remove_feature(
+                product_path,
+                product,
+                feature_key(namespace_fs, stale_name, stale_version),
+            )
+            click.echo(
+                click.style(f"  replacing {stale_entry} in {stale_key}", dim=True)
+            )
+
+        drop_feature_entries(data, feature_name, namespace=namespace_fs)
+        features = read_feature_list(data, features_key)
         features.append(full_name)
         write_features_to_data(data, features, key=features_key)
         atomic_write(pyproject_path, tomli_w.dumps(data))

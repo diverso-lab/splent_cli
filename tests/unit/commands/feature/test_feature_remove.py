@@ -124,3 +124,134 @@ class TestSuccessMessage:
         result = runner.invoke(feature_remove, ["my_feature"])
         assert result.exit_code == 0
         assert "done" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# Env-scoped lists: features_dev / features_prod
+# ---------------------------------------------------------------------------
+
+
+class TestEnvScopedLists:
+    def _write_pyproject(self, path, features=None, dev=None, prod=None):
+        splent = {}
+        if features is not None:
+            splent["features"] = features
+        if dev is not None:
+            splent["features_dev"] = dev
+        if prod is not None:
+            splent["features_prod"] = prod
+        data = {
+            "project": {"name": "test_app", "version": "1.0.0"},
+            "tool": {"splent": splent},
+        }
+        with open(path, "wb") as f:
+            tomli_w.dump(data, f)
+
+    def _lists(self, path):
+        with open(path, "rb") as f:
+            return tomllib.load(f)["tool"]["splent"]
+
+    def test_removes_dev_only_entry_without_flags(self, runner, product_workspace):
+        """A feature declared only in features_dev must be removable."""
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject, features=[], dev=["splent-io/splent_feature_admin"]
+        )
+
+        result = runner.invoke(
+            feature_remove, ["splent_feature_admin", "-n", "splent-io"]
+        )
+        assert result.exit_code == 0
+        assert "removed from features_dev" in result.output
+        assert self._lists(pyproject)["features_dev"] == []
+
+    def test_removes_prod_only_entry_without_flags(self, runner, product_workspace):
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject, features=[], prod=["splent-io/splent_feature_admin"]
+        )
+
+        result = runner.invoke(feature_remove, ["splent_feature_admin"])
+        assert result.exit_code == 0
+        assert "removed from features_prod" in result.output
+        assert self._lists(pyproject)["features_prod"] == []
+
+    def test_dev_flag_restricts_removal(self, runner, product_workspace):
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject,
+            features=["splent-io/splent_feature_admin"],
+            dev=["splent-io/splent_feature_admin"],
+        )
+
+        result = runner.invoke(feature_remove, ["splent_feature_admin", "--dev"])
+        assert result.exit_code == 0
+
+        lists = self._lists(pyproject)
+        assert lists["features_dev"] == []
+        assert lists["features"] == ["splent-io/splent_feature_admin"]
+
+    def test_still_declared_elsewhere_keeps_its_symlink(
+        self, runner, product_workspace
+    ):
+        """--dev must not tear down what the surviving declaration needs."""
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject,
+            features=["splent-io/splent_feature_admin"],
+            dev=["splent-io/splent_feature_admin"],
+        )
+
+        link_dir = product_workspace / "test_app" / "features" / "splent_io"
+        link_dir.mkdir(parents=True)
+        target = product_workspace / "splent_feature_admin"
+        target.mkdir()
+        link = link_dir / "splent_feature_admin"
+        link.symlink_to(target)
+
+        result = runner.invoke(feature_remove, ["splent_feature_admin", "--dev"])
+        assert result.exit_code == 0
+        assert link.is_symlink()
+
+    def test_dev_flag_reports_where_the_entry_actually_is(
+        self, runner, product_workspace
+    ):
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject, features=["splent-io/splent_feature_admin"], dev=[]
+        )
+
+        result = runner.invoke(feature_remove, ["splent_feature_admin", "--dev"])
+        assert result.exit_code == 0
+        assert "not in features_dev" in result.output
+        assert "features" in result.output
+        # Nothing was removed from the list it really lives in.
+        assert self._lists(pyproject)["features"] == ["splent-io/splent_feature_admin"]
+
+    def test_pinned_entry_is_removed(self, runner, product_workspace):
+        """The entry may be pinned; the version must not stop the removal."""
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject, features=[], dev=["splent_io/splent_feature_admin@v1.2.0"]
+        )
+
+        result = runner.invoke(feature_remove, ["splent_feature_admin"])
+        assert result.exit_code == 0
+        assert self._lists(pyproject)["features_dev"] == []
+
+    def test_removes_versioned_symlink_too(self, runner, product_workspace):
+        pyproject = product_workspace / "test_app" / "pyproject.toml"
+        self._write_pyproject(
+            pyproject, features=[], dev=["splent-io/splent_feature_admin@v1.2.0"]
+        )
+
+        link_dir = product_workspace / "test_app" / "features" / "splent_io"
+        link_dir.mkdir(parents=True)
+        target = product_workspace / "splent_feature_admin"
+        target.mkdir()
+        link = link_dir / "splent_feature_admin@v1.2.0"
+        link.symlink_to(target)
+
+        result = runner.invoke(feature_remove, ["splent_feature_admin"])
+        assert result.exit_code == 0
+        assert not link.is_symlink()
