@@ -10,6 +10,31 @@ from splent_cli.utils.io_utils import load_toml
 from splent_cli.commands.product.product_env import _is_port_var
 
 
+# ── User-tunable env vars ─────────────────────────────────────────────────────
+# A comment line starting with "user-tunable" marks the key on the NEXT
+# key=value line as belonging to the deployment operator, not to the template.
+# The marker travels from any product/feature .env.*.example into the generated
+# .env.deploy.example, and product:deploy honours it: a marked key the operator
+# edited is kept, and one they deleted is not put back. Without the marker the
+# template stays the source of truth, which is the historical behaviour.
+USER_TUNABLE_MARKER = "user-tunable"
+
+# Text appended after the marker in generated files, so an operator reading
+# .env.deploy.example or .env.deploy knows what the marker means.
+USER_TUNABLE_COMMENT = (
+    f"# {USER_TUNABLE_MARKER}: yours to edit. "
+    "product:deploy keeps your value and does not re-add the key if you delete it."
+)
+
+
+def is_user_tunable_marker(line: str) -> bool:
+    """True if ``line`` is a comment marking the next key as user-tunable."""
+    stripped = line.strip()
+    if not stripped.startswith("#"):
+        return False
+    return stripped.lstrip("#").strip().lower().startswith(USER_TUNABLE_MARKER)
+
+
 def _load_yaml_file(path):
     """Load a YAML file, raising a clear ClickException on malformed input."""
     try:
@@ -19,23 +44,42 @@ def _load_yaml_file(path):
         raise click.ClickException(f"{path} is not valid YAML:\n  {e}")
 
 
-def load_env_file(path):
-    """Returns dict of key=value pairs from .env.example-like file."""
+def load_env_file_with_markers(path):
+    """Parse an .env.example-like file into (values, user_tunable_keys)."""
     if not os.path.isfile(path):
-        return {}
+        return {}, set()
 
     env = {}
+    tunable = set()
+    marked_next = False
     with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
+
+            if is_user_tunable_marker(line):
+                marked_next = True
+                continue
 
             if not line or line.startswith("#") or "=" not in line:
+                # Blank lines do not break the marker/key pairing, so a marker
+                # may sit above a key with a blank line between them.
+                if line and not line.startswith("#"):
+                    marked_next = False
                 continue
 
             k, v = line.split("=", 1)
-            env[k.strip()] = v.strip()
+            key = k.strip()
+            env[key] = v.strip()
+            if marked_next:
+                tunable.add(key)
+            marked_next = False
 
-    return env
+    return env, tunable
+
+
+def load_env_file(path):
+    """Returns dict of key=value pairs from .env.example-like file."""
+    return load_env_file_with_markers(path)[0]
 
 
 def merge_env_dicts(base, override):
@@ -312,7 +356,7 @@ def product_build(no_image, skip_preflight):
         else os.path.join(docker_path, ".env.example")
     )
 
-    env_result = load_env_file(product_env_file)
+    env_result, tunable_keys = load_env_file_with_markers(product_env_file)
 
     # Read declared features from pyproject.toml (not glob)
     pydata = load_toml(pyproject_path, what="pyproject.toml")
@@ -373,8 +417,9 @@ def product_build(no_image, skip_preflight):
             else os.path.join(f_docker, ".env.example")
         )
 
-        feature_env = load_env_file(feature_env_file)
+        feature_env, feature_tunable = load_env_file_with_markers(feature_env_file)
         env_result = merge_env_dicts(env_result, feature_env)
+        tunable_keys |= feature_tunable
 
     # Apply product port offset to feature port variables
     import zlib
@@ -403,9 +448,15 @@ def product_build(no_image, skip_preflight):
     # Ensure SPLENT_ENV is set to prod in deploy artifacts
     env_result["SPLENT_ENV"] = "prod"
 
+    # Drop markers for keys that the merge removed, so the example never
+    # advertises a tunable that is not in the file.
+    tunable_keys &= set(env_result)
+
     env_deploy_path = os.path.join(docker_path, ".env.deploy.example")
     with open(env_deploy_path, "w", encoding="utf-8") as f:
         for k, v in env_result.items():
+            if k in tunable_keys:
+                f.write(f"{USER_TUNABLE_COMMENT}\n")
             f.write(f"{k}={v}\n")
 
     click.echo(f"✅ Created: {env_deploy_path}")
@@ -478,7 +529,11 @@ def product_build(no_image, skip_preflight):
     port_map: dict[str, list[str]] = {}  # "host_port" -> [service_names]
     for svc_name, svc_def in compose_result.get("services", {}).items():
         for p in svc_def.get("ports", []):
-            host_port = str(p).split(":")[0]
+            # Entries may be "5123:5000" or "<bind host>:5123:5000", and the
+            # bind host may itself contain ":" when written as ${VAR:-default},
+            # so take the host port from the right-hand end.
+            parts = str(p).split(":")
+            host_port = parts[-2] if len(parts) >= 2 else parts[0]
             port_map.setdefault(host_port, []).append(svc_name)
 
     for port, services in port_map.items():

@@ -78,6 +78,12 @@ def product_ctx(product_name: str) -> dict:
         "cli_version": CLI_VERSION,
         "network_name": "splent_network",
         "spl_name": spl_name,
+        # Production persistence context, mirroring product:create. The prod
+        # compose template is not drift-synced, but keeping both contexts in
+        # step means any template renders the same from either path.
+        "uploads_volume": True,
+        "protected_uploads_dir": f"/workspace/{product_name}/protected_uploads",
+        "archive_dir": f"/workspace/{product_name}/archive",
     }
 
 

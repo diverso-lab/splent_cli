@@ -1,10 +1,86 @@
 import os
+import re
 import subprocess
 
 import click
 import yaml
 from splent_cli.services import context
+from splent_cli.commands.product.product_build import (
+    USER_TUNABLE_COMMENT,
+    load_env_file_with_markers,
+)
 from splent_cli.utils.proc import require_docker
+
+# Env vars whose value is a directory the running app writes to. Their contents
+# only survive a redeploy if a volume in the compose file mounts that exact
+# path, so product:deploy warns when one is set without a matching mount.
+PERSISTENCE_DIR_VARS = ("PROTECTED_UPLOADS_DIR", "ARCHIVE_DIR")
+
+# ${VAR} and ${VAR:-default} as they appear in compose mount targets.
+_COMPOSE_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}")
+
+
+def _expand_compose_vars(value: str, env_vars: dict) -> str:
+    """Resolve ${VAR} / ${VAR:-default} in a compose value against env_vars."""
+
+    def replace(match):
+        name, default = match.group(1), match.group(2)
+        resolved = env_vars.get(name)
+        if resolved:
+            return resolved
+        return default or ""
+
+    return _COMPOSE_VAR_RE.sub(replace, value)
+
+
+def _mount_targets(compose_data: dict, env_vars: dict) -> set:
+    """Every container-side path mounted by any service in the compose file."""
+    targets = set()
+    for svc in compose_data.get("services", {}).values():
+        for vol in svc.get("volumes", []) or []:
+            if isinstance(vol, dict):
+                target = _expand_compose_vars(str(vol.get("target", "")), env_vars)
+            else:
+                # "source:target" or "source:target:mode". Interpolate first:
+                # a ${VAR:-default} target contains ":" of its own, so
+                # splitting the raw string would cut the path in half.
+                expanded = _expand_compose_vars(str(vol), env_vars)
+                parts = expanded.split(":")
+                target = parts[1] if len(parts) >= 2 else ""
+            if target:
+                targets.add(target.rstrip("/"))
+    return targets
+
+
+def _warn_unmounted_persistence_dirs(compose_path: str, env_vars: dict) -> None:
+    """Warn about directories the app writes to that no volume preserves.
+
+    A product scaffolded before the persistence volumes existed can pick up
+    these variables from a synced .env.prod.example while its compose file
+    still has no matching volume. The app would then write to a path that the
+    next redeploy throws away, silently.
+    """
+    try:
+        with open(compose_path, "r", encoding="utf-8") as cf:
+            compose_data = yaml.safe_load(cf) or {}
+    except (OSError, yaml.YAMLError):
+        return
+
+    targets = _mount_targets(compose_data, env_vars)
+
+    for var in PERSISTENCE_DIR_VARS:
+        value = (env_vars.get(var) or "").strip()
+        if not value or value.rstrip("/") in targets:
+            continue
+        click.secho(
+            f"  {var} is set to '{value}' but no volume in "
+            f"docker-compose.deploy.yml mounts that path.\n"
+            f"  Files written there are lost on every redeploy. Add a named "
+            f"volume for it to the product's docker/docker-compose.prod.yml "
+            f"and run 'splent product:build' again,\n"
+            f"  or remove {var} from .env.deploy if the app does not use it.",
+            fg="yellow",
+        )
 
 
 @click.command(
@@ -91,28 +167,34 @@ def product_deploy(down, ci):
     # Sync .env.deploy with template
     # ---------------------------------------------------------
     # Strategy: the template (.env.deploy.example) is the source of truth
-    # for all infrastructure variables. User-configured values (those that
-    # were <SET> in the template and filled in by the user) are preserved.
+    # for all infrastructure variables. Two kinds of value belong to the
+    # operator instead and are never overwritten:
+    #   * secrets and other keys the template ships as <SET>, once filled in;
+    #   * keys the template marks with a "# user-tunable" comment, such as the
+    #     interface a port binds to. A marked key the operator deleted stays
+    #     deleted, so removing it to fall back to the compose default works.
     # Everything else is updated from the template on every deploy.
-    existing_vars = {}
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if "=" in line and not line.strip().startswith("#"):
-                k, v = line.strip().split("=", 1)
-                existing_vars[k] = v
+    existing_vars, _ = load_env_file_with_markers(env_path)
+    example_vars, tunable_keys = load_env_file_with_markers(env_example_path)
 
-    example_vars = {}
-    with open(env_example_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if "=" in line and not line.strip().startswith("#"):
-                k, v = line.strip().split("=", 1)
-                example_vars[k] = v
+    # Keys the operator removed on purpose. Only meaningful for tunables: a
+    # template-owned key that went missing is still restored below.
+    deleted_tunables = {
+        k for k in tunable_keys if k in example_vars and k not in existing_vars
+    }
 
     # Build final env: start from template, preserve user-configured values
     env_vars = {}
     updated = []
     for k, v in example_vars.items():
-        if (
+        if k in deleted_tunables:
+            # The operator deleted this tunable. Leave it out and let the
+            # compose default apply.
+            continue
+        elif k in tunable_keys and k in existing_vars:
+            # Operator-owned value — keep it exactly as they wrote it.
+            env_vars[k] = existing_vars[k]
+        elif (
             v.strip() == "<SET>"
             and k in existing_vars
             and existing_vars[k].strip() != "<SET>"
@@ -130,6 +212,13 @@ def product_deploy(down, ci):
         click.echo(
             click.style("  env      ", dim=True)
             + f"updated {len(updated)} variable(s) from template"
+        )
+
+    if deleted_tunables:
+        click.echo(
+            click.style("  env      ", dim=True)
+            + f"keeping {len(deleted_tunables)} removed variable(s) out: "
+            + ", ".join(sorted(deleted_tunables))
         )
 
     # ---------------------------------------------------------
@@ -161,9 +250,18 @@ def product_deploy(down, ci):
     # ---------------------------------------------------------
     # Save updated .env.deploy
     # ---------------------------------------------------------
+    # The marker comments are carried over so the file itself tells the
+    # operator which keys are theirs to edit.
     with open(env_path, "w", encoding="utf-8") as f:
         for k, v in env_vars.items():
+            if k in tunable_keys:
+                f.write(f"{USER_TUNABLE_COMMENT}\n")
             f.write(f"{k}={v}\n")
+
+    # ---------------------------------------------------------
+    # Warn about write directories no volume preserves
+    # ---------------------------------------------------------
+    _warn_unmounted_persistence_dirs(compose_path, env_vars)
 
     # ---------------------------------------------------------
     # Update product .env with SPLENT_ENV=prod
@@ -260,9 +358,12 @@ def product_deploy(down, ci):
             compose_data = yaml.safe_load(cf)
         for svc in compose_data.get("services", {}).values():
             for p in svc.get("ports", []):
+                # Entries may be "5123:5000" or "<bind host>:5123:5000", and
+                # the bind host may itself contain ":" when written as
+                # ${VAR:-default}, so read the mapping from the right-hand end.
                 parts = str(p).split(":")
-                if len(parts) == 2 and parts[1] == "5000":
-                    app_port = parts[0]
+                if len(parts) >= 2 and parts[-1] == "5000":
+                    app_port = parts[-2]
                     break
             if app_port:
                 break
