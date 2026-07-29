@@ -275,6 +275,42 @@ def remove_feature_link(
     return False
 
 
+def prune_feature_links(
+    product_path: str,
+    namespace: str,
+    name: str,
+    keep: str | None = None,
+) -> list[str]:
+    """Leave one symlink for a feature and remove the rest.
+
+    A product runs one version of a feature, so two links for the same one
+    put two copies of the same package on the path and which wins is down to
+    directory order.  Removing what the previous declaration created is not
+    enough to guarantee that: a link whose version is no longer declared
+    anywhere, left behind by an interrupted command or by hand-editing, is
+    invisible to that bookkeeping and survives every later attach.
+
+    ``keep`` is the leaf to preserve, normally ``name@version`` for a pinned
+    feature or ``name`` for an editable one.  Real directories are left
+    alone, they are not ours to delete.  Returns the leaves removed.
+    """
+    links_dir = os.path.join(product_path, "features", normalize_namespace(namespace))
+    if not os.path.isdir(links_dir):
+        return []
+
+    removed = []
+    for leaf in sorted(os.listdir(links_dir)):
+        if leaf == keep:
+            continue
+        if leaf != name and not leaf.startswith(f"{name}@"):
+            continue
+        path = os.path.join(links_dir, leaf)
+        if os.path.islink(path):
+            os.unlink(path)
+            removed.append(leaf)
+    return removed
+
+
 def load_product_pyproject(product_dir: str) -> dict:
     """Load and return the parsed pyproject.toml dict for a product directory.
 

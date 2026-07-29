@@ -8,6 +8,7 @@ from splent_cli.utils.feature_utils import (
     hot_reinstall,
     normalize_namespace,
     parse_feature_entry,
+    prune_feature_links,
     read_feature_list,
     remove_feature_link,
     write_features_to_data,
@@ -139,6 +140,11 @@ def feature_add(full_name, env_scope):
     except FileExistsError:
         os.unlink(link_path)
         os.symlink(rel_target, link_path)
+
+    for gone in prune_feature_links(
+        product_path, org_safe, feature_name, keep=feature_name
+    ):
+        click.echo(click.style(f"  removing leftover link {gone}", dim=True))
 
     # ── Update manifest ───────────────────────────────────────────────
     key = feature_key(namespace, feature_name)

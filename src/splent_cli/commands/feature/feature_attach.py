@@ -7,6 +7,7 @@ from splent_cli.utils.feature_utils import (
     find_feature_entries,
     hot_reinstall,
     parse_feature_entry,
+    prune_feature_links,
     read_feature_list,
     remove_feature_link,
     write_features_to_data,
@@ -146,11 +147,17 @@ def feature_attach(feature_identifier, version, env_scope):
     product_features_dir = os.path.join(product_path, "features", namespace_fs)
     os.makedirs(product_features_dir, exist_ok=True)
 
-    new_link = os.path.join(product_features_dir, f"{feature_name}@{version}")
+    leaf = f"{feature_name}@{version}"
+    new_link = os.path.join(product_features_dir, leaf)
     if os.path.islink(new_link):
         os.unlink(new_link)
     rel_target = os.path.relpath(versioned_dir, product_features_dir)
     os.symlink(rel_target, new_link)
+
+    for gone in prune_feature_links(
+        product_path, namespace_fs, feature_name, keep=leaf
+    ):
+        click.echo(click.style(f"  removing leftover link {gone}", dim=True))
 
     # ── Update manifest ───────────────────────────────────────────────
     key = feature_key(namespace_fs, feature_name, version)
