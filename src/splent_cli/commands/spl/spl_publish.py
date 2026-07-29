@@ -387,6 +387,13 @@ def spl_publish(spl_name, registry_option, dry_run):
             click.echo(f"    {product}  {pinned}")
         click.echo("  Move one forward with: splent spl:pin " + spl_name)
 
+    # Same reason as a feature release: the index the marketplace serves is
+    # built in another repository and would not hear about this until its
+    # next scheduled run.
+    from splent_cli.services import index_refresh
+
+    index_refresh.request_rebuild()
+
     click.echo()
     click.secho(f"  '{spl_name}' published (DOI {doi}).", fg="green")
     click.echo()

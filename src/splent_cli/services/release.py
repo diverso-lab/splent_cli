@@ -1274,6 +1274,13 @@ def run_release_pipeline(
         click.echo()
         raise SystemExit(1)
 
+    # The index the marketplace serves lives in another repository, so a
+    # release here does not reach it on its own. Ask it to rebuild, as the
+    # last step and best effort: the release is already done.
+    from splent_cli.services import index_refresh
+
+    index_refresh.request_rebuild()
+
     click.secho(f"  {name} {tag} released.", fg="green")
     if not to_pypi or not to_github:
         published = ", ".join(channels)
