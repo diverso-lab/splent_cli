@@ -37,7 +37,10 @@
 						</div>
 
                         <div class="text-center mt-3">
-                            <a href="{{ url_for('public.index') }}" class="btn btn-lg btn-primary">Back to home</a>
+                            {# The site root, not an endpoint: a product need not install the public
+                               feature, and an unresolvable endpoint here turns every error page
+                               into a 500. #}
+                            <a href="/" class="btn btn-lg btn-primary">Back to home</a>
                         </div>
 
 					</div>
