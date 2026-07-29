@@ -33,14 +33,62 @@ class TestMissingPyproject:
 
 
 class TestCacheNotFound:
-    def test_exits_when_cache_missing(self, runner, product_workspace):
+    """Asking to attach a version the cache does not have means wanting it.
+
+    It used to print the clone command and exit, which made pinning a
+    freshly released feature a two-step dance on every machine except the
+    one that released it.
+    """
+
+    def _no_network(self, monkeypatch, on_call=None):
+        """Stub the fetch. These are unit tests and must not clone."""
+        import splent_cli.commands.feature.feature_attach as attach_module
+        from splent_cli.commands.feature import feature_clone
+
+        def fake_callback(full_name):
+            if on_call:
+                on_call(full_name)
+
+        monkeypatch.setattr(feature_clone.feature_clone, "callback", fake_callback)
+        return attach_module
+
+    def test_it_fetches_the_missing_version(
+        self, runner, product_workspace, monkeypatch
+    ):
+        asked = []
+        self._no_network(monkeypatch, on_call=asked.append)
+        runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
+        assert asked == ["splent_io/auth@v1.0.0"]
+
+    def test_it_says_it_is_fetching(self, runner, product_workspace, monkeypatch):
+        self._no_network(monkeypatch)
+        result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
+        assert "fetching it" in result.output
+
+    def test_it_fails_when_the_fetch_brings_nothing(
+        self, runner, product_workspace, monkeypatch
+    ):
+        """A fetch that leaves the cache empty has nothing to attach."""
+        self._no_network(monkeypatch)
         result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
         assert result.exit_code == 1
-        assert "not found in cache" in result.output
+        assert "nothing to attach" in result.output
 
-    def test_suggests_clone_command(self, runner, product_workspace):
+    def test_it_continues_when_the_fetch_works(
+        self, runner, product_workspace, monkeypatch
+    ):
+        def populate(full_name):
+            (
+                product_workspace
+                / ".splent_cache"
+                / "features"
+                / "splent_io"
+                / "auth@v1.0.0"
+            ).mkdir(parents=True)
+
+        self._no_network(monkeypatch, on_call=populate)
         result = runner.invoke(feature_attach, ["splent_io/auth", "v1.0.0"])
-        assert "feature:clone" in result.output
+        assert "nothing to attach" not in result.output
 
 
 # ---------------------------------------------------------------------------
