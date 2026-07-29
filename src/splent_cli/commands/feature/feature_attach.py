@@ -63,12 +63,26 @@ def feature_attach(feature_identifier, version, env_scope):
     versioned_dir = os.path.join(cache_base, f"{feature_name}@{version}")
 
     if not os.path.exists(versioned_dir):
-        click.secho(f"  {feature_name}@{version} not found in cache.", fg="red")
-        click.echo(
-            click.style("  clone it first: ", dim=True)
-            + f"splent feature:clone {namespace}/{feature_name}@{version}"
+        # Asking to attach a version means wanting it, so fetch it rather
+        # than printing the command that fetches it. Attaching after a
+        # release, on a machine that has never seen that version, is the
+        # normal case and not an error.
+        from splent_cli.commands.feature.feature_clone import feature_clone
+
+        click.secho(
+            f"  {feature_name}@{version} is not in the cache yet, fetching it.",
+            fg="bright_black",
         )
-        raise SystemExit(1)
+        # The callback, not the command: this is not a click context and
+        # feature_attach is itself invoked from the release pipeline.
+        feature_clone.callback(full_name=f"{namespace}/{feature_name}@{version}")
+        if not os.path.exists(versioned_dir):
+            click.secho(
+                f"  {feature_name}@{version} could not be fetched, so there is "
+                "nothing to attach.",
+                fg="red",
+            )
+            raise SystemExit(1)
 
     short = feature_name.replace("splent_feature_", "")
 
