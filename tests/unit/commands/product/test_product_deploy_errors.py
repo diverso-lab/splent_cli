@@ -372,9 +372,7 @@ class TestUserTunableEnvVars:
     def test_deleted_tunable_is_not_re_added(self, runner, tmp_path, monkeypatch):
         """Deleting a marked key is how you fall back to the compose default,
         so the sync must not put it back."""
-        docker_dir = _tunable_workspace(
-            tmp_path, monkeypatch, "FLASK_APP=app\n"
-        )
+        docker_dir = _tunable_workspace(tmp_path, monkeypatch, "FLASK_APP=app\n")
 
         result = _run_deploy(runner)
 

@@ -122,11 +122,7 @@ def _extract_registered_services(init_path: Path) -> list[str]:
         return []
     text = init_path.read_text()
     return sorted(
-        set(
-            re.findall(
-                r"""register_service\s*\(\s*\w+\s*,\s*['"](\w+)['"]""", text
-            )
-        )
+        set(re.findall(r"""register_service\s*\(\s*\w+\s*,\s*['"](\w+)['"]""", text))
     )
 
 
@@ -579,9 +575,7 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         # static analysis (e.g. team storing photos through the media admin
         # UI). Keeping them separate lets auto-inferred entries in `features`
         # expire when the code stops using them.
-        manual_requires = splent_contract.get("requires", {}).get(
-            "features_manual", []
-        )
+        manual_requires = splent_contract.get("requires", {}).get("features_manual", [])
         # Same idea for routes a feature builds at registration time from
         # configuration: the rule is assembled from app.config, so a source
         # scan finds no literal path and the contract would claim the

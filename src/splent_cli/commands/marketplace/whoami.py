@@ -82,8 +82,7 @@ def whoami(registry_option):
         if e.unreachable or e.rate_limited:
             if e.rate_limited:
                 click.secho(
-                    f"  The marketplace at {target.url} is rate limiting this "
-                    "client.",
+                    f"  The marketplace at {target.url} is rate limiting this client.",
                     fg="yellow",
                 )
                 click.echo(f"  {retry_hint(e.retry_after)}")

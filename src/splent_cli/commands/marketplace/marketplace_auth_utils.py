@@ -239,8 +239,7 @@ def report_error(err: marketplace_api.MarketplaceError, *, url: str) -> None:
         # single key, and somebody has deliberately closed it.
         click.secho("  This marketplace is not accepting publications.", fg="red")
         click.echo(
-            "  Publishing is switched off there, so retrying will not help. "
-            "Reading the"
+            "  Publishing is switched off there, so retrying will not help. Reading the"
         )
         click.echo("  registry still works. Ask whoever runs it to arm publishing.")
         if err.server_message:

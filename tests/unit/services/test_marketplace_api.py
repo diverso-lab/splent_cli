@@ -628,9 +628,7 @@ class TestTheServersRealRefusals:
         assert exc.value.code == marketplace_api.CODE_FORBIDDEN
         assert exc.value.dead_token is False
 
-    def test_a_403_with_no_recognisable_reason_keeps_the_credential(
-        self, monkeypatch
-    ):
+    def test_a_403_with_no_recognisable_reason_keeps_the_credential(self, monkeypatch):
         _install(monkeypatch, _Response(403, {"error": "nope"}))
         with pytest.raises(MarketplaceError) as exc:
             MarketplaceClient(BASE, token="tok").whoami()
@@ -656,9 +654,7 @@ class TestRefusalsWithoutACode:
         assert exc.value.code == marketplace_api.CODE_TOKEN_REVOKED
 
     def test_expired_prose_at_403_is_still_read(self, monkeypatch):
-        _install(
-            monkeypatch, _Response(403, {"error": "This API token has expired"})
-        )
+        _install(monkeypatch, _Response(403, {"error": "This API token has expired"}))
         with pytest.raises(MarketplaceError) as exc:
             MarketplaceClient(BASE, token="tok").whoami()
         assert exc.value.code == marketplace_api.CODE_TOKEN_EXPIRED

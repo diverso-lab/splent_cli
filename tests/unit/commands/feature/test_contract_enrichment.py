@@ -25,10 +25,7 @@ def _feature(tmp_path, name="splent_feature_demo", org="splent_io"):
 def _pyproject(feature_root: Path, extra: str = "") -> Path:
     path = feature_root / "pyproject.toml"
     path.write_text(
-        "[project]\n"
-        f'name = "{feature_root.name}"\n'
-        'version = "0.1.0"\n'
-        f"{extra}"
+        f'[project]\nname = "{feature_root.name}"\nversion = "0.1.0"\n{extra}'
     )
     return path
 
@@ -58,9 +55,7 @@ class TestServiceProxyInference:
     def test_proxy_call_becomes_requirement(self, tmp_path):
         root, src = _feature(tmp_path)
         (src / "routes.py").write_text(
-            '@bp.route("/send")\n'
-            "def send():\n"
-            '    service_proxy("MailService").send()\n'
+            '@bp.route("/send")\ndef send():\n    service_proxy("MailService").send()\n'
         )
         contract = infer_contract(
             str(root),
@@ -123,7 +118,7 @@ class TestBuildServiceMap:
             root = tmp_path / f"splent_feature_{short}"
             root.mkdir()
             (root / "pyproject.toml").write_text(
-                "[tool.splent.contract.provides]\n" f'services = ["{svc}"]\n'
+                f'[tool.splent.contract.provides]\nservices = ["{svc}"]\n'
             )
         mapping = build_service_map(str(tmp_path))
         assert mapping == {"MailService": "mail", "MediaService": "media"}
@@ -141,7 +136,9 @@ class TestBuildServiceMap:
 class TestWriteContractPreservation:
     def test_writes_archetype(self, tmp_path):
         root, src = _feature(tmp_path)
-        (src / "models.py").write_text("class T(db.Model):\n    x = db.Column(db.Int)\n")
+        (src / "models.py").write_text(
+            "class T(db.Model):\n    x = db.Column(db.Int)\n"
+        )
         path = _pyproject(root)
         contract = infer_contract(str(root), "splent_io", root.name, service_map={})
         write_contract(str(path), contract, root.name)
@@ -174,12 +171,10 @@ class TestWriteContractPreservation:
 
     def test_manual_and_inferred_requires_merge(self, tmp_path):
         root, src = _feature(tmp_path)
-        (src / "routes.py").write_text(
-            'service_proxy("MailService").send()\n'
-        )
+        (src / "routes.py").write_text('service_proxy("MailService").send()\n')
         path = _pyproject(
             root,
-            "\n[tool.splent.contract.requires]\n" 'features_manual = ["media"]\n',
+            '\n[tool.splent.contract.requires]\nfeatures_manual = ["media"]\n',
         )
         contract = infer_contract(
             str(root), "splent_io", root.name, service_map={"MailService": "mail"}
@@ -216,9 +211,9 @@ class TestWriteContractPreservation:
         )
         write_contract(str(path), contract, root.name)
         assert (
-            tomllib.loads(path.read_text())["tool"]["splent"]["contract"][
-                "requires"
-            ]["features"]
+            tomllib.loads(path.read_text())["tool"]["splent"]["contract"]["requires"][
+                "features"
+            ]
             == []
         )
 
@@ -233,7 +228,7 @@ class TestWriteContractPreservation:
         )
         path = root / "pyproject.toml"
         path.write_text(
-            '[build-system]\n'
+            "[build-system]\n"
             'requires = ["setuptools>=80.3.1", "wheel"]\n'
             'build-backend = "setuptools.build_meta"\n'
             "\n"
@@ -278,9 +273,7 @@ class TestWriteContractPreservation:
         )
 
         for _ in range(2):
-            contract = infer_contract(
-                str(root), "splent_io", root.name, service_map={}
-            )
+            contract = infer_contract(str(root), "splent_io", root.name, service_map={})
             write_contract(str(path), contract, root.name)
             if _ == 0:
                 first = path.read_text()
@@ -306,7 +299,9 @@ class TestWriteContractPreservation:
 
     def test_rewrite_is_idempotent(self, tmp_path):
         root, src = _feature(tmp_path)
-        (src / "models.py").write_text("class T(db.Model):\n    x = db.Column(db.Int)\n")
+        (src / "models.py").write_text(
+            "class T(db.Model):\n    x = db.Column(db.Int)\n"
+        )
         path = _pyproject(root)
         contract = infer_contract(str(root), "splent_io", root.name, service_map={})
         write_contract(str(path), contract, root.name)
@@ -329,7 +324,9 @@ class TestSoftDependencies:
             "        upcoming = []\n"
         )
         contract = infer_contract(
-            str(root), "splent_io", root.name,
+            str(root),
+            "splent_io",
+            root.name,
             service_map={"EventsService": "events"},
         )
         assert contract["requires_features"] == []
@@ -338,9 +335,7 @@ class TestSoftDependencies:
     def test_bare_usage_of_assigned_proxy_is_hard(self, tmp_path):
         root, src = _feature(tmp_path)
         (src / "routes.py").write_text(
-            'svc = service_proxy("MailService")\n'
-            "def send():\n"
-            "    svc.send()\n"
+            'svc = service_proxy("MailService")\ndef send():\n    svc.send()\n'
         )
         contract = infer_contract(
             str(root), "splent_io", root.name, service_map={"MailService": "mail"}

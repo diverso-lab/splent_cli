@@ -232,7 +232,7 @@ class TestCheckGitHub:
         assert st.ok is True
 
     def test_a_failed_tag_lookup_is_a_refusal(self, gh):
-        """"GitHub did not answer" must never be read as "there are no tags"."""
+        """ "GitHub did not answer" must never be read as "there are no tags"."""
         gh["latest_tag"] = registry.RegistryError("boom", status=500)
         st = release_gate.check_github("org/repo", "v0.0.1", token="tok")
         assert st.blocked is True
@@ -346,7 +346,9 @@ class TestCheckPyPI:
 
     # ── The new-project case, which is the one that actually failed ───
 
-    def test_the_probe_names_the_project_so_creation_is_exercised(self, pypi, monkeypatch):
+    def test_the_probe_names_the_project_so_creation_is_exercised(
+        self, pypi, monkeypatch
+    ):
         """A probe with no project name cannot see the creation rate limit.
 
         PyPI keys the limiter that has been refusing these releases on the
@@ -425,7 +427,9 @@ class TestCheckDocker:
         monkeypatch.setattr(
             registry,
             "dockerhub_login_probe",
-            lambda u, p, timeout=10: registry.DockerProbe(status=200, rate_limited=False),
+            lambda u, p, timeout=10: registry.DockerProbe(
+                status=200, rate_limited=False
+            ),
         )
         monkeypatch.setattr(
             registry, "dockerhub_tag_exists", lambda ns, repo, tag, timeout=10: False
@@ -437,7 +441,9 @@ class TestCheckDocker:
         monkeypatch.setattr(
             registry,
             "dockerhub_login_probe",
-            lambda u, p, timeout=10: registry.DockerProbe(status=401, rate_limited=False),
+            lambda u, p, timeout=10: registry.DockerProbe(
+                status=401, rate_limited=False
+            ),
         )
         st = release_gate.check_docker("me/app", "1.0.0", username="u", password="p")
         assert st.blocked is True
@@ -447,7 +453,9 @@ class TestCheckDocker:
         monkeypatch.setattr(
             registry,
             "dockerhub_login_probe",
-            lambda u, p, timeout=10: registry.DockerProbe(status=429, rate_limited=True),
+            lambda u, p, timeout=10: registry.DockerProbe(
+                status=429, rate_limited=True
+            ),
         )
         st = release_gate.check_docker("me/app", "1.0.0", username="u", password="p")
         assert st.blocked is True
@@ -458,7 +466,9 @@ class TestCheckDocker:
         monkeypatch.setattr(
             registry,
             "dockerhub_login_probe",
-            lambda u, p, timeout=10: registry.DockerProbe(status=200, rate_limited=False),
+            lambda u, p, timeout=10: registry.DockerProbe(
+                status=200, rate_limited=False
+            ),
         )
         monkeypatch.setattr(
             registry, "dockerhub_tag_exists", lambda ns, repo, tag, timeout=10: True
@@ -558,7 +568,9 @@ class TestRunGate:
         monkeypatch.setattr(
             registry,
             "dockerhub_login_probe",
-            lambda u, p, timeout=10: registry.DockerProbe(status=401, rate_limited=False),
+            lambda u, p, timeout=10: registry.DockerProbe(
+                status=401, rate_limited=False
+            ),
         )
         report = release_gate.run_gate(
             repo="org/repo",
@@ -926,8 +938,6 @@ class TestFindIncompleteRelease:
             registry, "pypi_version_exists", lambda p, v, strict=False: False
         )
         assert (
-            release_gate.find_incomplete_release(
-                "org/repo", "pkg", skip_tag="v0.2.1"
-            )
+            release_gate.find_incomplete_release("org/repo", "pkg", skip_tag="v0.2.1")
             is None
         )

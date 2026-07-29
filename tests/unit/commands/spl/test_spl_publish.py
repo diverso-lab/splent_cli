@@ -451,8 +451,7 @@ class TestHappyPaths:
         spl_dir = _make_spl(workspace)
         meta = spl_dir / "metadata.toml"
         meta.write_text(
-            meta.read_text(encoding="utf-8")
-            + 'concept_doi = "10.5281/zenodo.KEEP"\n',
+            meta.read_text(encoding="utf-8") + 'concept_doi = "10.5281/zenodo.KEEP"\n',
             encoding="utf-8",
         )
         net.route("POST", "/releases", _release_response())
@@ -460,9 +459,7 @@ class TestHappyPaths:
         result = runner.invoke(spl_publish, [SPL])
 
         assert result.exit_code == 0, _all_output(result)
-        assert 'concept_doi = "10.5281/zenodo.KEEP"' in meta.read_text(
-            encoding="utf-8"
-        )
+        assert 'concept_doi = "10.5281/zenodo.KEEP"' in meta.read_text(encoding="utf-8")
 
     def test_products_still_on_the_old_model_are_named(
         self, workspace, runner, net, logged_in

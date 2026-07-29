@@ -208,9 +208,7 @@ class TestChannelGateOrdering:
             patch.object(release, "push_main") as push,
             patch.object(release, "create_and_push_tag") as tag,
             patch.object(release, "create_github_release") as gh_release,
-            patch.object(
-                release, "build_and_upload_pypi", side_effect=SystemExit(1)
-            ),
+            patch.object(release, "build_and_upload_pypi", side_effect=SystemExit(1)),
             patch("splent_cli.commands.clear.clear_build.clean_build_artifacts"),
         ):
 
@@ -315,9 +313,7 @@ class TestChannelGateOrdering:
             patch.object(release, "commit_locally"),
             patch.object(release, "push_main"),
             patch.object(release, "create_and_push_tag"),
-            patch.object(
-                release, "create_github_release", return_value="HTTP 403"
-            ),
+            patch.object(release, "create_github_release", return_value="HTTP 403"),
             patch.object(release, "build_and_upload_pypi") as pypi,
             patch("splent_cli.commands.clear.clear_build.clean_build_artifacts"),
         ):
@@ -340,7 +336,6 @@ class TestChannelGateOrdering:
         hook.assert_called_once()
         assert "DIVERGED" in result.output
         assert "splent release:resume splent_feature_demo" in result.output
-
 
     def test_a_local_only_tag_is_reported_as_such(self, tmp_path):
         _pyproject(tmp_path)
@@ -742,7 +737,10 @@ class TestSemverWizardSources:
 
     def test_the_highest_source_wins(self, tmp_path):
         result = self._run(
-            tmp_path, remote={"return_value": "v1.0.0"}, local="v1.2.0", declared="1.1.0"
+            tmp_path,
+            remote={"return_value": "v1.0.0"},
+            local="v1.2.0",
+            declared="1.1.0",
         )
         assert "Current version: v1.2.0" in result.output
 

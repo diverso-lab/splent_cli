@@ -57,7 +57,9 @@ def test_single_mapping_is_used_even_if_it_is_not_the_app_port(monkeypatch):
 def test_several_mappings_without_the_app_port_is_an_error(monkeypatch):
     import click
 
-    _docker_ps(monkeypatch, "my_app_web 0.0.0.0:8089->8089/tcp, 0.0.0.0:9000->9001/tcp\n")
+    _docker_ps(
+        monkeypatch, "my_app_web 0.0.0.0:8089->8089/tcp, 0.0.0.0:9000->9001/tcp\n"
+    )
     with pytest.raises(click.ClickException) as exc:
         get_runtime_ports("my_app_web")
     assert "8089->8089" in str(exc.value)

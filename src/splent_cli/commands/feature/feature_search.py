@@ -92,8 +92,7 @@ def _product_feature_shorts() -> set[str]:
     except (FileNotFoundError, SystemExit):
         return set()
     return {
-        e.split("@")[0].split("/")[-1].removeprefix("splent_feature_")
-        for e in entries
+        e.split("@")[0].split("/")[-1].removeprefix("splent_feature_") for e in entries
     }
 
 
@@ -192,7 +191,9 @@ def _index_search(index, origin, query, category, archetype, tag, provides, requ
     default=None,
     help="Filter by required feature short name (e.g. auth).",
 )
-@click.option("--refresh", is_flag=True, help="Re-fetch the index from SPLENT_INDEX_URL.")
+@click.option(
+    "--refresh", is_flag=True, help="Re-fetch the index from SPLENT_INDEX_URL."
+)
 def feature_search(
     query, org, show_all, category, archetype, tag, provides, requires, refresh
 ):

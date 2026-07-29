@@ -351,9 +351,7 @@ class TestPartialRecovery:
         assert mocks["gate"].call_args.kwargs["channels"] == ("pypi",)
         mocks["pypi"].assert_called_once()
 
-    def test_no_github_does_not_try_to_snapshot_a_tag_that_never_left(
-        self, feature_ws
-    ):
+    def test_no_github_does_not_try_to_snapshot_a_tag_that_never_left(self, feature_ws):
         """The snapshot is a clone of the tag from GitHub."""
         report = release_gate.GateReport(
             statuses=[

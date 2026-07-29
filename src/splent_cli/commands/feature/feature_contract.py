@@ -104,9 +104,7 @@ def _read_current_contract(pyproject_path: Path) -> dict:
         "docker": raw.get("provides", {}).get("docker", []),
         "requires_features": raw.get("requires", {}).get("features", []),
         "routes_manual": raw.get("provides", {}).get("routes_manual", []),
-        "requires_features_manual": raw.get("requires", {}).get(
-            "features_manual", []
-        ),
+        "requires_features_manual": raw.get("requires", {}).get("features_manual", []),
         "requires_features_optional": raw.get("requires", {}).get(
             "features_optional", []
         ),
@@ -147,7 +145,7 @@ def _print_contract(contract: dict, feature_name: str) -> None:
     click.echo()
     if contract.get("archetype"):
         click.echo(click.style("  [tool.splent.contract]", fg="bright_black"))
-        click.echo(f"  archetype  = \"{contract['archetype']}\"")
+        click.echo(f'  archetype  = "{contract["archetype"]}"')
         click.echo()
     click.echo(click.style("  [tool.splent.contract.provides]", fg="bright_black"))
     click.echo(f"  routes     = {_fmt(contract['routes'])}")
@@ -229,9 +227,7 @@ def _print_diff(current: dict, inferred: dict) -> bool:
     new_arch = inferred.get("archetype")
     if new_arch and old_arch != new_arch:
         if old_arch:
-            diff_lines.append(
-                click.style(f"    - archetype: {old_arch}", fg="red")
-            )
+            diff_lines.append(click.style(f"    - archetype: {old_arch}", fg="red"))
         diff_lines.append(click.style(f"    + archetype: {new_arch}", fg="green"))
 
     for key, label in FIELDS:
@@ -307,9 +303,7 @@ def feature_contract(feature_ref, write):
             set(inferred["requires_features"]) | set(manual)
         )
         click.echo(
-            click.style(
-                "  Preserving requires.features_manual: ", fg="bright_black"
-            )
+            click.style("  Preserving requires.features_manual: ", fg="bright_black")
             + ", ".join(manual)
         )
 

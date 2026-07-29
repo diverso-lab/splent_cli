@@ -226,9 +226,7 @@ class TestRegistryFile:
                 "GitHub API error (HTTP 403)", status=403, rate_limited=True
             )
 
-        monkeypatch.setattr(
-            "splent_cli.services.registry.list_org_repos", _limited
-        )
+        monkeypatch.setattr("splent_cli.services.registry.list_org_repos", _limited)
         result = CliRunner().invoke(marketplace_index, [])
         assert result.exit_code == 1
         assert "rate limit" in result.output.lower()

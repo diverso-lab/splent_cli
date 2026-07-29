@@ -118,6 +118,26 @@ CLONE_REF_NOT_FOUND = "ref_not_found"  # repo reachable, ref missing
 CLONE_FAILED = "failed"  # no transport could reach the repo
 
 
+def _non_interactive_env() -> dict:
+    """An environment where git fails instead of asking.
+
+    Every credential prompt git can raise is turned into an error:
+    GIT_TERMINAL_PROMPT stops the username and password questions, and
+    SSH_ASKPASS with a batch-mode command stops the host-key and passphrase
+    ones. Trying several candidate URLs only works if a wrong one comes back
+    quickly.
+    """
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_ASKPASS"] = ""
+    env["SSH_ASKPASS"] = ""
+    env.setdefault(
+        "GIT_SSH_COMMAND",
+        "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10",
+    )
+    return env
+
+
 def clone(
     namespace: str,
     repo: str,
@@ -149,7 +169,13 @@ def clone(
             cmd += ["--branch", ref]
         cmd += ["--quiet", real_url, dest]
 
-        result = run(cmd, check=False, capture=True)
+        # Never let git stop and ask. Over HTTPS, GitHub cannot tell a
+        # repository that does not exist from one that is private and
+        # unauthenticated, so it answers both with a username prompt. A
+        # candidate that is simply the wrong spelling would then hang the
+        # command instead of failing and letting the next candidate run,
+        # which is what happens on a machine with no SSH key.
+        result = run(cmd, check=False, capture=True, env=_non_interactive_env())
         if result.returncode == 0:
             return CLONE_SUCCESS, display_url, ""
 

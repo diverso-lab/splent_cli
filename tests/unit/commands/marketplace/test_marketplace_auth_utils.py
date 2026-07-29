@@ -23,7 +23,7 @@ class TestRetryHint:
         assert retry_hint("0") == "Wait a second and run the command again."
 
     def test_long_waits_are_rounded_to_minutes(self):
-        """"Wait 3600 seconds" is a number a human has to do arithmetic on."""
+        """ "Wait 3600 seconds" is a number a human has to do arithmetic on."""
         assert retry_hint("3600") == "Wait about 60 minutes and run the command again."
         assert retry_hint("120") == "Wait about 2 minutes and run the command again."
 

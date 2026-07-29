@@ -36,7 +36,9 @@ SEMVER_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
 class RegistryError(Exception):
     """A GitHub API request failed (other than a plain 404)."""
 
-    def __init__(self, message: str, *, status: int | None = None, rate_limited: bool = False):
+    def __init__(
+        self, message: str, *, status: int | None = None, rate_limited: bool = False
+    ):
         super().__init__(message)
         self.status = status
         self.rate_limited = rate_limited
@@ -55,7 +57,9 @@ def rate_limit_hint(token: str | None) -> str:
 
 def _github_headers(token: str | None, *, raw: bool = False) -> dict:
     headers = {
-        "Accept": "application/vnd.github.raw+json" if raw else "application/vnd.github+json",
+        "Accept": "application/vnd.github.raw+json"
+        if raw
+        else "application/vnd.github+json",
         "User-Agent": USER_AGENT,
         "X-GitHub-Api-Version": "2022-11-28",
     }
@@ -216,9 +220,7 @@ def latest_semver_tag(
     if token is None:
         token = github_token()
     try:
-        batch = github_json(
-            f"{GITHUB_API}/repos/{org}/{repo}/tags?per_page=100", token
-        )
+        batch = github_json(f"{GITHUB_API}/repos/{org}/{repo}/tags?per_page=100", token)
     except RegistryError:
         if strict:
             raise
@@ -605,9 +607,7 @@ def dockerhub_login_probe(
             detail = (e.read() or b"").decode("utf-8", errors="replace")[:200].strip()
         except Exception:
             detail = ""
-        return DockerProbe(
-            status=e.code, rate_limited=e.code == 429, detail=detail
-        )
+        return DockerProbe(status=e.code, rate_limited=e.code == 429, detail=detail)
     except (urllib.error.URLError, TimeoutError) as e:
         raise RegistryError(f"Network error: {getattr(e, 'reason', e)}")
 

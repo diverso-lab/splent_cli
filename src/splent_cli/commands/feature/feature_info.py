@@ -48,8 +48,7 @@ def _product_feature_shorts() -> set[str]:
     except (FileNotFoundError, SystemExit):
         return set()
     return {
-        e.split("@")[0].split("/")[-1].removeprefix("splent_feature_")
-        for e in entries
+        e.split("@")[0].split("/")[-1].removeprefix("splent_feature_") for e in entries
     }
 
 
@@ -64,7 +63,9 @@ def _print_list(label: str, items: list, color: str | None = None) -> None:
     short_help="Show a feature's contract, dependencies and usage without cloning it.",
 )
 @click.argument("feature_ref")
-@click.option("--refresh", is_flag=True, help="Re-fetch the index from SPLENT_INDEX_URL.")
+@click.option(
+    "--refresh", is_flag=True, help="Re-fetch the index from SPLENT_INDEX_URL."
+)
 @click.option("--json", "as_json", is_flag=True, help="Print the raw entry as JSON.")
 def feature_info(feature_ref, refresh, as_json):
     """
@@ -132,9 +133,7 @@ def feature_info(feature_ref, refresh, as_json):
         click.echo(f"  {'category':<14}{entry['category']}")
     _print_list("tags", entry.get("tags", []))
     if entry.get("env"):
-        click.echo(
-            f"  {'env':<14}" + click.style(f"{entry['env']} only", fg="yellow")
-        )
+        click.echo(f"  {'env':<14}" + click.style(f"{entry['env']} only", fg="yellow"))
 
     _print_list("models", provides.get("models", []))
     _print_list("services", provides.get("services", []))
@@ -173,9 +172,7 @@ def feature_info(feature_ref, refresh, as_json):
         refines = entry["refinement"].get("refines")
         if refines:
             click.echo()
-            click.echo(
-                f"  {'refines':<14}" + click.style(refines, fg="magenta")
-            )
+            click.echo(f"  {'refines':<14}" + click.style(refines, fg="magenta"))
 
     pypi = entry.get("pypi")
     if pypi is not None:
@@ -198,7 +195,9 @@ def feature_info(feature_ref, refresh, as_json):
 
     click.echo()
     click.echo(
-        click.style(f"  source: {origin or entry.get('source', '?')}", fg="bright_black")
+        click.style(
+            f"  source: {origin or entry.get('source', '?')}", fg="bright_black"
+        )
     )
     if entry["short"] not in installed and context.active_app():
         click.echo()

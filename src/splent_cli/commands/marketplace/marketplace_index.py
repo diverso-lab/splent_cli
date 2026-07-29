@@ -180,7 +180,9 @@ def marketplace_index(orgs, repos, registry_file, local, output, no_pypi):
             )
     if problems:
         click.echo()
-        click.secho(f"  ⚠  {len(problems)} source(s) could not be indexed:", fg="yellow")
+        click.secho(
+            f"  ⚠  {len(problems)} source(s) could not be indexed:", fg="yellow"
+        )
         for p in problems:
             click.echo(click.style(f"    - {p}", fg="yellow"))
 
