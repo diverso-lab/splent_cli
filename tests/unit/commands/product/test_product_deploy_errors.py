@@ -301,3 +301,165 @@ class TestHappyPath:
         assert result.exit_code == 0
         assert "done." in result.output
         assert "Traceback" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# User-tunable env vars survive the .env.deploy sync
+# ---------------------------------------------------------------------------
+
+
+def _tunable_workspace(tmp_path, monkeypatch, env_deploy, compose=None):
+    """Workspace whose example marks SPLENT_WEB_BIND_HOST as user-tunable."""
+    monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+    monkeypatch.setenv("SPLENT_APP", "test_app")
+
+    docker_dir = tmp_path / "test_app" / "docker"
+    docker_dir.mkdir(parents=True)
+
+    (docker_dir / ".env.deploy.example").write_text(
+        "FLASK_APP=app\n"
+        "# user-tunable: yours to edit.\n"
+        "SPLENT_WEB_BIND_HOST=127.0.0.1\n"
+    )
+    (docker_dir / ".env.deploy").write_text(env_deploy)
+    (docker_dir / "docker-compose.deploy.yml").write_text(
+        compose
+        or 'services:\n  web:\n    image: test\n    ports:\n      - "8080:5000"\n'
+    )
+    return docker_dir
+
+
+def _run_deploy(runner, args=None):
+    def fake_run(cmd, *a, **kw):
+        if "exec" in cmd:
+            return MagicMock(returncode=0, stdout="200", stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with (
+        patch("splent_cli.commands.product.product_deploy.require_docker"),
+        patch(
+            "splent_cli.commands.product.product_derive._extract_host_ports",
+            return_value=[],
+        ),
+        patch(
+            "splent_cli.commands.product.product_derive._containers_using_port",
+            return_value=[],
+        ),
+        patch(
+            "splent_cli.commands.product.product_deploy.subprocess.run",
+            side_effect=fake_run,
+        ),
+    ):
+        return runner.invoke(product_deploy, args or [])
+
+
+class TestUserTunableEnvVars:
+    def test_edited_tunable_is_preserved(self, runner, tmp_path, monkeypatch):
+        """An operator's edit to a marked key survives every deploy."""
+        docker_dir = _tunable_workspace(
+            tmp_path,
+            monkeypatch,
+            "FLASK_APP=app\nSPLENT_WEB_BIND_HOST=10.0.0.5\n",
+        )
+
+        result = _run_deploy(runner)
+
+        assert result.exit_code == 0
+        written = (docker_dir / ".env.deploy").read_text()
+        assert "SPLENT_WEB_BIND_HOST=10.0.0.5" in written
+        assert "SPLENT_WEB_BIND_HOST=127.0.0.1" not in written
+
+    def test_deleted_tunable_is_not_re_added(self, runner, tmp_path, monkeypatch):
+        """Deleting a marked key is how you fall back to the compose default,
+        so the sync must not put it back."""
+        docker_dir = _tunable_workspace(
+            tmp_path, monkeypatch, "FLASK_APP=app\n"
+        )
+
+        result = _run_deploy(runner)
+
+        assert result.exit_code == 0
+        written = (docker_dir / ".env.deploy").read_text()
+        assert "SPLENT_WEB_BIND_HOST" not in written
+
+    def test_untunable_infra_value_still_updated(self, runner, tmp_path, monkeypatch):
+        """Keys without the marker keep the old behaviour: template wins."""
+        docker_dir = _tunable_workspace(
+            tmp_path,
+            monkeypatch,
+            "FLASK_APP=stale\nSPLENT_WEB_BIND_HOST=127.0.0.1\n",
+        )
+
+        result = _run_deploy(runner)
+
+        assert result.exit_code == 0
+        written = (docker_dir / ".env.deploy").read_text()
+        assert "FLASK_APP=app" in written
+        assert "FLASK_APP=stale" not in written
+
+    def test_marker_is_written_into_env_deploy(self, runner, tmp_path, monkeypatch):
+        docker_dir = _tunable_workspace(
+            tmp_path,
+            monkeypatch,
+            "FLASK_APP=app\nSPLENT_WEB_BIND_HOST=127.0.0.1\n",
+        )
+
+        result = _run_deploy(runner)
+
+        assert result.exit_code == 0
+        written = (docker_dir / ".env.deploy").read_text()
+        assert "user-tunable" in written
+
+
+class TestPersistenceDirWarning:
+    def test_warns_when_no_volume_mounts_the_dir(self, runner, tmp_path, monkeypatch):
+        """A product whose env gained PROTECTED_UPLOADS_DIR while its compose
+        has no matching volume would silently lose files on redeploy."""
+        docker_dir = _tunable_workspace(
+            tmp_path,
+            monkeypatch,
+            "FLASK_APP=app\nPROTECTED_UPLOADS_DIR=/workspace/test_app/protected\n",
+        )
+        (docker_dir / ".env.deploy.example").write_text(
+            "FLASK_APP=app\nPROTECTED_UPLOADS_DIR=/workspace/test_app/protected\n"
+        )
+
+        result = _run_deploy(runner)
+
+        assert result.exit_code == 0
+        assert "PROTECTED_UPLOADS_DIR" in result.output
+        assert "lost on every redeploy" in result.output
+
+    def test_no_warning_when_volume_mounts_the_dir(self, runner, tmp_path, monkeypatch):
+        compose = (
+            "services:\n"
+            "  web:\n"
+            "    image: test\n"
+            '    ports:\n      - "8080:5000"\n'
+            "    volumes:\n"
+            "      - test_app_protected:${PROTECTED_UPLOADS_DIR:-/workspace/test_app/protected}\n"
+        )
+        docker_dir = _tunable_workspace(
+            tmp_path,
+            monkeypatch,
+            "FLASK_APP=app\nPROTECTED_UPLOADS_DIR=/workspace/test_app/protected\n",
+            compose=compose,
+        )
+        (docker_dir / ".env.deploy.example").write_text(
+            "FLASK_APP=app\nPROTECTED_UPLOADS_DIR=/workspace/test_app/protected\n"
+        )
+
+        result = _run_deploy(runner)
+
+        assert result.exit_code == 0
+        assert "lost on every redeploy" not in result.output
+
+    def test_no_warning_when_var_absent(self, runner, tmp_path, monkeypatch):
+        _tunable_workspace(
+            tmp_path, monkeypatch, "FLASK_APP=app\nSPLENT_WEB_BIND_HOST=127.0.0.1\n"
+        )
+
+        result = _run_deploy(runner)
+
+        assert result.exit_code == 0
+        assert "lost on every redeploy" not in result.output

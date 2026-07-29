@@ -175,6 +175,13 @@ def make_product(name, spl_name, spl_doi, features_file, force):
         # made every product created this way fall back to "<name>.uvl" and
         # 404, with nothing local left that knew the real name.
         "spl_file": pin.file or "",
+        # Production persistence. These switch on the named-volume mounts in
+        # the prod compose template so uploads survive redeploys. Products
+        # scaffolded before these variables existed render without them and
+        # keep a compose identical to the historical one.
+        "uploads_volume": True,
+        "protected_uploads_dir": f"/workspace/{name}/protected_uploads",
+        "archive_dir": f"/workspace/{name}/archive",
     }
 
     base_path = str(context.workspace() / name)
