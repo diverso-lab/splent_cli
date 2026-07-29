@@ -38,6 +38,13 @@ venv/
 # Temporary files for testing and deployment
 uploads/
 
+# Runtime state, never code. instance/protected_uploads holds files a
+# feature keeps behind an access check, which for a course wiki means
+# material withheld until a release date. Committing it would put the very
+# content the product protects into a repository, so it is excluded here
+# rather than left to whoever notices.
+src/instance/
+
 # Node.js dependencies
 node_modules/
 
