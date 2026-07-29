@@ -36,7 +36,13 @@ def detect_archetype(src_dir: str) -> str:
     services = _read(os.path.join(src_dir, "services.py"))
 
     has_models = models and re.search(r"db\.Column", models)
-    has_routes = routes and re.search(r"@\w+\.route\s*\(", routes)
+    # A decorator is the common way to declare a route, but a feature whose
+    # paths come from configuration has to build them at registration time
+    # instead. Those are routes too, and missing them labelled a wiki's
+    # archive feature as config, which reads as "serves nothing".
+    has_routes = routes and re.search(
+        r"@\w+\.route\s*\(|add_url_rule\s*\(", routes
+    )
     has_services = services and re.search(
         r"def\s+(?!__)\w+\s*\(.*\):\s*\n\s+(?!pass\b|\.\.\.|\s*#)",
         services,

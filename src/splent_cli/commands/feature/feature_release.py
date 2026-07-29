@@ -564,6 +564,7 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
     existing_category = None
     existing_tags: list[str] = []
     manual_requires: list[str] = []
+    manual_routes: list[str] = []
     try:
         data = tomllib.loads(text)
         splent_contract = data.get("tool", {}).get("splent", {}).get("contract", {})
@@ -581,14 +582,22 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         manual_requires = splent_contract.get("requires", {}).get(
             "features_manual", []
         )
+        # Same idea for routes a feature builds at registration time from
+        # configuration: the rule is assembled from app.config, so a source
+        # scan finds no literal path and the contract would claim the
+        # feature serves nothing.
+        manual_routes = splent_contract.get("provides", {}).get("routes_manual", [])
     except Exception:
         pass
 
     merged_requires = sorted(
         set(contract.get("requires_features", [])) | set(manual_requires)
     )
+    merged_routes = sorted(set(contract.get("routes", [])) | set(manual_routes))
     contract = {
         **contract,
+        "routes": merged_routes,
+        "routes_manual": sorted(set(manual_routes)),
         "requires_features": merged_requires,
         "requires_features_manual": sorted(set(manual_requires)),
     }
@@ -631,8 +640,10 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         "\n\n"
         "# ── Feature Contract (auto-generated) ────────────────────────────────────────\n"
         "# Do not edit manually — re-run `splent feature:contract --write` to refresh.\n"
-        "# Preserved across refreshes: description, category, tags, env, and\n"
-        "# requires.features_manual (dependencies invisible to static analysis).\n"
+        "# Preserved across refreshes: description, category, tags, env,\n"
+        "# requires.features_manual (dependencies invisible to static analysis)\n"
+        "# and provides.routes_manual (routes built from configuration at\n"
+        "# registration time, which have no literal path to find in source).\n"
         "[tool.splent.contract]\n"
         f'description = "{existing_description}"\n'
         + (
@@ -646,7 +657,12 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         + "\n"
         "[tool.splent.contract.provides]\n"
         f"routes     = {_toml_list(contract['routes'])}\n"
-        f"blueprints = {_toml_list(contract['blueprints'])}\n"
+        + (
+            f"routes_manual = {_toml_list(contract['routes_manual'])}\n"
+            if contract.get("routes_manual")
+            else ""
+        )
+        + f"blueprints = {_toml_list(contract['blueprints'])}\n"
         f"models     = {_toml_list(contract['models'])}\n"
         f"commands   = {_toml_list(contract['commands'])}\n"
         f"hooks      = {_toml_list(contract['hooks'])}\n"

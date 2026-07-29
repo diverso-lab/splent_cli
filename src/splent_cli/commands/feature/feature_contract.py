@@ -103,6 +103,7 @@ def _read_current_contract(pyproject_path: Path) -> dict:
         "translations": raw.get("provides", {}).get("translations", []),
         "docker": raw.get("provides", {}).get("docker", []),
         "requires_features": raw.get("requires", {}).get("features", []),
+        "routes_manual": raw.get("provides", {}).get("routes_manual", []),
         "requires_features_manual": raw.get("requires", {}).get(
             "features_manual", []
         ),
@@ -310,6 +311,20 @@ def feature_contract(feature_ref, write):
                 "  Preserving requires.features_manual: ", fg="bright_black"
             )
             + ", ".join(manual)
+        )
+
+    # Routes a feature builds at registration time, from configuration, are
+    # invisible to a source scan: the rule is assembled from app.config, so
+    # there is no literal path to find. A feature that serves its pages
+    # under a word the product chooses would otherwise publish a contract
+    # claiming it serves nothing, or only its admin screens, which is worse
+    # than an empty contract because it reads as complete.
+    manual_routes = sorted(set(current.get("routes_manual", [])))
+    if manual_routes:
+        inferred["routes"] = sorted(set(inferred["routes"]) | set(manual_routes))
+        click.echo(
+            click.style("  Preserving provides.routes_manual: ", fg="bright_black")
+            + ", ".join(manual_routes)
         )
 
     # Show inferred contract
