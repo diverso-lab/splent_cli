@@ -50,3 +50,9 @@ node_modules/
 
 # Features symlinks
 features
+
+# Per-machine lifecycle state, written by the CLI: it records when each
+# feature was installed and migrated ON THIS MACHINE. Sharing it between
+# machines is meaningless, and versioning it makes every deployment pull
+# conflict with whatever the last machine recorded.
+splent.manifest.json
