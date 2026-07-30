@@ -16,5 +16,9 @@ prune src/{{ org_safe }}/{{ feature_name }}/assets/node_modules
 # Jinja templates (feature views + hook fragments)
 recursive-include src/{{ org_safe }}/{{ feature_name }}/templates *.html
 
+# Translations. The .mo is what gettext reads at runtime; the .po travels
+# with it so the next translator has something to edit.
+recursive-include src/{{ org_safe }}/{{ feature_name }}/translations *.mo *.po *.pot
+
 # Alembic migration config and scripts
 recursive-include src/{{ org_safe }}/{{ feature_name }}/migrations *.py *.ini *.mako
