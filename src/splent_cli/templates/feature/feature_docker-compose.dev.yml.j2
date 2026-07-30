@@ -1,0 +1,69 @@
+# {{ feature_name }} — development stack
+#
+# A feature that needs a server of its own contributes it here. Every product
+# that installs this feature gets ITS OWN instance: product:up runs this file
+# as a Compose project named after the product, the feature and the pinned
+# version, so the containers and the named volumes below are all prefixed
+# with the product's name and no two products ever share one.
+#
+# That isolation only holds if the four rules below are kept, so check:infra
+# enforces them. See: docs/features/docker-services.md
+services:
+
+  # 1. The service is named after the package.
+  #    On splent_network this name IS the hostname other containers reach it
+  #    by, and it is what the feature's own config points at, so it must not
+  #    be shortened or prettified.
+  #
+  # 2. No container_name.
+  #    Setting one pins an absolute name Compose will not prefix, so the
+  #    second product to start collides with the first and Docker refuses.
+  #    Let Compose derive it.
+  {{ feature_name }}:
+    image: CHANGEME:latest
+    restart: always
+
+    # 3. Every published port comes from a *_HOST_PORT variable.
+    #    product:env --merge gives each product a different value, offsetting
+    #    the default by zlib.crc32(product) % 1000, so two products of the
+    #    same line run side by side. A literal here defeats that and the
+    #    second product fails with "port is already allocated". The
+    #    container-side port stays fixed: nothing outside reaches it.
+    ports:
+      - "{{ host_port_ref }}:CHANGEME"
+
+    # 4. Persistent data goes in a named volume, declared below.
+    #    Compose prefixes it with the project name, which is per product, so
+    #    each product keeps its own data. A host bind mount is not prefixed
+    #    and every product would write into the same directory.
+    volumes:
+      - {{ short_name }}_data:/CHANGEME
+
+    # Optional, and worth having: product:up waits for a healthy stack before
+    # starting the web container, so the app never comes up talking to a
+    # server that is not listening yet.
+    healthcheck:
+      test: ["CMD-SHELL", "CHANGEME || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+    networks:
+      - splent_network
+
+volumes:
+  {{ short_name }}_data:
+
+# 5. The network is the product's, not the feature's.
+#    The key below never changes, so nothing that references it has to; what
+#    changes is the network it resolves to, one per product, set by
+#    product:env --merge. Sharing one network would undo the isolation
+#    everything above builds: Compose gives every container a DNS alias equal
+#    to its service name, so two products running this feature would publish
+#    the same alias and each product's queries would land on either server at
+#    random. The fallback keeps a product that predates the rule working.
+networks:
+  splent_network:
+    external: true
+    name: ${SPLENT_NETWORK:-splent_network}

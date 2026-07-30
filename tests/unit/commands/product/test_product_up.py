@@ -143,6 +143,99 @@ class TestFeaturesStartup:
 
 
 # ---------------------------------------------------------------------------
+# A feature's stack belongs to the product that started it
+# ---------------------------------------------------------------------------
+
+
+def _declare_docker_feature(tmp_path):
+    """Give test_app one pinned feature that contributes a Docker stack."""
+    pyproject = tmp_path / "test_app" / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "test_app"\nversion = "1.0.0"\n'
+        "[project.optional-dependencies]\n"
+        'features = ["splent_io/splent_feature_auth@v1.0.0"]\n'
+    )
+    feat_docker = (
+        tmp_path
+        / ".splent_cache"
+        / "features"
+        / "splent_io"
+        / "splent_feature_auth@v1.0.0"
+        / "docker"
+    )
+    feat_docker.mkdir(parents=True)
+    (feat_docker / "docker-compose.dev.yml").write_text("services: {}")
+    return feat_docker
+
+
+def _feature_up_call(mock_run):
+    """The 'docker compose up' argv that started the feature's own stack."""
+    for call in mock_run.call_args_list:
+        cmd = call[0][0]
+        if "up" in cmd and any(".splent_cache" in str(a) for a in cmd):
+            return cmd
+    raise AssertionError("no 'docker compose up' call for the feature stack")
+
+
+class TestFeatureStackNaming:
+    def test_feature_project_name_carries_the_product(
+        self, runner, product_workspace, tmp_path
+    ):
+        """Two products pinning one feature version must not share a stack."""
+        _declare_docker_feature(tmp_path)
+
+        with patch("subprocess.run", side_effect=_success_run) as mock_run:
+            result = runner.invoke(product_up, ["--dev"])
+
+        assert result.exit_code == 0
+        cmd = _feature_up_call(mock_run)
+        project = cmd[cmd.index("-p") + 1]
+        assert project == "test_app_splent_io_splent_feature_auth_v1_0_0_dev"
+
+    def test_product_stack_keeps_its_own_name(
+        self, runner, product_workspace, tmp_path
+    ):
+        _declare_docker_feature(tmp_path)
+
+        with patch("subprocess.run", side_effect=_success_run) as mock_run:
+            runner.invoke(product_up, ["--dev"])
+
+        product_calls = [
+            c[0][0]
+            for c in mock_run.call_args_list
+            if "up" in c[0][0] and not any(".splent_cache" in str(a) for a in c[0][0])
+        ]
+        assert product_calls
+        cmd = product_calls[-1]
+        assert cmd[cmd.index("-p") + 1] == "test_app_dev"
+
+    def test_feature_stack_reads_the_product_env_file(
+        self, runner, product_workspace, tmp_path
+    ):
+        """The offset host port only exists in the product's docker/.env."""
+        _declare_docker_feature(tmp_path)
+        product_env = tmp_path / "test_app" / "docker" / ".env"
+        product_env.write_text("AUTH_HOST_PORT=9604\n")
+
+        with patch("subprocess.run", side_effect=_success_run) as mock_run:
+            runner.invoke(product_up, ["--dev"])
+
+        cmd = _feature_up_call(mock_run)
+        assert cmd[cmd.index("--env-file") + 1] == str(product_env)
+
+    def test_env_file_omitted_when_the_product_has_none(
+        self, runner, product_workspace, tmp_path
+    ):
+        """A product that never ran product:env still gets a usable command."""
+        _declare_docker_feature(tmp_path)
+
+        with patch("subprocess.run", side_effect=_success_run) as mock_run:
+            runner.invoke(product_up, ["--dev"])
+
+        assert "--env-file" not in _feature_up_call(mock_run)
+
+
+# ---------------------------------------------------------------------------
 # Missing pyproject.toml (lines 47-48)
 # ---------------------------------------------------------------------------
 

@@ -4,7 +4,7 @@ import subprocess
 
 import click
 import yaml
-from splent_cli.services import context
+from splent_cli.services import compose, context
 from splent_cli.commands.product.product_build import (
     USER_TUNABLE_COMMENT,
     load_env_file_with_markers,
@@ -122,8 +122,15 @@ def product_deploy(down, ci):
 
         click.echo(click.style("  stopping ", dim=True) + f"{product} (prod)...")
         try:
+            # Same project and same env file the deploy used, so this stops
+            # what it started and nothing else. Without --env-file, Compose
+            # would read the development .env sitting in this directory and
+            # resolve the network to a different name than the one running.
+            cmd = ["docker", "compose", "-p", compose.deploy_project_name(product)]
+            if os.path.isfile(env_path):
+                cmd += ["--env-file", env_path]
             subprocess.run(
-                ["docker", "compose", "-f", compose_path, "down"],
+                cmd + ["-f", compose_path, "down"],
                 check=True,
                 capture_output=True,
                 cwd=docker_dir,
@@ -331,6 +338,17 @@ def product_deploy(down, ci):
     # Deploy using docker compose
     # ---------------------------------------------------------
     click.echo()
+
+    legacy = compose.legacy_deploy_project_notice(product)
+    if legacy:
+        click.secho(legacy, fg="yellow")
+        click.echo()
+
+    # The network the product's containers meet on, one per product. Declared
+    # external in every compose file, so it must exist before the first
+    # container starts.
+    compose.ensure_network(compose.network_name(product))
+
     click.echo(click.style("  deploying ", dim=True) + f"{product} (prod)...")
 
     try:
@@ -338,6 +356,10 @@ def product_deploy(down, ci):
             [
                 "docker",
                 "compose",
+                # Without this, Compose names the project after the directory
+                # holding the compose file, which is 'docker' in every product.
+                "-p",
+                compose.deploy_project_name(product),
                 "-f",
                 compose_path,
                 "--env-file",

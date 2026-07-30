@@ -1,0 +1,44 @@
+# {{ feature_name }} — production stack
+#
+# product:build merges this file into the product's docker-compose.deploy.yml,
+# so in production these services already run inside the product's own Compose
+# project. The per-product isolation is therefore automatic there; the same
+# four rules still apply, because a merged file with a literal host port or a
+# container_name collides with the product's own services instead.
+#
+# Kept separate from the development file so production can differ where it
+# should: no host port published unless something outside really needs it, and
+# resource limits sized for a real machine rather than a laptop.
+services:
+
+  {{ feature_name }}:
+    image: CHANGEME:latest
+    restart: always
+
+    # Publish nothing by default. Other containers reach this service by name
+    # on splent_network, which never leaves the host; a published port is an
+    # open port on the server, so it should be a deliberate decision rather
+    # than something inherited from the development file.
+    # ports:
+    #   - "{{ host_port_ref }}:CHANGEME"
+
+    volumes:
+      - {{ short_name }}_data:/CHANGEME
+
+    healthcheck:
+      test: ["CMD-SHELL", "CHANGEME || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+    networks:
+      - splent_network
+
+volumes:
+  {{ short_name }}_data:
+
+networks:
+  splent_network:
+    external: true
+    name: ${SPLENT_NETWORK:-splent_network}

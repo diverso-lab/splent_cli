@@ -6,15 +6,29 @@ from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.utils.proc import run, require_docker
 
 
-def _docker_down(name: str, base_path: str, env: str):
+def _docker_down(name: str, base_path: str, env: str, product_path: str | None = None):
+    """Stop one stack and delete its volumes.
+
+    ``product_path`` marks the stack as a feature's: it is then named after the
+    product that owns it, so wiping this product's data never wipes the volumes
+    of a sibling product running the same feature version.
+    """
     compose_file = compose.resolve_file(base_path, env)
     if compose_file is None:
         return
-    project_name = compose.project_name(name, env)
+    if product_path is not None:
+        product = os.path.basename(product_path)
+        project_name = compose.feature_project_name(name, product, env)
+        base_cmd = compose.feature_compose_cmd(
+            project_name, compose_file, product_path, env
+        )
+    else:
+        project_name = compose.project_name(name, env)
+        base_cmd = ["docker", "compose", "-p", project_name, "-f", compose_file]
     # Destructive: 'down -v' removes all volumes/data. Do not silence stderr —
     # surface failures instead of always reporting success.
     result = run(
-        ["docker", "compose", "-p", project_name, "-f", compose_file, "down", "-v"],
+        base_cmd + ["down", "-v"],
         check=False,
     )
     if result.returncode != 0:
@@ -84,7 +98,9 @@ def product_clean(env_dev, env_prod, yes):
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
         feat_docker = compose.feature_docker_dir(workspace, clean)
-        _docker_down(clean, os.path.dirname(feat_docker), env)
+        _docker_down(
+            clean, os.path.dirname(feat_docker), env, product_path=product_path
+        )
 
     # ── 2. DB reset ──────────────────────────────────────────────────
     click.secho("\n🗄️  Resetting database...", fg="cyan")

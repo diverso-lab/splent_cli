@@ -157,27 +157,21 @@ def _get_service_names(docker_dir, env):
     return list(data.get("services", {}).keys())
 
 
-def _wait_for_healthy(project_name, compose_file, docker_dir, timeout=60):
+def _wait_for_healthy(base_cmd, docker_dir, timeout=60):
     """Wait for all services in a compose project to be healthy.
 
     Only waits for services that declare a healthcheck. Services without
     healthcheck are considered ready immediately.
+
+    ``base_cmd`` is the full ``docker compose`` prefix the caller used to bring
+    the stack up, so this polls the very project it started. For a feature that
+    means this product's own stack, not another product's.
     """
     deadline = time.time() + timeout
 
     while time.time() < deadline:
         result = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "-p",
-                project_name,
-                "-f",
-                compose_file,
-                "ps",
-                "--format",
-                "json",
-            ],
+            base_cmd + ["ps", "--format", "json"],
             cwd=docker_dir,
             capture_output=True,
             text=True,
@@ -245,12 +239,22 @@ def product_up(dev, prod):
     failed: list[str] = []
     started: list[str] = []
 
-    def launch(name, base_path, wait_health=False):
+    def launch(name, base_path, wait_health=False, feature=False):
         compose_file = compose.resolve_file(base_path, env)
         if compose_file is None:
             return True
 
-        project = compose.project_name(name, env)
+        # A feature's stack is one instance per product, so it is named after
+        # the product too and reads the product's merged .env. The product's own
+        # stack keeps the name it has always had.
+        if feature:
+            project = compose.feature_project_name(name, product, env)
+            base_cmd = compose.feature_compose_cmd(
+                project, compose_file, product_path, env
+            )
+        else:
+            project = compose.project_name(name, env)
+            base_cmd = ["docker", "compose", "-p", project, "-f", compose_file]
         docker_dir = os.path.join(base_path, "docker")
 
         # Build if needed (dev mode — compose handles it natively with up --build)
@@ -259,7 +263,7 @@ def product_up(dev, prod):
         if os.path.isdir(feat_docker) and _has_build(feat_docker, env):
             needs_build = True
 
-        cmd = ["docker", "compose", "-p", project, "-f", compose_file, "up", "-d"]
+        cmd = base_cmd + ["up", "-d"]
         if needs_build:
             cmd.append("--build")
 
@@ -286,7 +290,7 @@ def product_up(dev, prod):
         # Wait for health if this feature has healthchecks
         if wait_health:
             click.echo(click.style(" waiting...", dim=True), nl=False)
-            healthy = _wait_for_healthy(project, compose_file, docker_dir)
+            healthy = _wait_for_healthy(base_cmd, docker_dir)
             if healthy:
                 click.echo(click.style(" ✓", fg="green"))
             else:
@@ -299,6 +303,29 @@ def product_up(dev, prod):
     # Get features in UVL dependency order
     features = _get_feature_order(workspace, product_path, env)
 
+    # Said before anything starts, not after. A stack that comes up without
+    # the product's values reports success and listens on an unpredictable
+    # port, and a leftover container from the shared era competes for the
+    # service name the new one wants; both explain a failure below, and a
+    # warning printed underneath the failure it explains is no warning.
+    notice = compose.missing_env_file_notice(product_path, env)
+    if notice:
+        click.secho(notice, fg="yellow")
+
+    for feat in features:
+        clean = compose.normalize_feature_ref(feat)
+        feat_docker = compose.feature_docker_dir(workspace, clean)
+        cf = compose.resolve_file(os.path.dirname(feat_docker), env)
+        if cf is None:
+            continue
+        legacy = compose.legacy_feature_stack_notice(clean, env, cf)
+        if legacy:
+            click.secho(legacy, fg="yellow")
+
+    # Every compose file declares its network external, so it has to exist
+    # before the first container starts.
+    compose.ensure_network(compose.network_name(product))
+
     # Launch features in order
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
@@ -309,7 +336,7 @@ def product_up(dev, prod):
             continue
 
         has_hc = _has_healthcheck(feat_docker, env)
-        launch(clean, feat_base, wait_health=has_hc)
+        launch(clean, feat_base, wait_health=has_hc, feature=True)
 
     if failed:
         click.secho(

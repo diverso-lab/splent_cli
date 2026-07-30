@@ -20,10 +20,28 @@ from splent_cli.commands.product.product_deploy import product_deploy
 # ── Port conflict helpers ──────────────────────────────────────────────────────
 
 
-def _extract_host_ports(compose_file: str) -> list[tuple[int, str]]:
-    """Return [(host_port, service_name)] declared in a docker-compose file."""
+def _extract_host_ports(
+    compose_file: str, env_args: list[str] | None = None
+) -> list[tuple[int, str]]:
+    """Return [(host_port, service_name)] declared in a docker-compose file.
+
+    ``env_args`` is the product's ``--env-file``. A feature's compose file takes
+    its host port from a variable that only the product's merged .env defines,
+    with this product's offset already applied, so without it the port this
+    check compares against running containers is not the one that will be
+    published.
+    """
     result = subprocess.run(
-        ["docker", "compose", "-f", compose_file, "config", "--format", "json"],
+        [
+            "docker",
+            "compose",
+            *(env_args or []),
+            "-f",
+            compose_file,
+            "config",
+            "--format",
+            "json",
+        ],
         capture_output=True,
         text=True,
     )
@@ -73,9 +91,12 @@ def _run_port_check(
     """
     conflicts = []
     seen_ports: set[int] = set()
+    # Every file is read with the product's merged .env, the same one product:up
+    # hands to the feature stacks, so the ports compared here are the real ones.
+    env_args = compose.env_file_args(product_path, env)
 
     def check_file(label, compose_file):
-        for host_port, svc_name in _extract_host_ports(compose_file):
+        for host_port, svc_name in _extract_host_ports(compose_file, env_args):
             if host_port in seen_ports:
                 continue
             seen_ports.add(host_port)

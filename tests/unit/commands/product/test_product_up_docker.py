@@ -57,14 +57,17 @@ class TestFeatureFailurePropagation:
 
         call_count = {"n": 0}
 
-        # ``docker info`` is the daemon probe (require_docker); everything else is
-        # a ``docker compose up``. Both go through the same ``subprocess.run``
-        # singleton, so one side_effect handles them and keeps the test
-        # independent of whether a real Docker daemon is reachable.
+        # Every docker call goes through the same ``subprocess.run`` singleton:
+        # the daemon probe, the network the stacks join, and the compose ups.
+        # Matching on the command rather than counting calls keeps this test
+        # about what it is for, and stops it breaking whenever the command
+        # gains or loses an unrelated docker call.
         def mock_run(cmd, **kwargs):
             result = MagicMock()
-            if len(cmd) > 1 and cmd[0] == "docker" and cmd[1] == "info":
-                result.returncode = 0
+            result.returncode = 0
+            if not (len(cmd) > 1 and cmd[0] == "docker" and cmd[1] == "compose"):
+                return result
+            if "up" not in cmd:
                 return result
             # First compose up (feature) → fail, second (product) → should never reach
             call_count["n"] += 1

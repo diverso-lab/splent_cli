@@ -236,7 +236,9 @@ def product_restart(env_dev, env_prod, full):
         if not feat_compose:
             continue
 
-        feat_project = compose.project_name(clean, env)
+        # Restart this product's instance of the feature stack, not the one a
+        # sibling product started from the same feature version.
+        feat_project = compose.feature_project_name(clean, product, env)
         short = clean.split("/")[-1] if "/" in clean else clean
         short = short.replace("splent_feature_", "")
 
@@ -245,7 +247,8 @@ def product_restart(env_dev, env_prod, full):
             nl=False,
         )
         result = subprocess.run(
-            ["docker", "compose", "-p", feat_project, "-f", feat_compose, "restart"],
+            compose.feature_compose_cmd(feat_project, feat_compose, product_path, env)
+            + ["restart"],
             cwd=feat_docker,
             capture_output=True,
             text=True,

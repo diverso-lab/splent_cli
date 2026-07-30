@@ -297,6 +297,16 @@ def product_env(generate, merge, env_name, process_all):
                     else:
                         merged.setdefault(k, v)
 
+        # The network this product's containers meet on. Every compose file
+        # resolves its network through ${SPLENT_NETWORK:-splent_network}, so
+        # this line is what separates one product's containers from another's:
+        # without it they share a bridge, share DNS aliases, and each product's
+        # database answers to a name any sibling product can resolve. Set here
+        # rather than left to each product's .env because it is derived, not a
+        # choice, and a product that got it wrong would look fine until a
+        # second product of the same line came up.
+        merged["SPLENT_NETWORK"] = compose.network_name(product)
+
         # Replace __PRODUCT__ placeholder with the actual product name
         product_replaced = []
         for k, v in merged.items():

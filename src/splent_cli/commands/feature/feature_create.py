@@ -45,7 +45,7 @@ def render_and_write_file(env, template_name, filename, context):
         f.write(content)
 
 
-def _build_file_map(feature_type, short_name):
+def _build_file_map(feature_type, short_name, docker=False):
     """Return (src_files, base_files) dicts for the given feature type."""
     T = "feature/"  # template prefix
 
@@ -122,6 +122,20 @@ def _build_file_map(feature_type, short_name):
     else:
         raise ValueError(f"Unknown feature type: {feature_type}")
 
+    # ── A stack of the feature's own ─────────────────────────────────
+    # Orthogonal to the archetype: a feature of any type may need a server,
+    # and the three files always come together. .env.example is not optional
+    # here — without it product:env has no default to offset per product, the
+    # host port variable arrives unset, and Compose quietly publishes on a
+    # random port instead of failing.
+    if docker:
+        base_common = {
+            **base_common,
+            "docker/docker-compose.dev.yml": f"{T}feature_docker-compose.dev.yml.j2",
+            "docker/docker-compose.prod.yml": f"{T}feature_docker-compose.prod.yml.j2",
+            "docker/.env.example": f"{T}feature_docker.env.example.j2",
+        }
+
     # Merge common files (type-specific wins on conflict)
     merged_src = {**src_common, **src}
     merged_base = {**base_common, **base}
@@ -140,7 +154,13 @@ def _build_file_map(feature_type, short_name):
     default="full",
     help="Scaffold type: full (default), light, config, or service.",
 )
-def make_feature(full_name, feature_type):
+@click.option(
+    "--docker",
+    is_flag=True,
+    default=False,
+    help="Also scaffold docker/ for a feature that runs a server of its own.",
+)
+def make_feature(full_name, feature_type, docker):
     """
     Creates a new feature in the workspace.
     The name must follow the pattern <namespace>/<feature_name>.
@@ -153,11 +173,18 @@ def make_feature(full_name, feature_type):
       service  Service feature (services, config, commands, signals — no UI)
 
     \b
+    --docker adds docker/ with a compose stack per environment and the
+    .env.example that gives it its defaults. Every product that installs the
+    feature gets its own instance of that stack. Independent of the type: a
+    feature of any archetype may need a server.
+
+    \b
     Examples:
       splent feature:create splent-io/splent_feature_billing
       splent feature:create splent-io/splent_feature_redis --type config
       splent feature:create splent-io/splent_feature_sidebar --type light
       splent feature:create splent-io/splent_feature_email_queue --type service
+      splent feature:create splent-io/splent_feature_rabbitmq --type service --docker
     """
 
     # --- Validate input pattern ---
@@ -201,6 +228,8 @@ def make_feature(full_name, feature_type):
     # PascalCase for class names: notes_tags → NotesTags
     pascal_name = "".join(w.capitalize() for w in short_name.split("_"))
 
+    env_prefix = short_name.upper()
+
     template_ctx = {
         "feature_name": feature_name,
         "short_name": short_name,
@@ -208,10 +237,16 @@ def make_feature(full_name, feature_type):
         "org_safe": org_safe,
         "feature_import": f"{org_safe}.{feature_name}",
         "cli_version": _CLI_VERSION,
+        # Prefix for this feature's environment variables, and the reference
+        # a compose file makes to its host port. Built here rather than in
+        # the template because "${" opens a Jinja expression and escaping it
+        # inline turns a line that has to be read literally into noise.
+        "env_prefix": env_prefix,
+        "host_port_ref": "${" + env_prefix + "_HOST_PORT}",
     }
 
     # --- Build file maps for the selected type ---
-    src_files, base_files = _build_file_map(feature_type, short_name)
+    src_files, base_files = _build_file_map(feature_type, short_name, docker=docker)
 
     # --- Create src structure ---
     for filename, template in src_files.items():
@@ -263,6 +298,14 @@ def make_feature(full_name, feature_type):
     )
     click.echo(click.style(f"     {feature_dir}", fg="bright_black"))
     click.echo()
+
+    if docker:
+        click.echo(
+            click.style("     docker/  ", fg="cyan")
+            + "one stack per product. Replace every CHANGEME, then run "
+            + click.style("check:infra", bold=True)
+        )
+        click.echo()
 
     if chown_failed:
         click.secho(

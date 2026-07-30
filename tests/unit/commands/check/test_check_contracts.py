@@ -1,9 +1,32 @@
 """check:contracts — split dependency truth between contracts and UVL."""
 
+from unittest.mock import patch
+
+import pytest
 from click.testing import CliRunner
 
-from splent_cli.commands.check.check_contracts import check_contracts
+from splent_cli.commands.check.check_contracts import (
+    _exists_remotely,
+    check_contracts,
+)
 from tests.conftest import make_spl_working_copy
+
+
+@pytest.fixture(autouse=True)
+def features_exist_remotely():
+    """Every feature in these fixtures is assumed to exist on GitHub.
+
+    check:contracts asks GitHub about features it cannot find locally, to tell
+    "not cloned yet" from "declared but never written". That question belongs
+    to the one test that is about it; everywhere else it would put a real
+    network call in a unit test and make the outcome depend on which of these
+    fixture names happens to be a released repository.
+    """
+    with patch(
+        "splent_cli.commands.check.check_contracts._exists_remotely",
+        return_value=True,
+    ):
+        yield
 
 
 UVL = """features
@@ -76,3 +99,44 @@ class TestCheckContracts:
         assert result.exit_code == 0
         assert "not local" in result.output
         assert "auth" in result.output
+
+
+class TestAFeatureTheModelOffersButNobodyWrote:
+    """A variability model is a promise about which products can be built.
+
+    A feature that exists nowhere is offered by product:configure all the
+    same, selected, written into the pyproject, and only fails at derive time
+    on a repository that returns 404. That used to read as "not local", which
+    is the right words for a feature that is merely not cloned.
+    """
+
+    def test_it_is_an_error_and_not_an_aside(self, tmp_path, monkeypatch):
+        _workspace(tmp_path, monkeypatch, {"team": ["media"], "media": [], "notes": []})
+
+        with patch(
+            "splent_cli.commands.check.check_contracts._exists_remotely",
+            return_value=False,
+        ):
+            result = CliRunner().invoke(check_contracts, [])
+
+        assert result.exit_code == 1
+        assert "does not exist" in result.output
+        assert "splent-io/splent_feature_auth" in result.output
+
+    def test_a_feature_merely_not_cloned_stays_an_aside(self, tmp_path, monkeypatch):
+        _workspace(tmp_path, monkeypatch, {"team": ["media"], "media": [], "notes": []})
+        result = CliRunner().invoke(check_contracts, [])
+
+        assert result.exit_code == 0
+        assert "not local" in result.output
+        assert "does not exist" not in result.output
+
+    def test_the_network_being_unreachable_never_invents_a_missing_feature(self):
+        """Everything else here is checked from disk; a diagnostic that failed
+        the build because the wifi dropped would be worse than a quiet one."""
+        with patch("urllib.request.urlopen", side_effect=OSError("no network")):
+            assert _exists_remotely("splent-io", "whatever") is True
+
+    def test_a_feature_with_no_org_is_left_alone(self):
+        """Nothing to look under, so nothing can be concluded."""
+        assert _exists_remotely(None, "splent_feature_x") is True

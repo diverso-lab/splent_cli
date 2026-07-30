@@ -23,14 +23,21 @@ def _status_color(state: str) -> str:
     return state
 
 
-def _get_containers(project_name: str, compose_file: str) -> list[dict]:
-    """Run docker compose ps and return parsed container list."""
+def _get_containers(
+    project_name: str, compose_file: str, env_args: list[str] | None = None
+) -> list[dict]:
+    """Run docker compose ps and return parsed container list.
+
+    ``env_args`` carries the product's ``--env-file`` for feature stacks, whose
+    compose files interpolate variables that only exist in the product's .env.
+    """
     result = subprocess.run(
         [
             "docker",
             "compose",
             "-p",
             project_name,
+            *(env_args or []),
             "-f",
             compose_file,
             "ps",
@@ -133,12 +140,18 @@ def product_docker(env_dev, env_prod):
     product_path = os.path.join(workspace, product)
 
     all_containers: list[tuple[str, dict]] = []  # (source_label, container)
+    legacy_notices: list[str] = []  # feature stacks left over from the shared era
     docker_dir = os.path.join(product_path, "docker")
 
-    # In prod/deploy: everything runs under one compose project (docker-compose.deploy.yml)
+    # In prod/deploy: everything runs under one compose project per product
+    # (docker-compose.deploy.yml). The name used to be the literal "docker",
+    # which is what Compose derives from the directory when no -p is given,
+    # and which every product on the host therefore shared.
     deploy_compose = os.path.join(docker_dir, "docker-compose.deploy.yml")
     if env == "prod" and os.path.isfile(deploy_compose):
-        for c in _get_containers("docker", deploy_compose):
+        deploy_project = compose.deploy_project_name(product)
+        env_args = compose.env_file_args(product_path, env)
+        for c in _get_containers(deploy_project, deploy_compose, env_args):
             svc = c.get("Service") or c.get("Name", "?")
             # Label: feature name if it's a feature service, product name otherwise
             if svc.startswith("splent_feature_"):
@@ -153,6 +166,7 @@ def product_docker(env_dev, env_prod):
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
             features = read_features_from_data(data, env)
+            env_args = compose.env_file_args(product_path, env)
 
             for feat in features:
                 clean = compose.normalize_feature_ref(feat)
@@ -170,10 +184,16 @@ def product_docker(env_dev, env_prod):
                 if not os.path.exists(compose_file):
                     continue
 
-                proj = compose.project_name(clean, env)
-                for c in _get_containers(proj, compose_file):
+                # This product's instance of the feature stack. Listing the
+                # feature-only project would show another product's containers.
+                proj = compose.feature_project_name(clean, product, env)
+                for c in _get_containers(proj, compose_file, env_args):
                     short = clean.split("/")[-1] if "/" in clean else clean
                     all_containers.append((short, c))
+
+                notice = compose.legacy_feature_stack_notice(clean, env, compose_file)
+                if notice:
+                    legacy_notices.append(notice)
 
         # Product containers
         product_compose = compose.resolve_file(product_path, env)
@@ -181,6 +201,14 @@ def product_docker(env_dev, env_prod):
             proj = compose.project_name(product, env)
             for c in _get_containers(proj, product_compose):
                 all_containers.append((product, c))
+
+    # Printed before the table so the empty case explains itself: containers may
+    # well be running, just under the shared project name this product no longer
+    # uses.
+    if legacy_notices:
+        click.echo()
+        for notice in legacy_notices:
+            click.secho(notice, fg="yellow")
 
     if not all_containers:
         click.secho(

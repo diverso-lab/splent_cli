@@ -76,17 +76,33 @@ def product_down(dev, prod, v):
     # --dev: stop development containers
     env = "dev"
 
-    def shutdown(name, base_path):
+    def shutdown(name, base_path, feature=False):
         compose_file = compose.resolve_file(base_path, env)
         if compose_file is None:
             return
-        project_name = compose.project_name(name, env)
 
-        args = ["docker", "compose", "-p", project_name, "-f", compose_file, "down"]
+        # Stop the stack this product started. A feature's stack is per product,
+        # so stopping it must not reach into another product's containers.
+        if feature:
+            project_name = compose.feature_project_name(name, product, env)
+            base_cmd = compose.feature_compose_cmd(
+                project_name, compose_file, product_path, env
+            )
+        else:
+            project_name = compose.project_name(name, env)
+            base_cmd = ["docker", "compose", "-p", project_name, "-f", compose_file]
+        args = base_cmd + ["down"]
         if remove_volumes:
             args += ["-v"]
         subprocess.run(args, check=False)
         click.echo(f"🛑  {name}: stopped successfully")
+
+        # Whatever this feature left behind under the old shared name keeps
+        # running after this command; point at it instead of hiding it.
+        if feature:
+            notice = compose.legacy_feature_stack_notice(name, env, compose_file)
+            if notice:
+                click.secho(notice, fg="yellow")
 
     shutdown(product, product_path)
 
@@ -102,7 +118,7 @@ def product_down(dev, prod, v):
     for feat in features:
         clean = compose.normalize_feature_ref(feat)
         feat_docker = compose.feature_docker_dir(workspace, clean)
-        shutdown(clean, os.path.dirname(feat_docker))
+        shutdown(clean, os.path.dirname(feat_docker), feature=True)
 
     click.secho("🛑 Development environment stopped.", fg="green")
 

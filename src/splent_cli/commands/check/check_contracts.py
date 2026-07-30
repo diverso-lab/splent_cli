@@ -64,6 +64,33 @@ def _local_contract_requires(workspace: str, package: str) -> list[str] | None:
     return None
 
 
+def _exists_remotely(org: str | None, package: str) -> bool:
+    """Whether a feature not present locally at least exists on GitHub.
+
+    Answers True whenever the question cannot be settled: no org to look
+    under, no network, a rate limit, anything unexpected. A diagnostic that
+    invented a missing feature because the wifi dropped would be worse than
+    one that stayed quiet, and everything else here is checked from disk.
+    """
+    if not org:
+        return True
+
+    import urllib.error
+    import urllib.request
+
+    # The UVL writes the org the way GitHub spells it ("splent-io"), which is
+    # not the way the filesystem does ("splent_io"), so it is used verbatim.
+    url = f"https://github.com/{org}/{package}"
+    request = urllib.request.Request(url, method="HEAD")
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status < 400
+    except urllib.error.HTTPError as e:
+        return e.code != 404
+    except Exception:
+        return True
+
+
 @click.command(
     "check:contracts",
     short_help="Check that feature contracts and SPL UVL constraints agree.",
@@ -183,10 +210,44 @@ def check_contracts(spl_name):
                 )
                 spl_warnings += 1
 
-        if missing_local:
+        # 3. Features the model offers that do not exist anywhere.
+        #
+        # A variability model is a promise about which products can be built.
+        # A feature nobody has written yet is offered by product:configure all
+        # the same, selected, written into the pyproject, and only then fails,
+        # at derive time, on a repository that returns 404. Until now this
+        # counted as "not local" and was reported as an aside, which is right
+        # for a feature that simply is not cloned and wrong for one that does
+        # not exist.
+        unbuildable = []
+        for short in missing_local:
+            meta = shorts[short]
+            if not _exists_remotely(meta.get("org"), meta["package"]):
+                unbuildable.append(short)
+
+        for short in unbuildable:
+            meta = shorts[short]
+            click.secho(
+                f"  ✗ {short} is offered by the model but does not exist: "
+                f"{meta.get('org')}/{meta['package']} is not in this workspace, "
+                f"not in the cache and not on GitHub",
+                fg="red",
+            )
             click.echo(
                 click.style(
-                    f"  ℹ  not local (skipped): {', '.join(missing_local)}",
+                    f"      fix: create and release it (splent feature:create "
+                    f"{meta.get('org')}/{meta['package']}), or drop it from the "
+                    f"model until it exists",
+                    fg="bright_black",
+                )
+            )
+            spl_errors += 1
+
+        not_cloned = [s for s in missing_local if s not in unbuildable]
+        if not_cloned:
+            click.echo(
+                click.style(
+                    f"  ℹ  not local (skipped): {', '.join(not_cloned)}",
                     fg="bright_black",
                 )
             )

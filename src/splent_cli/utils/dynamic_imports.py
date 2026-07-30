@@ -121,9 +121,28 @@ def get_app():
     global _app_instance
     if _app_instance is not None:
         return _app_instance
+
+    # Anything that builds the product's app is about to reach the product's
+    # services by name: its database, and the servers its features run. Each
+    # product now has a network of its own, so the CLI's container has to be
+    # on it. Silent and idempotent; when it cannot be done the command below
+    # fails with its own message about the service it could not reach, which
+    # is more use than one about networks.
+    _join_the_products_network()
+
     create_app = get_create_app()
     _app_instance = create_app()
     return _app_instance
+
+
+def _join_the_products_network() -> None:
+    try:
+        from splent_cli.services import compose
+
+        if module_name:
+            compose.attach_self_to_network(compose.network_name(module_name))
+    except Exception:
+        pass
 
 
 def get_current_app_config_value(key: str):

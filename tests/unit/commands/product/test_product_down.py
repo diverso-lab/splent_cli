@@ -128,3 +128,52 @@ class TestFeatureShutdown:
         assert result.exit_code == 0
         # Both product and feature docker compose down calls expected
         assert call_count["n"] >= 1
+
+    def test_stops_the_stack_this_product_started(
+        self, runner, product_workspace, tmp_path
+    ):
+        """product:down must address the same project product:up created,
+        and no other product's copy of the same feature version."""
+        pyproject = tmp_path / "test_app" / "pyproject.toml"
+        data = {
+            "project": {
+                "name": "test_app",
+                "version": "1.0.0",
+                "optional-dependencies": {
+                    "features": ["splent_io/splent_feature_auth@v1.0.0"]
+                },
+            }
+        }
+        with open(pyproject, "wb") as f:
+            tomli_w.dump(data, f)
+
+        feat_docker = (
+            tmp_path
+            / ".splent_cache"
+            / "features"
+            / "splent_io"
+            / "splent_feature_auth@v1.0.0"
+            / "docker"
+        )
+        feat_docker.mkdir(parents=True)
+        (feat_docker / "docker-compose.dev.yml").write_text("services: {}")
+
+        product_env = tmp_path / "test_app" / "docker" / ".env"
+        product_env.write_text("AUTH_HOST_PORT=9604\n")
+
+        with patch("subprocess.run", side_effect=_success_run) as mock_run:
+            result = runner.invoke(product_down, [])
+
+        assert result.exit_code == 0
+        feature_downs = [
+            c[0][0]
+            for c in mock_run.call_args_list
+            if "down" in c[0][0] and any(".splent_cache" in str(a) for a in c[0][0])
+        ]
+        assert feature_downs
+        cmd = feature_downs[0]
+        assert (
+            cmd[cmd.index("-p") + 1]
+            == "test_app_splent_io_splent_feature_auth_v1_0_0_dev"
+        )
+        assert cmd[cmd.index("--env-file") + 1] == str(product_env)

@@ -460,6 +460,13 @@ def product_build(no_image, skip_preflight):
     # Ensure SPLENT_ENV is set to prod in deploy artifacts
     env_result["SPLENT_ENV"] = "prod"
 
+    # The network this product's containers meet on, derived rather than
+    # chosen. It matters most here: several products of one line are deployed
+    # to the same host, and on a shared network their service names collide,
+    # so each product's web container resolves a name that may answer from a
+    # sibling product's container.
+    env_result["SPLENT_NETWORK"] = compose.network_name(product)
+
     # Drop markers for keys that the merge removed, so the example never
     # advertises a tunable that is not in the file.
     tunable_keys &= set(env_result)

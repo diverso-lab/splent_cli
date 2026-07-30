@@ -417,10 +417,23 @@ def feature_install(feature_identifier, env_scope, mode, version):
 
     if compose_file:
         require_docker()
-        proj = compose.project_name(f"{namespace_fs}/{feature_name}", env_name)
+        # Same project name and env file product:up would use, built from the
+        # same ref: install and up have to address one single stack, or the
+        # product ends up with two copies of the feature's services.
+        product_path = compose.product_path(product, workspace)
+        proj = compose.feature_project_name(clean_ref, product, env_name)
+
+        # Without the product's merged values this stack would publish on a
+        # port nobody can predict, so say so rather than starting quietly.
+        notice = compose.missing_env_file_notice(product_path, env_name)
+        if notice:
+            click.secho(notice, fg="yellow")
+        compose.ensure_network(compose.network_name(product))
+
         click.echo(click.style("  docker   ", dim=True) + f"starting {short} services")
         result = run(
-            ["docker", "compose", "-p", proj, "-f", compose_file, "up", "-d"],
+            compose.feature_compose_cmd(proj, compose_file, product_path, env_name)
+            + ["up", "-d"],
             cwd=docker_dir_f,
             check=False,
             capture=True,
