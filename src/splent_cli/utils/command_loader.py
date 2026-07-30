@@ -52,11 +52,22 @@ def load_commands(cli_group):
                         traceback.print_exc()
                     continue
 
-                # Prefer an explicit cli_command attribute when present
-                if hasattr(module, "cli_command"):
-                    command = getattr(module, "cli_command")
-                    if isinstance(command, click.Command):
-                        cli_group.add_command(command)
+                # Prefer an explicit declaration when present. A module may
+                # name one command, or several when a command answers to more
+                # than one name.
+                declared = getattr(module, "cli_commands", None)
+                if declared is None:
+                    declared = getattr(module, "cli_command", None)
+                if declared is not None:
+                    commands = (
+                        declared if isinstance(declared, (list, tuple)) else [declared]
+                    )
+                    added = False
+                    for command in commands:
+                        if isinstance(command, click.Command):
+                            cli_group.add_command(command)
+                            added = True
+                    if added:
                         continue
 
                 # Fall back to scanning all module attributes

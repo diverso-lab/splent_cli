@@ -64,18 +64,25 @@ class SPLENTCLI(click.Group):
         return self._feature_cmds_cache
 
     def get_command(self, ctx, cmd_name):
-        # Built-in commands take priority
-        cmd = super().get_command(ctx, cmd_name)
-        if cmd is not None:
-            return cmd
-        # Fall back to feature-contributed command groups
+        # "feature:<short>" belongs to the feature called <short> whenever the
+        # product installs one. Built-ins win everywhere else.
+        #
+        # Without this rule a feature can be silently unreachable: the CLI
+        # ships feature:search for finding features in the marketplace, and a
+        # product installing splent_feature_search got that command instead of
+        # its own, with nothing said. The feature's name is not something the
+        # CLI gets to reserve, and the built-in has an unambiguous name of its
+        # own (marketplace:search) for the case where it loses.
         feat_cmds = self._load_feature_commands()
-        return feat_cmds.get(cmd_name)
+        if cmd_name in feat_cmds:
+            return feat_cmds[cmd_name]
+        return super().get_command(ctx, cmd_name)
 
     def list_commands(self, ctx):
         builtin = super().list_commands(ctx)
         feat = sorted(self._load_feature_commands().keys())
-        return builtin + feat
+        # A name a feature claimed is listed once, as the feature's.
+        return [name for name in builtin if name not in feat] + feat
 
     # ── App context injection ─────────────────────────────────────
 

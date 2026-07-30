@@ -158,7 +158,7 @@ def _index_search(index, origin, query, category, archetype, tag, provides, requ
 
 
 @click.command(
-    "feature:search",
+    "marketplace:search",
     short_help="Search features in the marketplace index (or live on GitHub).",
 )
 @click.argument("query", required=False)
@@ -236,4 +236,21 @@ def feature_search(
     _index_search(index, origin, query, category, archetype, tag, provides, requires)
 
 
-cli_command = feature_search
+# Two names, and the reason is a collision that had no good answer.
+#
+# This command searches the MARKETPLACE for features, so marketplace:search
+# is what it should always have been called, next to marketplace:index.
+# feature:search stays because it is in everybody's fingers and in scripts,
+# and it keeps working in every product that does not install a feature
+# actually called "search". Where one is installed, feature:search is that
+# feature's own namespace and this command answers to its proper name.
+marketplace_search = feature_search
+feature_search_alias = click.Command(
+    name="feature:search",
+    callback=feature_search.callback,
+    params=feature_search.params,
+    help=feature_search.help,
+    short_help="Alias of marketplace:search.",
+)
+
+cli_commands = [marketplace_search, feature_search_alias]
