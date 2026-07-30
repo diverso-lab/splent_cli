@@ -310,25 +310,31 @@ class TestNetworkName:
 
 
 class TestEnsureNetwork:
-    def test_an_existing_network_is_left_alone(self):
-        with patch("splent_cli.services.compose.subprocess.run") as run:
-            run.return_value = subprocess.CompletedProcess([], 0, "", "")
+    def test_an_existing_network_is_not_created_again(self):
+        calls = []
+
+        def fake(cmd, **kwargs):
+            calls.append(cmd)
+            return subprocess.CompletedProcess([], 0, "", "")
+
+        with patch("splent_cli.services.compose.subprocess.run", side_effect=fake):
             assert compose.ensure_network("egc_wiki_network") is True
-        assert run.call_count == 1
-        assert run.call_args[0][0][:3] == ["docker", "network", "inspect"]
+
+        assert calls[0][:3] == ["docker", "network", "inspect"]
+        assert not any(cmd[:3] == ["docker", "network", "create"] for cmd in calls)
 
     def test_a_missing_network_is_created(self):
         calls = []
 
         def fake(cmd, **kwargs):
             calls.append(cmd)
-            code = 1 if cmd[2] == "inspect" else 0
+            code = 1 if cmd[:3] == ["docker", "network", "inspect"] else 0
             return subprocess.CompletedProcess([], code, "", "")
 
         with patch("splent_cli.services.compose.subprocess.run", side_effect=fake):
             assert compose.ensure_network("egc_wiki_network") is True
 
-        assert calls[1] == ["docker", "network", "create", "egc_wiki_network"]
+        assert ["docker", "network", "create", "egc_wiki_network"] in calls
 
     def test_docker_being_unreachable_is_not_an_exception(self):
         """A convenience must never be the reason a command dies. Without the
@@ -431,3 +437,80 @@ class TestLegacyDeployProjectNotice:
             side_effect=OSError("no docker"),
         ):
             assert compose.legacy_deploy_project_notice("egc_wiki") is None
+
+
+class TestAttachSelfToNetwork:
+    """The CLI runs in a container and reaches product services by name.
+
+    That worked while every product shared one network. With one network
+    per product it has to join the right one, and just as importantly leave
+    the others: a container on two product networks is back to one name
+    answering from two servers, and that container is the one running
+    feature:search reindex, which would rebuild an index into a sibling
+    product's node without an error anywhere.
+    """
+
+    def _in_a_container(self, monkeypatch, networks):
+        monkeypatch.setattr("os.path.exists", lambda p: p == "/.dockerenv")
+        calls = []
+
+        def fake(cmd, **kwargs):
+            calls.append(cmd)
+            if cmd[:2] == ["docker", "inspect"]:
+                return subprocess.CompletedProcess([], 0, " ".join(networks), "")
+            return subprocess.CompletedProcess([], 0, "", "")
+
+        return calls, fake
+
+    def test_it_joins_the_products_network(self, monkeypatch):
+        calls, fake = self._in_a_container(monkeypatch, ["splent_network"])
+        with patch("splent_cli.services.compose.subprocess.run", side_effect=fake):
+            assert compose.attach_self_to_network("egc_wiki_network") is True
+        assert any(
+            cmd[:4] == ["docker", "network", "connect", "egc_wiki_network"]
+            for cmd in calls
+        )
+
+    def test_it_leaves_another_products_network(self, monkeypatch):
+        calls, fake = self._in_a_container(
+            monkeypatch, ["splent_network", "isia_wiki_network"]
+        )
+        with patch("splent_cli.services.compose.subprocess.run", side_effect=fake):
+            compose.attach_self_to_network("egc_wiki_network")
+        assert any(
+            cmd[:4] == ["docker", "network", "disconnect", "isia_wiki_network"]
+            for cmd in calls
+        )
+
+    def test_it_stays_on_the_shared_network(self, monkeypatch):
+        """That is where products written before this rule still live, and
+        where the CLI's own compose file put it."""
+        calls, fake = self._in_a_container(monkeypatch, ["splent_network"])
+        with patch("splent_cli.services.compose.subprocess.run", side_effect=fake):
+            compose.attach_self_to_network("egc_wiki_network")
+        assert not any(
+            cmd[:4] == ["docker", "network", "disconnect", "splent_network"]
+            for cmd in calls
+        )
+
+    def test_already_attached_is_not_attached_again(self, monkeypatch):
+        calls, fake = self._in_a_container(
+            monkeypatch, ["splent_network", "egc_wiki_network"]
+        )
+        with patch("splent_cli.services.compose.subprocess.run", side_effect=fake):
+            assert compose.attach_self_to_network("egc_wiki_network") is True
+        assert not any(cmd[2] == "connect" for cmd in calls if len(cmd) > 2)
+
+    def test_running_on_the_host_does_nothing(self, monkeypatch):
+        monkeypatch.setattr("os.path.exists", lambda p: False)
+        with patch("splent_cli.services.compose.subprocess.run") as run:
+            assert compose.attach_self_to_network("egc_wiki_network") is False
+        run.assert_not_called()
+
+    def test_docker_being_unreachable_is_not_an_exception(self, monkeypatch):
+        monkeypatch.setattr("os.path.exists", lambda p: p == "/.dockerenv")
+        with patch(
+            "splent_cli.services.compose.subprocess.run",
+            side_effect=OSError("no docker"),
+        ):
+            assert compose.attach_self_to_network("egc_wiki_network") is False

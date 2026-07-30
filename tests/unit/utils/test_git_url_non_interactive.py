@@ -17,8 +17,15 @@ def test_git_is_told_not_to_ask_for_credentials():
     assert env["SSH_ASKPASS"] == ""
 
 
-def test_ssh_runs_in_batch_mode():
-    """Otherwise an unknown host key or a passphrase stops the command."""
+def test_ssh_runs_in_batch_mode(monkeypatch):
+    """Otherwise an unknown host key or a passphrase stops the command.
+
+    The variable is cleared first because the next test down proves an
+    existing one is respected: without this the two disagree whenever the
+    shell running the suite happens to export its own, which is exactly what
+    a release run does when it is given a deploy key.
+    """
+    monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
     command = _non_interactive_env()["GIT_SSH_COMMAND"]
     assert "BatchMode=yes" in command
     assert "ConnectTimeout" in command
