@@ -313,7 +313,11 @@ def pin_from_pyproject(data: dict) -> SplPin | None:
 
 
 def read_pin(
-    workspace: str | os.PathLike, name: str, *, product: str | None = None
+    workspace: str | os.PathLike,
+    name: str,
+    *,
+    product: str | None = None,
+    use_catalog: bool = True,
 ) -> SplPin:
     """Best pin available for *name*, merging every place that knows something.
 
@@ -355,6 +359,13 @@ def read_pin(
         if meta.is_file():
             sources.append(pin_from_metadata(name, _load_toml(meta)))
             break
+
+    # The catalog counts as a source everywhere except when the question is
+    # precisely whether anything OTHER than the catalog knows this SPL, which
+    # is what catalog_migration_pending asks.
+    legacy = catalog_entry(workspace, name) if use_catalog else None
+    if legacy is not None:
+        sources.append(pin_from_metadata(name, _load_toml(legacy / METADATA_FILENAME)))
 
     merged = SplPin(name=name)
     for source in sources:
@@ -520,6 +531,18 @@ def find_uvl(
         cached = directory / uvl_filename(name)
         if cached.is_file():
             return str(cached)
+
+    # Last, the legacy catalog. Nothing needs it any more, but a checkout
+    # whose only content is a catalog clone is a real place: the job that
+    # builds the marketplace index clones exactly that and has no products,
+    # no working copies and no cache to read from.
+    legacy = catalog_entry(workspace, name)
+    if legacy is not None:
+        model = legacy / uvl_filename(name)
+        if model.is_file():
+            return str(model)
+        for candidate in sorted(legacy.glob("*.uvl")):
+            return str(candidate)
     return None
 
 
@@ -660,7 +683,7 @@ def catalog_migration_pending(workspace: str | os.PathLike) -> list[str]:
         name = entry.name
         if not _NAME_RE.match(name):
             continue
-        if read_pin(workspace, name).fetchable:
+        if read_pin(workspace, name, use_catalog=False).fetchable:
             continue
         pending.append(name)
     return pending
@@ -732,6 +755,15 @@ def known_spls(workspace: str | os.PathLike) -> list[str]:
         pin = pin_from_pyproject(_load_toml(entry / "pyproject.toml"))
         if pin and _NAME_RE.match(pin.name):
             names.add(pin.name)
+
+    # A leftover catalog still names SPLs even though nothing needs it to
+    # resolve them any more, and in one place it is the only thing that does:
+    # the job that builds the marketplace index clones the catalog into an
+    # otherwise empty checkout. Dropping it from discovery published an index
+    # with every feature and not a single product line.
+    for entry in _safe_iterdir(root / CATALOG_DIRNAME):
+        if entry.is_dir() and _NAME_RE.match(entry.name):
+            names.add(entry.name)
 
     return sorted(names)
 

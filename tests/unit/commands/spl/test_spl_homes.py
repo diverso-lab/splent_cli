@@ -462,7 +462,7 @@ class TestUnmigratedWorkspaceNamesTheFix:
         result = runner.invoke(spl_list, [])
 
         assert result.exit_code == 0, _out(result)
-        assert "no model" in result.output
+        assert "demo_spl" in result.output
         assert "spl:migrate-catalog" in result.output
 
     def test_spl_list_stays_quiet_once_the_product_pins_the_model(
@@ -484,7 +484,17 @@ class TestUnmigratedWorkspaceNamesTheFix:
 
         assert "spl:migrate-catalog" not in result.output
 
-    def test_spl_info_points_at_the_migration(self, workspace, runner, no_network):
+    def test_spl_info_reads_the_doi_the_catalog_still_holds(
+        self, workspace, runner, no_network
+    ):
+        """It used to report no model and no DOI, and name the migration.
+
+        The catalog entry has always held the DOI; nothing read it. Now that
+        the resolver does, the honest answer is that the model is known and
+        simply not downloaded yet, which is something the developer can act
+        on. spl:list still names the migration, so the workspace is not left
+        thinking it is done.
+        """
         from splent_cli.commands.spl.spl_info import spl_info
 
         _catalog(workspace, with_uvl=False)
@@ -493,8 +503,8 @@ class TestUnmigratedWorkspaceNamesTheFix:
         result = runner.invoke(spl_info, ["demo_spl"])
 
         assert result.exit_code == 0, _out(result)
-        assert "no model and no DOI" in result.output
-        assert "spl:migrate-catalog" in result.output
+        assert "spl:fetch demo_spl" in result.output
+        assert "no model and no DOI" not in result.output
 
     def test_spl_info_stays_quiet_once_the_model_is_pinned(
         self, workspace, runner, no_network

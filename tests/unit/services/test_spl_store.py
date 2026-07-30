@@ -383,6 +383,56 @@ class TestKnownSpls:
         ]
 
 
+class TestACheckoutThatOnlyHasTheCatalog:
+    """The one place the legacy catalog is still the only source.
+
+    Nothing needs splent_catalog to resolve a model any more, and that is the
+    point of this module. But the job that builds the marketplace index
+    clones the catalog into an otherwise empty checkout: no products, no
+    working copies, no cache. When discovery stopped looking there, the
+    published index carried forty features and zero product lines, and every
+    configurator page in the deployed marketplace answered 404.
+    """
+
+    def _catalog_entry(self, workspace, name="demo_spl", doi=DOI):
+        entry = workspace / "splent_catalog" / name
+        entry.mkdir(parents=True)
+        (entry / f"{name}.uvl").write_text(UVL)
+        (entry / "metadata.toml").write_text(
+            f'[spl]\nname = "{name}"\ndescription = "from the catalog"\n'
+            f'\n[spl.uvl]\nmirror = "uvlhub.io"\ndoi = "{doi}"\n'
+            f'version = "1"\nfile = "{name}.uvl"\n'
+        )
+        return entry
+
+    def test_the_names_are_discovered(self, tmp_path):
+        self._catalog_entry(tmp_path, "demo_spl")
+        self._catalog_entry(tmp_path, "other_spl")
+        assert spl_store.known_spls(tmp_path) == ["demo_spl", "other_spl"]
+
+    def test_the_model_is_found(self, tmp_path):
+        entry = self._catalog_entry(tmp_path)
+        assert spl_store.find_uvl(tmp_path, "demo_spl") == str(entry / "demo_spl.uvl")
+
+    def test_the_doi_and_description_are_read(self, tmp_path):
+        self._catalog_entry(tmp_path)
+        pin = spl_store.read_pin(tmp_path, "demo_spl")
+        assert pin.doi == DOI
+        assert pin.description == "from the catalog"
+
+    def test_a_working_copy_still_wins(self, tmp_path):
+        """The catalog is the last resort, not a competitor."""
+        copy = make_spl_working_copy(tmp_path, "demo_spl", "features\n\tedited\n")
+        self._catalog_entry(tmp_path)
+        found = spl_store.find_uvl(tmp_path, "demo_spl")
+        assert str(copy) in found
+        assert "splent_catalog" not in found
+
+    def test_a_workspace_without_a_catalog_is_unaffected(self, tmp_path):
+        assert spl_store.known_spls(tmp_path) == []
+        assert spl_store.find_uvl(tmp_path, "demo_spl") is None
+
+
 class TestTwoProductsPinningTwoVersions:
     """The normal state right after spl:publish moves one product forward.
 
