@@ -251,6 +251,23 @@ class TestNamespaceSpelling:
 
         assert self._lists(pyproject)["features"] == ["splent_io/theme@v0.2.1"]
 
+    def test_a_mixed_product_converges_on_its_majority_spelling(
+        self, runner, product_workspace
+    ):
+        """Not on whichever is declared first. A product with nineteen of one
+        and two of the other should not drift towards the two."""
+        pyproject = self._write_pyproject(
+            product_workspace,
+            features=["splent-io/archive@v0.1.1", "splent_io/auth@v1.7.0"],
+            dev=["splent_io/admin@v1.2.0"],
+        )
+        self._setup_cache(product_workspace)
+
+        result = runner.invoke(feature_attach, ["splent-io/theme", "v0.2.1"])
+        assert result.exit_code == 0
+
+        assert "splent_io/theme@v0.2.1" in self._lists(pyproject)["features"]
+
     def test_the_spelling_comes_from_any_list_not_just_this_one(
         self, runner, product_workspace
     ):

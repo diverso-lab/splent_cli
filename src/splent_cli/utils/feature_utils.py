@@ -285,16 +285,23 @@ def product_namespace_spelling(data: dict, namespace: str, default: str) -> str:
     spelling comes from whatever the person typed, a command that adds an
     entry should adopt what is already there rather than create the condition
     the CLI then warns about.
+
+    A product that already mixes them gets its majority spelling, so
+    re-attaching converges on the one it mostly uses instead of on whichever
+    happens to be declared first. Ties keep the earlier one.
     """
     target = normalize_namespace(namespace)
+    counts: dict[str, int] = {}
     for key in FEATURE_LIST_KEYS:
         for entry in read_feature_list(data, key):
             if "/" not in entry:
                 continue
             spelling = entry.split("/")[0]
             if normalize_namespace(spelling) == target:
-                return spelling
-    return default
+                counts[spelling] = counts.get(spelling, 0) + 1
+    if not counts:
+        return default
+    return max(counts, key=lambda spelling: counts[spelling])
 
 
 def prune_feature_links(

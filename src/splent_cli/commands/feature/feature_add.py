@@ -98,7 +98,9 @@ def feature_add(full_name, env_scope):
 
     # Keep one spelling of the namespace per product, whichever it already
     # uses, instead of whichever this invocation happened to be typed with.
-    full_name = f"{product_namespace_spelling(data, org_safe, namespace)}/{feature_name}"
+    full_name = (
+        f"{product_namespace_spelling(data, org_safe, namespace)}/{feature_name}"
+    )
 
     features_key = f"features_{env_scope}" if env_scope else "features"
     short = feature_name.replace("splent_feature_", "")
