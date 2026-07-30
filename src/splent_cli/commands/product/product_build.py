@@ -356,7 +356,14 @@ def product_build(no_image, skip_preflight):
         else os.path.join(docker_path, ".env.example")
     )
 
-    env_result, tunable_keys = load_env_file_with_markers(product_env_file)
+    # The product's own file is CONFIGURATION and a feature's file is a
+    # DEFAULT, so they are collected separately and the product is applied
+    # last. Merging them in declaration order let a feature default overwrite
+    # the value the product had chosen: isia_wiki set COURSES_NAME_PREFIX=ISIA
+    # and the deploy template came out with it empty, which would have created
+    # unnamed courses with no categories in production.
+    product_env, tunable_keys = load_env_file_with_markers(product_env_file)
+    feature_defaults: dict[str, str] = {}
 
     # Read declared features from pyproject.toml (not glob)
     pydata = load_toml(pyproject_path, what="pyproject.toml")
@@ -418,19 +425,24 @@ def product_build(no_image, skip_preflight):
         )
 
         feature_env, feature_tunable = load_env_file_with_markers(feature_env_file)
-        env_result = merge_env_dicts(env_result, feature_env)
+        feature_defaults = merge_env_dicts(feature_defaults, feature_env)
         tunable_keys |= feature_tunable
 
-    # Apply product port offset to feature port variables
+    # Apply the product port offset to feature port variables. Only to those:
+    # the offset exists so two products sharing a feature default do not fight
+    # over the same host port, and a port the product wrote itself is already
+    # the port it means.
     import zlib
 
     port_offset = zlib.crc32(product.encode("utf-8")) % 1000
-    for k, v in env_result.items():
+    for k, v in feature_defaults.items():
         if _is_port_var(k, v):
             try:
-                env_result[k] = str(int(v) + port_offset)
+                feature_defaults[k] = str(int(v) + port_offset)
             except ValueError:
                 pass
+
+    env_result = merge_env_dicts(feature_defaults, product_env)
 
     # Resolve __PRODUCT__ placeholder
     for k, v in env_result.items():

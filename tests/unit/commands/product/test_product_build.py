@@ -184,3 +184,71 @@ class TestProductBuildCommand:
         assert result.exit_code == 0
         content = (docker_dir / ".env.deploy.example").read_text()
         assert "AUTH_SECRET=abc" in content
+
+    def _product_with_feature(self, workspace, product_value, feature_value):
+        """A product that sets a key the feature also declares."""
+        docker_dir = workspace / "test_app" / "docker"
+        (docker_dir / "docker-compose.prod.yml").write_text("services: {}")
+        (docker_dir / ".env.prod.example").write_text(product_value)
+        (workspace / "test_app" / "pyproject.toml").write_text(
+            '[project]\nname = "test_app"\nversion = "1.0.0"\n\n'
+            "[tool.splent]\n"
+            'features = ["splent-io/splent_feature_courses"]\n'
+        )
+        feat_docker = workspace / "splent_feature_courses" / "docker"
+        feat_docker.mkdir(parents=True)
+        (feat_docker / ".env.example").write_text(feature_value)
+        return docker_dir
+
+    def test_the_product_wins_over_a_feature_default(self, runner, product_workspace):
+        """The product's file is configuration; the feature's is a default.
+
+        Merging them in declaration order let the default overwrite the
+        choice: isia_wiki set COURSES_NAME_PREFIX=ISIA and the deploy
+        template came out empty, which would have created unnamed courses
+        with no categories in production.
+        """
+        docker_dir = self._product_with_feature(
+            product_workspace,
+            product_value="COURSES_NAME_PREFIX=ISIA\n",
+            feature_value="COURSES_NAME_PREFIX=\nCOURSES_PATH=cursos\n",
+        )
+
+        result = runner.invoke(product_build, ["--skip-preflight"], input="y\n")
+
+        assert result.exit_code == 0
+        content = (docker_dir / ".env.deploy.example").read_text()
+        assert "COURSES_NAME_PREFIX=ISIA" in content
+        assert "COURSES_NAME_PREFIX=\n" not in content
+        # A key the product says nothing about still comes from the feature.
+        assert "COURSES_PATH=cursos" in content
+
+    def test_a_port_the_product_chose_is_not_offset(self, runner, product_workspace):
+        """The offset keeps two products off the same host port. A port the
+        product wrote itself is already the port it means."""
+        docker_dir = self._product_with_feature(
+            product_workspace,
+            product_value="REDIS_HOST_PORT=6399\n",
+            feature_value="REDIS_HOST_PORT=6379\n",
+        )
+
+        result = runner.invoke(product_build, ["--skip-preflight"], input="y\n")
+
+        assert result.exit_code == 0
+        assert (
+            "REDIS_HOST_PORT=6399" in (docker_dir / ".env.deploy.example").read_text()
+        )
+
+    def test_a_feature_port_default_is_still_offset(self, runner, product_workspace):
+        docker_dir = self._product_with_feature(
+            product_workspace,
+            product_value="UNRELATED=1\n",
+            feature_value="REDIS_HOST_PORT=6379\n",
+        )
+
+        result = runner.invoke(product_build, ["--skip-preflight"], input="y\n")
+
+        assert result.exit_code == 0
+        content = (docker_dir / ".env.deploy.example").read_text()
+        assert "REDIS_HOST_PORT=" in content
+        assert "REDIS_HOST_PORT=6379\n" not in content
