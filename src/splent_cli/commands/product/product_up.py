@@ -321,6 +321,9 @@ def product_up(dev, prod):
         legacy = compose.legacy_feature_stack_notice(clean, env, cf)
         if legacy:
             click.secho(legacy, fg="yellow")
+        superseded = compose.superseded_version_notice(clean, product, env)
+        if superseded:
+            click.secho(superseded, fg="yellow")
 
     # Every compose file declares its network external, so it has to exist
     # before the first container starts.

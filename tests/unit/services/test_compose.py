@@ -514,3 +514,87 @@ class TestAttachSelfToNetwork:
             side_effect=OSError("no docker"),
         ):
             assert compose.attach_self_to_network("egc_wiki_network") is False
+
+
+class TestSupersededVersionNotice:
+    """Moving a feature to a new version leaves the old stack running.
+
+    The pinned version is part of the project name, so the new stack is a
+    different project and the previous one keeps the host port. The next
+    product:up then fails with "port is already allocated" and says nothing
+    about what is holding it. That happened for real, pinning elasticsearch
+    v0.1.1 over v0.1.0.
+    """
+
+    def _projects(self, *names):
+        return subprocess.CompletedProcess([], 0, "\n".join(names) + "\n", "")
+
+    def test_it_names_the_stack_left_behind(self):
+        with patch("splent_cli.services.compose.subprocess.run") as run:
+            run.return_value = self._projects(
+                "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_0_dev",
+                "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_1_dev",
+            )
+            notice = compose.superseded_version_notice(
+                "splent_io/splent_feature_elasticsearch@v0.1.1", "egc_wiki", "dev"
+            )
+        assert "v0_1_0" in notice
+        assert "v0_1_1" not in notice
+
+    def test_another_products_stack_is_not_this_products_problem(self):
+        with patch("splent_cli.services.compose.subprocess.run") as run:
+            run.return_value = self._projects(
+                "isia_wiki_splent_io_splent_feature_elasticsearch_v0_1_0_dev"
+            )
+            assert (
+                compose.superseded_version_notice(
+                    "splent_io/splent_feature_elasticsearch@v0.1.1", "egc_wiki", "dev"
+                )
+                is None
+            )
+
+    def test_the_other_environment_is_left_alone(self):
+        with patch("splent_cli.services.compose.subprocess.run") as run:
+            run.return_value = self._projects(
+                "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_0_prod"
+            )
+            assert (
+                compose.superseded_version_notice(
+                    "splent_io/splent_feature_elasticsearch@v0.1.1", "egc_wiki", "dev"
+                )
+                is None
+            )
+
+    def test_silent_when_only_the_current_stack_is_there(self):
+        with patch("splent_cli.services.compose.subprocess.run") as run:
+            run.return_value = self._projects(
+                "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_1_dev"
+            )
+            assert (
+                compose.superseded_version_notice(
+                    "splent_io/splent_feature_elasticsearch@v0.1.1", "egc_wiki", "dev"
+                )
+                is None
+            )
+
+    def test_it_counts_stopped_containers_too(self):
+        """A stopped container still holds nothing, but a stopped stack is
+        about to be started again by somebody reading this."""
+        with patch("splent_cli.services.compose.subprocess.run") as run:
+            run.return_value = self._projects("")
+            compose.superseded_version_notice(
+                "splent_io/splent_feature_elasticsearch@v0.1.1", "egc_wiki", "dev"
+            )
+        assert "-a" in run.call_args[0][0]
+
+    def test_docker_being_unreachable_is_not_an_exception(self):
+        with patch(
+            "splent_cli.services.compose.subprocess.run",
+            side_effect=OSError("no docker"),
+        ):
+            assert (
+                compose.superseded_version_notice(
+                    "splent_io/splent_feature_elasticsearch@v0.1.1", "egc_wiki", "dev"
+                )
+                is None
+            )

@@ -30,7 +30,9 @@
         <div class="sidebar-content js-simplebar">
 
             <a class="sidebar-brand" href="/">
-                {{ SPLENT_APP }}
+                {# What the site calls itself, not what the code calls it.
+                   SPLENT_APP is the package name and is the last resort. #}
+                {{ config.SITE_NAME or SPLENT_APP }}
             </a>
 
             <ul class="sidebar-nav">

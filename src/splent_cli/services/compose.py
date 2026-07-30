@@ -350,6 +350,66 @@ def legacy_feature_stack_notice(
     )
 
 
+def superseded_version_notice(feature_ref: str, product: str, env: str) -> str | None:
+    """Report this product's stack for an older version of the same feature.
+
+    The pinned version is part of the project name, so moving a feature to a
+    new version starts a new stack and leaves the previous one running. It
+    still holds the host port, which is the same port the new one asks for,
+    so the next ``product:up`` fails on "port is already allocated" and says
+    nothing about why the port is taken. Measured, not supposed: pinning
+    elasticsearch v0.1.1 over v0.1.0 did exactly that.
+
+    Docker is asked for this product's stacks of this feature at any version,
+    which is what the project-name prefix is for, and the one about to run is
+    left out.
+
+    Returns None when there is nothing to report or docker cannot be asked; a
+    courtesy notice must never be the reason a command fails.
+    """
+    current = feature_project_name(feature_ref, product, env)
+    without_version = feature_ref.split("@")[0]
+    prefix = project_name(f"{product}/{without_version}", "").rstrip("_")
+
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--format",
+                '{{.Label "com.docker.compose.project"}}',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+
+    stale = sorted(
+        {
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip().startswith(prefix)
+            and line.strip().endswith(f"_{env}")
+            and line.strip() != current
+        }
+    )
+    if not stale:
+        return None
+
+    short = without_version.split("/")[-1]
+    lines = [
+        f"  {short}: this product still has a stack from a version it no "
+        f"longer pins. It holds the host port the new one wants.",
+    ]
+    lines += [f"  Run: docker compose -p {name} down" for name in stale]
+    return "\n".join(lines)
+
+
 def resolve_file(product_path: str, env: str) -> str | None:
     """Return the path to the active docker-compose file, or None if not found.
 
