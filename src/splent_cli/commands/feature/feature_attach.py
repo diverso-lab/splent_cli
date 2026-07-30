@@ -7,6 +7,7 @@ from splent_cli.utils.feature_utils import (
     find_feature_entries,
     hot_reinstall,
     parse_feature_entry,
+    product_namespace_spelling,
     prune_feature_links,
     read_feature_list,
     remove_feature_link,
@@ -106,9 +107,12 @@ def feature_attach(feature_identifier, version, env_scope):
                 )
 
     # ── Update pyproject.toml ─────────────────────────────────────────
-    full_name = f"{namespace}/{feature_name}@{version}"
-
     data = load_toml(pyproject_path, what="pyproject.toml")
+
+    # Keep one spelling of the namespace per product, whichever it already
+    # uses, instead of whichever this invocation happened to be typed with.
+    spelling = product_namespace_spelling(data, namespace_fs, namespace)
+    full_name = f"{spelling}/{feature_name}@{version}"
 
     features_key = f"features_{env_scope}" if env_scope else "features"
 

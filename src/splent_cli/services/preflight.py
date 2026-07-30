@@ -27,15 +27,48 @@ def _check_pypi_exists(package: str, version: str) -> bool:
         return False
 
 
+def _check_tag_exists(namespace: str, repo: str, tag: str) -> bool:
+    """Is the pinned version tagged on the hosting side?
+
+    Asked without cloning, and without ever letting git stop to ask for
+    credentials, since a wrong namespace spelling over HTTPS is answered with
+    a username prompt rather than an error.
+    """
+    from splent_cli.utils.git_url import (
+        _non_interactive_env,
+        https_url,
+        namespace_spellings,
+    )
+    from splent_cli.utils.proc import run
+
+    for spelling in namespace_spellings(namespace):
+        real, _ = https_url(spelling, repo)
+        result = run(
+            ["git", "ls-remote", "--tags", real, f"refs/tags/{tag}"],
+            check=False,
+            capture=True,
+            env=_non_interactive_env(),
+        )
+        if result.returncode == 0 and (result.stdout or "").strip():
+            return True
+    return False
+
+
 def _check_features_ready(workspace: str, product_dir: str, interactive: bool) -> bool:
-    """Check that all prod features are versioned and published on PyPI.
+    """Check that every prod feature is versioned and can reach the image.
 
     This is not a formality. The production image installs features with pip
-    from PyPI (``splent feature:pip-install`` in the builder stage of
-    ``Dockerfile.<product>.prod``), so a feature that is not there cannot get
-    into the image, and one declared without a version is installed as a bare
-    package name, meaning pip serves whatever PyPI has rather than the code in
-    this workspace.
+    (``splent feature:pip-install`` in the builder stage of
+    ``Dockerfile.<product>.prod``), so a feature neither channel serves cannot
+    get into the image, and one declared without a version is installed as a
+    bare package name, meaning pip serves whatever PyPI has rather than the
+    code in this workspace.
+
+    PyPI is not the only channel. A release tags the commit and uploads the
+    package built from it, so the tag is the same artifact and pip-install
+    falls back to it. Refusing to build over a missing PyPI project would
+    block a product whose code is tagged and reachable, which is what
+    happened when PyPI rate-limited the creation of new projects.
 
     Returns True if all features pass.
     """
@@ -47,8 +80,9 @@ def _check_features_ready(workspace: str, product_dir: str, interactive: bool) -
         return True
 
     issues = []
-    checked = 0
+    from_tag = []
     for entry in features:
+        namespace = entry.split("/")[0] if "/" in entry else ""
         name = entry.split("/")[-1] if "/" in entry else entry
         bare_name = name.split("@")[0]
         short = bare_name.replace("splent_feature_", "")
@@ -59,22 +93,43 @@ def _check_features_ready(workspace: str, product_dir: str, interactive: bool) -
                 (
                     short,
                     "no version, so the image would install whatever PyPI has "
-                    "under that name. Release it first",
+                    "under that name, and there is no tag to fall back to. "
+                    "Release it first",
                 )
             )
             continue
 
         version = name.split("@")[1]
-        checked += 1
 
-        # Check exists on PyPI
-        if not _check_pypi_exists(bare_name, version):
-            issues.append((short, f"@{version} not found on PyPI"))
+        if _check_pypi_exists(bare_name, version):
+            continue
+
+        # Not on PyPI. The tag is the other half of the same release, so the
+        # build still works, but say which features arrive that way.
+        if namespace and _check_tag_exists(namespace, bare_name, version):
+            from_tag.append((short, version))
+        else:
+            issues.append(
+                (
+                    short,
+                    f"@{version} is on neither channel, not on PyPI and not "
+                    "tagged on GitHub, so the image cannot install it",
+                )
+            )
+
+    if interactive:
+        for short, version in from_tag:
+            click.secho(
+                f"  features  {short}: not on PyPI, the image will install its "
+                f"git tag {version}",
+                fg="yellow",
+            )
 
     if not issues:
         if interactive:
+            source = "on PyPI" if not from_tag else "on PyPI or tagged"
             click.echo(
-                f"  features  all {len(features)} feature(s) versioned and on PyPI"
+                f"  features  all {len(features)} feature(s) versioned and {source}"
             )
         return True
 

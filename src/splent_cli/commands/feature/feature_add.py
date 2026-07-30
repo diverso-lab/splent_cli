@@ -8,6 +8,7 @@ from splent_cli.utils.feature_utils import (
     hot_reinstall,
     normalize_namespace,
     parse_feature_entry,
+    product_namespace_spelling,
     prune_feature_links,
     read_feature_list,
     remove_feature_link,
@@ -94,6 +95,10 @@ def feature_add(full_name, env_scope):
         raise SystemExit(1)
 
     data = load_toml(pyproject_path, what="pyproject.toml")
+
+    # Keep one spelling of the namespace per product, whichever it already
+    # uses, instead of whichever this invocation happened to be typed with.
+    full_name = f"{product_namespace_spelling(data, org_safe, namespace)}/{feature_name}"
 
     features_key = f"features_{env_scope}" if env_scope else "features"
     short = feature_name.replace("splent_feature_", "")

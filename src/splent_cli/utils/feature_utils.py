@@ -275,6 +275,28 @@ def remove_feature_link(
     return False
 
 
+def product_namespace_spelling(data: dict, namespace: str, default: str) -> str:
+    """How this product already spells that namespace, or ``default``.
+
+    ``splent-io`` and ``splent_io`` name the same namespace, one being the
+    hosting org and the other the Python package, and both are accepted
+    everywhere. A product that carries the two spellings at once reads as if
+    it depended on two different orgs, and product:validate says so. Since the
+    spelling comes from whatever the person typed, a command that adds an
+    entry should adopt what is already there rather than create the condition
+    the CLI then warns about.
+    """
+    target = normalize_namespace(namespace)
+    for key in FEATURE_LIST_KEYS:
+        for entry in read_feature_list(data, key):
+            if "/" not in entry:
+                continue
+            spelling = entry.split("/")[0]
+            if normalize_namespace(spelling) == target:
+                return spelling
+    return default
+
+
 def prune_feature_links(
     product_path: str,
     namespace: str,

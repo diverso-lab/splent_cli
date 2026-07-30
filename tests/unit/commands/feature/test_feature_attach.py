@@ -208,6 +208,13 @@ class TestNamespaceSpelling:
         return data.get("tool", {}).get("splent", {})
 
     def test_dash_entry_is_replaced_not_duplicated(self, runner, product_workspace):
+        """One declaration, in the spelling the product already used.
+
+        splent-io and splent_io are the same namespace, so typing the other
+        one must not add a second entry. It does not change the existing
+        spelling either: a product carrying both reads as if it depended on
+        two orgs, and product:validate warns about exactly that.
+        """
         pyproject = self._write_pyproject(
             product_workspace, features=["splent-io/theme"]
         )
@@ -217,7 +224,7 @@ class TestNamespaceSpelling:
         assert result.exit_code == 0
 
         lists = self._lists(pyproject)
-        assert lists["features"] == ["splent_io/theme@v0.2.1"]
+        assert lists["features"] == ["splent-io/theme@v0.2.1"]
 
     def test_replaces_entry_declared_in_another_list(self, runner, product_workspace):
         pyproject = self._write_pyproject(
@@ -229,8 +236,33 @@ class TestNamespaceSpelling:
         assert result.exit_code == 0
 
         lists = self._lists(pyproject)
-        assert lists["features"] == ["splent_io/theme@v0.2.1"]
+        assert lists["features"] == ["splent-io/theme@v0.2.1"]
         assert lists["features_dev"] == []
+
+    def test_a_product_with_no_entry_yet_keeps_what_was_typed(
+        self, runner, product_workspace
+    ):
+        """There is nothing to be consistent with, so the argument decides."""
+        pyproject = self._write_pyproject(product_workspace, features=[])
+        self._setup_cache(product_workspace)
+
+        result = runner.invoke(feature_attach, ["splent_io/theme", "v0.2.1"])
+        assert result.exit_code == 0
+
+        assert self._lists(pyproject)["features"] == ["splent_io/theme@v0.2.1"]
+
+    def test_the_spelling_comes_from_any_list_not_just_this_one(
+        self, runner, product_workspace
+    ):
+        pyproject = self._write_pyproject(
+            product_workspace, features=[], dev=["splent-io/auth@v1.7.0"]
+        )
+        self._setup_cache(product_workspace)
+
+        result = runner.invoke(feature_attach, ["splent_io/theme", "v0.2.1"])
+        assert result.exit_code == 0
+
+        assert self._lists(pyproject)["features"] == ["splent-io/theme@v0.2.1"]
 
     def test_reports_the_replaced_entry(self, runner, product_workspace):
         self._write_pyproject(product_workspace, features=["splent-io/theme"])
