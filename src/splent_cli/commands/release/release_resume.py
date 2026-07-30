@@ -367,6 +367,15 @@ def release_resume(target, assume_yes, no_pypi, no_github):
         click.echo()
         raise SystemExit(1)
 
+    # Same reason feature:release asks: the index the marketplace serves lives
+    # in another repository and does not hear about this one. A version that
+    # was finished here rather than in one go is still a new version, and
+    # leaving it out meant the marketplace kept showing the previous one until
+    # the next scheduled build.
+    from splent_cli.services import index_refresh
+
+    index_refresh.request_rebuild()
+
     click.secho(
         f"  {label} {tag} is now published on {', '.join(channels)}.", fg="green"
     )

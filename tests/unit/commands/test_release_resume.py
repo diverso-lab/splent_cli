@@ -301,6 +301,29 @@ class TestDoesOnlyWhatIsMissing:
 # ── One broken channel does not block the other ───────────────────────
 
 
+class TestMarketplaceIndex:
+    """A version finished here is still a new version.
+
+    The index the marketplace serves lives in another repository and does not
+    hear about a release. feature:release asks it to rebuild; resume did not,
+    so a version that needed two runs stayed invisible in the marketplace
+    until the next scheduled build. courses v0.1.2 was exactly that case.
+    """
+
+    def test_finishing_a_release_asks_the_index_to_rebuild(self, feature_ws):
+        with patch("splent_cli.services.index_refresh.request_rebuild") as rebuild:
+            result, _ = _run(["splent_feature_demo"], _gate(pypi_published=False))
+        assert result.exit_code == 0
+        rebuild.assert_called_once()
+
+    def test_nothing_missing_does_not_ask(self, feature_ws, snapshot_exists):
+        """Nothing was published, so there is nothing new to show."""
+        with patch("splent_cli.services.index_refresh.request_rebuild") as rebuild:
+            result, _ = _run(["splent_feature_demo"], _gate())
+        assert result.exit_code == 0
+        rebuild.assert_not_called()
+
+
 class TestPartialRecovery:
     def test_a_blocked_github_does_not_stop_the_pypi_half(self, feature_ws):
         """The exact state of the incident.
