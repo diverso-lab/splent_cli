@@ -174,6 +174,6 @@ class TestFeatureShutdown:
         cmd = feature_downs[0]
         assert (
             cmd[cmd.index("-p") + 1]
-            == "test_app_splent_io_splent_feature_auth_v1_0_0_dev"
+            == "test_app_splent_io_splent_feature_auth_dev"
         )
         assert cmd[cmd.index("--env-file") + 1] == str(product_env)

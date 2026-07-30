@@ -190,7 +190,7 @@ class TestFeatureStackNaming:
         assert result.exit_code == 0
         cmd = _feature_up_call(mock_run)
         project = cmd[cmd.index("-p") + 1]
-        assert project == "test_app_splent_io_splent_feature_auth_v1_0_0_dev"
+        assert project == "test_app_splent_io_splent_feature_auth_dev"
 
     def test_product_stack_keeps_its_own_name(
         self, runner, product_workspace, tmp_path

@@ -51,7 +51,7 @@ class TestFeatureProjectName:
             "splent_io/splent_feature_elasticsearch@v0.1.0", "egc_wiki", "dev"
         )
         assert result.startswith("egc_wiki_")
-        assert result == "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_0_dev"
+        assert result == "egc_wiki_splent_io_splent_feature_elasticsearch_dev"
 
     def test_two_products_differ_on_the_same_feature_version(self):
         """The whole point: egc and isia must not share a container or a volume."""
@@ -60,14 +60,34 @@ class TestFeatureProjectName:
         isia = compose.feature_project_name(ref, "isia_wiki", "dev")
         assert egc != isia
 
-    def test_two_versions_of_one_feature_differ(self):
+    def test_a_version_bump_keeps_the_same_stack(self):
+        """And therefore the same volume.
+
+        The version used to be in the name, and every bump of a feature then
+        started a fresh stack with an empty volume while the old data sat
+        stranded under the previous name. Releasing elasticsearch v0.1.1,
+        whose only change was a comment, wiped a 1246-document search index.
+        For a cache that is a reindex; for a feature that ships a database it
+        is the data.
+        """
         older = compose.feature_project_name(
             "splent_io/splent_feature_redis@v1.0.0", "egc_wiki", "dev"
         )
         newer = compose.feature_project_name(
             "splent_io/splent_feature_redis@v2.0.0", "egc_wiki", "dev"
         )
-        assert older != newer
+        assert older == newer
+
+    def test_an_unpinned_feature_lands_in_the_same_place(self):
+        """feature:unlock drops the @version, and unlocking a feature must
+        not move a product onto a different volume."""
+        pinned = compose.feature_project_name(
+            "splent_io/splent_feature_redis@v1.0.0", "egc_wiki", "dev"
+        )
+        editable = compose.feature_project_name(
+            "splent_io/splent_feature_redis", "egc_wiki", "dev"
+        )
+        assert pinned == editable
 
     def test_is_a_safe_compose_project_name(self):
         result = compose.feature_project_name(
@@ -517,29 +537,34 @@ class TestAttachSelfToNetwork:
 
 
 class TestSupersededVersionNotice:
-    """Moving a feature to a new version leaves the old stack running.
+    """What the version-in-the-name era left behind.
 
-    The pinned version is part of the project name, so the new stack is a
-    different project and the previous one keeps the host port. The next
-    product:up then fails with "port is already allocated" and says nothing
-    about what is holding it. That happened for real, pinning elasticsearch
-    v0.1.1 over v0.1.0.
+    Project names used to carry the pinned version, so every bump started a
+    fresh stack: the old one kept the host port and kept the data. The
+    version is gone from the name now and this finds the leftovers.
     """
 
     def _projects(self, *names):
         return subprocess.CompletedProcess([], 0, "\n".join(names) + "\n", "")
 
-    def test_it_names_the_stack_left_behind(self):
+    def test_it_names_the_stacks_left_behind(self):
         with patch("splent_cli.services.compose.subprocess.run") as run:
             run.return_value = self._projects(
                 "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_0_dev",
                 "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_1_dev",
+                # The current one, which is the version-free name.
+                "egc_wiki_splent_io_splent_feature_elasticsearch_dev",
             )
             notice = compose.superseded_version_notice(
                 "splent_io/splent_feature_elasticsearch@v0.1.1", "egc_wiki", "dev"
             )
         assert "v0_1_0" in notice
-        assert "v0_1_1" not in notice
+        assert "v0_1_1" in notice
+        # And never the one about to run, or the notice would tell somebody
+        # to stop the stack they just started.
+        assert (
+            "-p egc_wiki_splent_io_splent_feature_elasticsearch_dev down" not in notice
+        )
 
     def test_another_products_stack_is_not_this_products_problem(self):
         with patch("splent_cli.services.compose.subprocess.run") as run:
@@ -568,7 +593,7 @@ class TestSupersededVersionNotice:
     def test_silent_when_only_the_current_stack_is_there(self):
         with patch("splent_cli.services.compose.subprocess.run") as run:
             run.return_value = self._projects(
-                "egc_wiki_splent_io_splent_feature_elasticsearch_v0_1_1_dev"
+                "egc_wiki_splent_io_splent_feature_elasticsearch_dev"
             )
             assert (
                 compose.superseded_version_notice(

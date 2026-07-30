@@ -34,11 +34,23 @@ def feature_project_name(feature_ref: str, product: str, env: str) -> str:
     under this rule: a distinct port per product presupposes a distinct
     instance to publish it.
 
-    ``feature_ref`` is a normalised ref (``splent_io/splent_feature_x@v0.1.0``).
-    The pinned version stays in the name so a product that moves to a new
-    version gets a new stack instead of reusing the old one.
+    The pinned version is deliberately NOT part of the name, and it was at
+    first. Compose derives volume names from the project name, so a version
+    in it meant every bump of a feature started a fresh stack with an empty
+    volume and left the old data stranded under the previous name. Observed:
+    releasing elasticsearch v0.1.1, whose only change was a comment, wiped a
+    1246-document search index. For a cache that is a reindex; for a feature
+    that ships a database it is the data.
+
+    A version that genuinely cannot reuse its predecessor's volume, a major
+    engine upgrade with an incompatible on-disk format, is a migration the
+    feature has to describe. It is not something to arrive at by accident on
+    a patch release.
+
+    ``feature_ref`` is a normalised ref (``splent_io/splent_feature_x@v0.1.0``);
+    everything from the ``@`` on is dropped here.
     """
-    return project_name(f"{product}/{feature_ref}", env)
+    return project_name(f"{product}/{feature_ref.split('@')[0]}", env)
 
 
 def deploy_project_name(product: str) -> str:
@@ -351,18 +363,17 @@ def legacy_feature_stack_notice(
 
 
 def superseded_version_notice(feature_ref: str, product: str, env: str) -> str | None:
-    """Report this product's stack for an older version of the same feature.
+    """Report a stack left behind from when the version was in the name.
 
-    The pinned version is part of the project name, so moving a feature to a
-    new version starts a new stack and leaves the previous one running. It
-    still holds the host port, which is the same port the new one asks for,
-    so the next ``product:up`` fails on "port is already allocated" and says
-    nothing about why the port is taken. Measured, not supposed: pinning
-    elasticsearch v0.1.1 over v0.1.0 did exactly that.
+    Project names used to carry the pinned version, so every bump of a
+    feature started a fresh stack: the old one kept running, kept the host
+    port, and kept the data in a volume the new stack could not see. The
+    version is gone from the name now, and this finds what that era left.
 
-    Docker is asked for this product's stacks of this feature at any version,
-    which is what the project-name prefix is for, and the one about to run is
-    left out.
+    Two things need saying and this says both: those containers hold the
+    port the current stack wants, and they hold the volume its data is in.
+    Removing them without ``-v`` keeps the volume, which is why the command
+    offered omits it.
 
     Returns None when there is nothing to report or docker cannot be asked; a
     courtesy notice must never be the reason a command fails.
@@ -403,8 +414,9 @@ def superseded_version_notice(feature_ref: str, product: str, env: str) -> str |
 
     short = without_version.split("/")[-1]
     lines = [
-        f"  {short}: this product still has a stack from a version it no "
-        f"longer pins. It holds the host port the new one wants.",
+        f"  {short}: this product has a stack left over from when project "
+        f"names carried the feature version. It holds the host port this one "
+        f"wants, and the data this one will start without.",
     ]
     lines += [f"  Run: docker compose -p {name} down" for name in stale]
     return "\n".join(lines)
