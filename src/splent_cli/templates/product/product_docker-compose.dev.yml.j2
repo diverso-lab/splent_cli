@@ -18,7 +18,7 @@ services:
       - "{{ web_port }}:5000"
       # Locust web interface, served from inside this container by
       # 'splent locust'.
-      - "8089:8089"
+      - "{{ locust_port }}:8089"
     depends_on:
       {{ product_name }}_db:
         condition: service_healthy

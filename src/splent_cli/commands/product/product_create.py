@@ -123,6 +123,10 @@ def make_product(name, spl_name, spl_doi, features_file, force):
     web_port = 5000 + offset
     db_port = 33060 + offset
     redis_port = 6379 + offset
+    # Locust binds a fixed 8089 in the template it came from, which meant no
+    # two products of a line could run in dev at the same time on one
+    # machine. Running several at once is the point of a product line.
+    locust_port = 8089 + offset
     mailhog_port_one = 8025 + offset
     mailhog_port_two = 1025 + offset
 
@@ -146,7 +150,7 @@ def make_product(name, spl_name, spl_doi, features_file, force):
                     parts = str(p).split(":")
                     if len(parts) == 2:
                         existing_port = int(parts[0])
-                        if existing_port in (web_port, db_port):
+                        if existing_port in (web_port, db_port, locust_port):
                             click.secho(
                                 f"\u26a0\ufe0f  Port conflict: {existing_port} already used by product '{existing.name}'.\n"
                                 f"   Edit the generated docker-compose files to use different ports.",
@@ -161,6 +165,7 @@ def make_product(name, spl_name, spl_doi, features_file, force):
         "web_port": web_port,
         "db_port": db_port,
         "redis_port": redis_port,
+        "locust_port": locust_port,
         "mailhog_port_one": mailhog_port_one,
         "mailhog_port_two": mailhog_port_two,
         "cli_version": _CLI_VERSION,
