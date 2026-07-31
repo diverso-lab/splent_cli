@@ -118,7 +118,13 @@ class TestUpgrade403:
             result = runner.invoke(feature_upgrade, ["splent_feature_auth"])
 
         assert result.exit_code == 0
-        assert "already at the latest version" in result.output.lower()
+        # Not "already at the latest version". Nothing was compared against
+        # anything: the rate limit stopped the check before it started, and
+        # saying the feature is current is the one thing this command must
+        # never invent.
+        assert "could not check" in result.output.lower()
+        assert "nothing could be checked" in result.output.lower()
+        assert "already at the latest version" not in result.output.lower()
 
 
 # ── feature:versions ────────────────────────────────────────────────────────
@@ -298,5 +304,6 @@ class TestHappyPath:
             result = runner.invoke(feature_upgrade, [])
 
         assert result.exit_code == 0
-        assert "already at the latest version" in result.output.lower()
+        assert "at its latest version" in result.output.lower()
+        assert "could not check" not in result.output.lower()
         _no_traceback(result.output)

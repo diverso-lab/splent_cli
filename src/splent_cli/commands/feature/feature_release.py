@@ -551,6 +551,49 @@ def infer_contract(
     }
 
 
+def _sections_not_owned_by_the_contract(tail: str) -> str:
+    """The TOML sections below the contract that the contract did not write.
+
+    ``[tool.splent.contract]`` and its subtables are regenerated from source
+    and go; anything else a maintainer put there stays, with the comments
+    written above it, since a comment above a table is about that table.
+    """
+    chunks: list[list[str]] = []
+    lead: list[str] = []
+    current: list[str] | None = None
+
+    for line in tail.splitlines():
+        if line.startswith("["):
+            if current is not None:
+                chunks.append(current)
+            current = [*lead, line]
+            lead = []
+        elif current is None:
+            # Before the first table: comments introducing whatever follows.
+            lead.append(line)
+        elif line.strip().startswith("#") or not line.strip():
+            # Might introduce the next table rather than close this one, so
+            # it is held until the next line says which.
+            lead.append(line)
+        else:
+            current.extend(lead)
+            lead = []
+            current.append(line)
+
+    if current is not None:
+        chunks.append(current)
+
+    kept = []
+    for chunk in chunks:
+        header = next((line for line in chunk if line.startswith("[")), "")
+        if header.startswith("[tool.splent.contract"):
+            continue
+        body = "\n".join(chunk).strip()
+        if body:
+            kept.append(body)
+    return "\n\n".join(kept)
+
+
 def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> None:
     path = Path(pyproject_path)
     text = path.read_text()
@@ -596,20 +639,20 @@ def write_contract(pyproject_path: str, contract: dict, feature_name: str) -> No
         "requires_features_manual": sorted(set(manual_requires)),
     }
 
-    # Preserve any refinement section that comes after the contract
-    refinement_block = ""
-    ref_match = re.search(
-        r"((?:^# -- Refinement.*?\n)?^\[tool\.splent\.refinement\].*)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    if ref_match:
-        refinement_block = "\n" + ref_match.group(1).rstrip() + "\n"
-
     match = re.search(r"^# ── Feature Contract\b.*$", text, re.MULTILINE)
     if not match:
         match = re.search(r"^\[tool\.splent\.contract\b", text, re.MULTILINE)
+
+    # Whatever a maintainer wrote below the contract is theirs, and the
+    # contract is refreshed by truncating from its header and writing a new
+    # block: everything after it went with it. That is how
+    # [tool.splent.config] vanished from five features the moment they were
+    # released, silently taking every declared default with them.
+    refinement_block = ""
     if match:
+        preserved = _sections_not_owned_by_the_contract(text[match.start() :])
+        if preserved:
+            refinement_block = "\n" + preserved + "\n"
         text = text[: match.start()]
     # Normalize trailing whitespace on both paths so a first write and a
     # rewrite produce byte-identical output.

@@ -50,8 +50,13 @@ def _read_features(pyproject_path: Path) -> list[dict]:
     for ref in refs:
         if "/" in ref:
             ns_part, rest = ref.split("/", 1)
-            ns_github = ns_part
             ns_fs = normalize_namespace(ns_part)
+            # A pyproject writes the namespace the way a Python package
+            # needs it, splent_io, and GitHub serves it as splent-io. Taking
+            # it verbatim asked the API about an organisation that does not
+            # exist, and every feature was then reported as already up to
+            # date.
+            ns_github = ns_fs.replace("_", "-")
         else:
             ns_github = "splent-io"
             ns_fs = "splent_io"
@@ -178,9 +183,13 @@ def feature_upgrade(feature_ref, yes):
     click.secho("  Checking latest versions on GitHub...", fg="bright_black")
 
     upgrades = []
+    unchecked = []
     for feat in features:
         latest = _latest_remote_version(feat["ns_github"], feat["name"], token)
         if not latest:
+            # Not the same as being up to date, and saying so would be a
+            # lie about the one thing this command is for.
+            unchecked.append(feat["name"])
             continue
 
         current = feat["version"]
@@ -197,9 +206,27 @@ def feature_upgrade(feature_ref, yes):
         if is_newer:
             upgrades.append({**feat, "latest": latest})
 
+    if unchecked:
+        click.echo()
+        click.secho(
+            f"  ⚠  Could not check {len(unchecked)}: {', '.join(unchecked)}",
+            fg="yellow",
+        )
+        click.secho(
+            "     Whatever is declared for these was left alone. They may or\n"
+            "     may not have a newer version.",
+            dim=True,
+        )
+
     if not upgrades:
         click.echo()
-        click.secho("  ✅ All features are already at the latest version.", fg="green")
+        if unchecked and len(unchecked) == len(features):
+            click.secho("  Nothing could be checked.", fg="yellow")
+        else:
+            click.secho(
+                "  ✅ Every feature that could be checked is at its latest version.",
+                fg="green",
+            )
         click.echo()
         return
 
