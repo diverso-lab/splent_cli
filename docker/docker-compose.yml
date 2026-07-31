@@ -9,9 +9,21 @@ services:
       HOST_UID: ${HOST_UID:-1000}
       HOST_GID: ${HOST_GID:-1000}
       SPLENT_CONTAINER: cli
+      # Credentials are deliberately absent here. The CLI loads the
+      # workspace .env itself, and load_dotenv does not overwrite a variable
+      # that already exists: declaring GITHUB_TOKEN with an empty default
+      # would set it to the empty string and shadow the real one for good.
     volumes:
       - ../../:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mounted where the process actually looks. The container runs as
+      # root, so ssh reads /root/.ssh; mounting only to /home/splent left
+      # every push failing with "Permission denied (publickey)" halfway
+      # through a release, after PyPI had already accepted the upload.
+      # Both are mounted so the day this runs as an unprivileged user it
+      # keeps working.
+      - ${HOME}/.ssh:/root/.ssh:ro
+      - ${HOME}/.gitconfig:/root/.gitconfig:rw
       - ${HOME}/.ssh:/home/splent/.ssh:ro
       - ${HOME}/.gitconfig:/home/splent/.gitconfig:rw
     stdin_open: true
