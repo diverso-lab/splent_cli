@@ -13,6 +13,9 @@ Works with both editable features (no version) and versioned features (@v1.x.x).
 """
 
 import os
+import re
+import tomllib
+
 import click
 from pathlib import Path
 
@@ -337,6 +340,10 @@ def feature_contract(feature_ref, write):
 
     if not has_changes:
         click.secho("  ✅ Contract is already up to date.", fg="green")
+        # Reported here too: a settings gap has nothing to do with whether
+        # the contract changed, and an up to date contract is exactly when
+        # nobody would think to look.
+        _check_declared_config(cache_path, inferred)
         click.echo()
         return
 
@@ -347,6 +354,7 @@ def feature_contract(feature_ref, write):
             + click.style("--write", bold=True)
             + " to update pyproject.toml."
         )
+        _check_declared_config(cache_path, inferred)
         click.echo()
         return
 
@@ -357,7 +365,83 @@ def feature_contract(feature_ref, write):
     # Check if config.py needs updating
     _check_config_py(cache_path, ns, name, inferred)
 
+    # And whether the settings it reads are declared where a product looks
+    _check_declared_config(cache_path, inferred)
+
     click.echo()
+
+
+# Variables whose value is a credential. A default for one of these does not
+# belong in a committed file, so they are expected to be absent from the
+# declaration and are not reported as missing.
+_SECRET = re.compile(r"(SECRET|PASSWORD|API_KEY|TOKEN|_KEY$)")
+
+# Set for every product by the framework and the compose files. A feature
+# that reads one is asking where it is running, not offering a setting, so
+# declaring a default for it would be claiming something it does not own.
+_FRAMEWORK_VARS = {
+    "FLASK_APP",
+    "PYTHONPATH",
+    "SPLENT_APP",
+    "SPLENT_ENV",
+    "SPLENT_HOST_PROJECT_DIR",
+    "SPLENT_NETWORK",
+    "WORKING_DIR",
+}
+
+
+def _check_declared_config(feature_path, inferred):
+    """Report settings the feature reads but declares nowhere.
+
+    A variable that appears only as an ``os.getenv`` fallback is invisible:
+    a product cannot discover the knob exists, and nothing tells a reader of
+    the pyproject what happens if it is left alone. ``[tool.splent.config]``
+    is where that is written down, whether or not the feature ships a
+    container.
+    """
+    env_vars = [
+        v
+        for v in inferred.get("env_vars", [])
+        if not _SECRET.search(v) and v not in _FRAMEWORK_VARS
+    ]
+    if not env_vars:
+        return
+
+    pyproject = feature_path / "pyproject.toml"
+    try:
+        with open(pyproject, "rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return
+
+    declared = set(data.get("tool", {}).get("splent", {}).get("config", {}))
+    # A feature that ships a service may state a default next to its compose
+    # file instead, which is equally visible to product:env --merge.
+    env_example = feature_path / "docker" / ".env.example"
+    if env_example.exists():
+        declared |= {
+            line.split("=", 1)[0].strip()
+            for line in env_example.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()
+            if "=" in line and not line.strip().startswith("#")
+        }
+
+    missing = sorted(set(env_vars) - declared)
+    if not missing:
+        return
+
+    click.echo()
+    click.secho(
+        f"  ⚠  {len(missing)} setting(s) read but not declared in "
+        f"[tool.splent.config]: {', '.join(missing)}",
+        fg="yellow",
+    )
+    click.secho(
+        "     Add one line per variable, the value being its default, so a\n"
+        "     product can see the knob and override only what it decides.",
+        dim=True,
+    )
 
 
 def _check_config_py(feature_path, ns, name, inferred):
