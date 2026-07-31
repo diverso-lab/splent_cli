@@ -75,7 +75,31 @@ def _extract_feature(feature_root, src_dir, translations_dir, name):
             f.write("[python: **.py]\n[jinja2: **/templates/**.html]\n")
 
         ok, output = _run_pybabel(
-            ["extract", "-F", babel_cfg, "-o", pot_file, "src/"],
+            # -k for the lazy forms. pybabel knows _, gettext and ngettext
+            # out of the box and nothing else, so every string wrapped in
+            # lazy_gettext was silently absent from the catalog: the label
+            # on a form field, which is exactly where lazy is the only
+            # correct choice, because a form class is built once at import
+            # time and an eager gettext there freezes whichever locale
+            # happened to be active during startup.
+            #
+            # The symptom was a login form whose placeholders translated
+            # and whose labels did not, in a product that looked fully
+            # translated everywhere else.
+            [
+                "extract",
+                "-F",
+                babel_cfg,
+                "-k",
+                "_l",
+                "-k",
+                "lazy_gettext",
+                "-k",
+                "_n:1,2",
+                "-o",
+                pot_file,
+                "src/",
+            ],
             cwd=feature_root,
         )
     finally:
