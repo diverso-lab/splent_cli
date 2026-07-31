@@ -437,24 +437,39 @@ def resolve_file(product_path: str, env: str) -> str | None:
     return None
 
 
-def feature_docker_dir(workspace: str, feature: str) -> str:
-    """Return the docker/ directory for a feature.
+def feature_dir(workspace: str, feature: str) -> str:
+    """Return the root directory of a feature: where its pyproject lives.
 
-    Accepts refs like 'splent_io/splent_feature_redis@v1.5.4' or bare 'splent_feature_redis'.
-    Checks workspace root first (editable features), then falls back
-    to the .splent_cache (pinned features).
+    Accepts refs like 'splent_io/splent_feature_redis@v1.5.4' or bare
+    'splent_feature_redis'. Checks the workspace root first (editable
+    features), then falls back to the .splent_cache (pinned features).
+
+    Resolution is by the feature's own directory rather than by any file
+    inside it, so a feature that ships no docker/ still resolves to its
+    editable copy. Keying on docker/ meant a feature with no container
+    silently resolved to a stale pinned copy in the cache, and read that
+    copy's settings instead of the ones being edited.
     """
     # Extract bare name (strip org prefix and version)
     name = feature.split("/")[-1] if "/" in feature else feature
     bare_name = name.split("@")[0]
 
     # Editable feature at workspace root
-    root_docker = os.path.join(workspace, bare_name, "docker")
-    if os.path.isdir(root_docker):
-        return root_docker
+    root = os.path.join(workspace, bare_name)
+    if os.path.isdir(root):
+        return root
 
     # Pinned feature in cache (needs full ref with org and version)
-    return os.path.join(workspace, ".splent_cache", "features", feature, "docker")
+    return os.path.join(workspace, ".splent_cache", "features", feature)
+
+
+def feature_docker_dir(workspace: str, feature: str) -> str:
+    """Return the docker/ directory for a feature.
+
+    The directory need not exist: only features that bring a container
+    have one, and callers check before reading.
+    """
+    return os.path.join(feature_dir(workspace, feature), "docker")
 
 
 def normalize_feature_ref(feat: str) -> str:

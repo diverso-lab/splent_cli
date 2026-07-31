@@ -54,3 +54,20 @@ templates = []
 models = []
 hooks = []
 routes = false
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+# What this feature reads from the environment, and what it falls back to.
+# One line per variable, the value being the default.
+#
+# This is where a default belongs, whether or not the feature ships a
+# container: docker/.env.example only exists for features that bring a
+# service, and a setting is not infrastructure. A product overrides any of
+# these in its own [tool.splent.config]; it never copies the ones it agrees
+# with. `splent product:env --merge` and `splent product:build` both read
+# this, so dev and deploy see the same values.
+#
+# Types map to what an env file can hold: true becomes "true", a list
+# becomes a comma separated string. Keys ending in _HOST_PORT get the
+# product's port offset, so two products can run at once.
+[tool.splent.config]
+# {{ env_prefix }}_EXAMPLE = "value"

@@ -43,6 +43,46 @@ def _parse_env_line(line: str):
     return key, value
 
 
+def _declared_config(pyproject_path: str) -> dict:
+    """The ``[tool.splent.config]`` block of a pyproject, as strings.
+
+    A feature declares the variables it reads and what they default to; a
+    product declares the ones it decides differently. Both use the same
+    key, because they are the same kind of statement made by two different
+    owners, and the merge decides which wins.
+
+    Values are stringified because an env file has no types. A boolean
+    written as ``true`` in TOML reaches the environment as ``true``, which
+    is what every config.py in this workspace already parses.
+    """
+    try:
+        with open(pyproject_path, "rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+
+    declared = data.get("tool", {}).get("splent", {}).get("config", {})
+    if not isinstance(declared, dict):
+        return {}
+
+    out = {}
+    for key, value in declared.items():
+        if isinstance(value, bool):
+            out[key] = "true" if value else "false"
+        elif isinstance(value, (int, float, str)):
+            out[key] = str(value)
+        elif isinstance(value, list):
+            # A list is the natural way to write something the reader of
+            # the .env will see comma separated, like a set of locales.
+            out[key] = ",".join(str(item) for item in value)
+    return out
+
+
+def _feature_pyproject(workspace: str, clean_ref: str) -> str:
+    """Where a feature's own pyproject lives, editable or pinned."""
+    return os.path.join(compose.feature_dir(workspace, clean_ref), "pyproject.toml")
+
+
 def _is_port_var(key: str, value: str) -> bool:
     """Check if an env var looks like a port declaration.
 
@@ -231,6 +271,11 @@ def product_env(generate, merge, env_name, process_all):
                     k, v = parsed
                     merged[k] = v
 
+        # What the product's own env file states, captured before anything
+        # is merged into it. These keys are the product's last word: nothing
+        # declared in a pyproject, its own included, may quietly replace one.
+        stated_by_the_product = set(merged)
+
         # Always set SPLENT_ENV to match the current merge target
         merged["SPLENT_ENV"] = env_name
 
@@ -307,6 +352,59 @@ def product_env(generate, merge, env_name, process_all):
         # second product of the same line came up.
         merged["SPLENT_NETWORK"] = compose.network_name(product)
 
+        # ── What each side declares in its pyproject ─────────────────────
+        #
+        # A feature declares the variables it reads and their defaults; a
+        # product declares the ones it decides differently. Same key on both
+        # sides, because it is the same kind of statement made by two owners.
+        #
+        # This exists so a product's .env example can go back to being
+        # infrastructure. Feature settings used to be copied into it, which
+        # meant a product carried variables it had no opinion about, and a
+        # feature with no container had nowhere to declare a default at all,
+        # since .env.example lives under docker/.
+        #
+        # Precedence, weakest first:
+        #   feature docker/.env.example   (already merged above)
+        #   feature [tool.splent.config]
+        #   product [tool.splent.config]
+        #   product .env.<env>.example    (captured in stated_by_the_product)
+        #
+        # A feature that states a default in both places is saying the same
+        # thing twice; the pyproject wins because that is where a product's
+        # override sits, so the two can be read side by side.
+        declared_by_features = []
+        for feature in features:
+            clean_ref = compose.normalize_feature_ref(feature)
+            for key, value in _declared_config(
+                _feature_pyproject(workspace, clean_ref)
+            ).items():
+                if key in stated_by_the_product:
+                    continue
+                if _is_port_var(key, value):
+                    # Same offset the container defaults get: a port a
+                    # feature declares is still a port two products would
+                    # otherwise fight over.
+                    try:
+                        merged[key] = str(int(value) + port_offset)
+                        port_adjusted.append(
+                            (key, int(value), int(value) + port_offset)
+                        )
+                    except ValueError:
+                        merged[key] = value
+                else:
+                    merged[key] = value
+                declared_by_features.append(key)
+
+        product_declared = _declared_config(py_path)
+        for key, value in product_declared.items():
+            # Beats the feature's default, which is the point of writing it
+            # here, and loses to the product's own env file, which is the
+            # escape hatch for a setting an operator needs to force.
+            if key in stated_by_the_product:
+                continue
+            merged[key] = value
+
         # Replace __PRODUCT__ placeholder with the actual product name
         product_replaced = []
         for k, v in merged.items():
@@ -323,6 +421,17 @@ def product_env(generate, merge, env_name, process_all):
             click.echo(
                 click.style("  product  ", dim=True)
                 + f"resolved __PRODUCT__ in {len(product_replaced)} variable(s) → {product}"
+            )
+
+        if declared_by_features:
+            click.echo(
+                click.style("  declared ", dim=True)
+                + f"{len(declared_by_features)} default(s) from feature pyprojects"
+            )
+        if product_declared:
+            click.echo(
+                click.style("  product  ", dim=True)
+                + f"{len(product_declared)} value(s) this product decides"
             )
 
         if port_adjusted:

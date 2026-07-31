@@ -7,7 +7,11 @@ from splent_cli.services import context, compose
 from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
 from splent_cli.utils.io_utils import load_toml
-from splent_cli.commands.product.product_env import _is_port_var
+from splent_cli.commands.product.product_env import (
+    _declared_config,
+    _feature_pyproject,
+    _is_port_var,
+)
 
 
 # ── User-tunable env vars ─────────────────────────────────────────────────────
@@ -415,18 +419,25 @@ def product_build(no_image, skip_preflight):
         seen_features.add(clean)
 
         f_docker = compose.feature_docker_dir(workspace, clean)
-        if not os.path.isdir(f_docker):
-            continue
+        if os.path.isdir(f_docker):
+            feature_env_file = (
+                os.path.join(f_docker, ".env.prod.example")
+                if os.path.isfile(os.path.join(f_docker, ".env.prod.example"))
+                else os.path.join(f_docker, ".env.example")
+            )
 
-        feature_env_file = (
-            os.path.join(f_docker, ".env.prod.example")
-            if os.path.isfile(os.path.join(f_docker, ".env.prod.example"))
-            else os.path.join(f_docker, ".env.example")
+            feature_env, feature_tunable = load_env_file_with_markers(feature_env_file)
+            feature_defaults = merge_env_dicts(feature_defaults, feature_env)
+            tunable_keys |= feature_tunable
+
+        # What the feature declares in its own pyproject, applied after its
+        # env example so the pyproject wins. Outside the isdir() guard on
+        # purpose: most features ship no docker/ at all, and those are the
+        # ones with nowhere else to state a default. Skipping them would put
+        # a deploy template together out of whatever config.py falls back to.
+        feature_defaults = merge_env_dicts(
+            feature_defaults, _declared_config(_feature_pyproject(workspace, clean))
         )
-
-        feature_env, feature_tunable = load_env_file_with_markers(feature_env_file)
-        feature_defaults = merge_env_dicts(feature_defaults, feature_env)
-        tunable_keys |= feature_tunable
 
     # Apply the product port offset to feature port variables. Only to those:
     # the offset exists so two products sharing a feature default do not fight
@@ -442,7 +453,12 @@ def product_build(no_image, skip_preflight):
             except ValueError:
                 pass
 
-    env_result = merge_env_dicts(feature_defaults, product_env)
+    # And what the product decides about those features, which beats their
+    # defaults and loses to the product's own env file, exactly as in
+    # product:env --merge. The two paths have to agree: a deploy template
+    # that disagreed with dev would only be found in production.
+    env_result = merge_env_dicts(feature_defaults, _declared_config(pyproject_path))
+    env_result = merge_env_dicts(env_result, product_env)
 
     # Resolve __PRODUCT__ placeholder
     for k, v in env_result.items():

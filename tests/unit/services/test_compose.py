@@ -298,14 +298,35 @@ class TestPaths:
         result = compose.product_path("my_app", "/workspace")
         assert result == "/workspace/my_app"
 
-    def test_feature_docker_dir(self):
+    def test_a_pinned_feature_resolves_to_the_cache(self, tmp_path):
         result = compose.feature_docker_dir(
-            "/workspace", "splent_io/splent_feature_auth"
+            str(tmp_path), "splent_io/splent_feature_auth@v1.10.0"
         )
-        assert (
-            result
-            == "/workspace/.splent_cache/features/splent_io/splent_feature_auth/docker"
+        assert result == str(
+            tmp_path
+            / ".splent_cache/features/splent_io/splent_feature_auth@v1.10.0/docker"
         )
+
+    def test_an_editable_feature_resolves_to_the_workspace(self, tmp_path):
+        (tmp_path / "splent_feature_auth" / "docker").mkdir(parents=True)
+
+        result = compose.feature_docker_dir(
+            str(tmp_path), "splent_io/splent_feature_auth"
+        )
+
+        assert result == str(tmp_path / "splent_feature_auth" / "docker")
+
+    def test_an_editable_feature_without_a_container_still_resolves_there(
+        self, tmp_path
+    ):
+        """Most features ship no docker/ at all. Resolving by that directory
+        sent them to a stale pinned copy in the cache, so the settings read
+        were not the ones being edited."""
+        (tmp_path / "splent_feature_auth").mkdir()
+
+        assert compose.feature_dir(
+            str(tmp_path), "splent_io/splent_feature_auth"
+        ) == str(tmp_path / "splent_feature_auth")
 
 
 # ---------------------------------------------------------------------------
