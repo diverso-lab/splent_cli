@@ -43,6 +43,12 @@ RUN pip install --no-cache-dir ./{{ product_name }}
 # whatever PyPI serves rather than the code in the workspace.
 ENV SPLENT_APP={{ product_name }}
 ENV WORKING_DIR=/workspace
+# The CLI's in-container detection keys on /.dockerenv, which the classic
+# builder created inside RUN steps and BuildKit does not. Restore the marker
+# so feature:compile knows it is already inside the product being built and
+# never reaches for a docker daemon mid-build.
+ENV SPLENT_CONTAINER=product
+RUN touch /.dockerenv
 RUN splent feature:pip-install
 
 # Compile frontend assets (if package.json exists)
@@ -68,6 +74,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PIP_ROOT_USER_ACTION=ignore
 ENV SPLENT_APP={{ product_name }}
 ENV WORKING_DIR=/workspace
+ENV SPLENT_CONTAINER=product
 
 # Copy installed Python packages from builder
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages

@@ -17,8 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 def _is_product_container() -> bool:
-    """Return True when running inside the product's web container (not the CLI)."""
-    return os.path.exists("/.dockerenv") and os.getenv("SPLENT_CONTAINER") != "cli"
+    """Return True when running inside the product's web container (not the CLI).
+
+    SPLENT_CONTAINER is the explicit answer when set (the CLI container says
+    "cli", product images say "product"). The /.dockerenv fallback covers
+    containers that predate the variable, but BuildKit does not create that
+    file inside RUN steps, so image builds must set the variable.
+    """
+    container = os.getenv("SPLENT_CONTAINER")
+    if container:
+        return container != "cli"
+    return os.path.exists("/.dockerenv")
 
 
 @click.command(
