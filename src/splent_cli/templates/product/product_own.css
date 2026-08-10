@@ -131,6 +131,7 @@ a:hover {
 }
 
 .sidebar-link {
+    background: transparent !important;
     color: var(--s-sidebar-text) !important;
     font-size: 0.84rem !important;
     font-weight: 500 !important;
@@ -155,6 +156,7 @@ a:hover {
 
 .sidebar-link svg,
 .sidebar-link .align-middle[data-feather] {
+    color: inherit !important;
     width: 17px !important;
     height: 17px !important;
     stroke-width: 1.8 !important;
@@ -163,6 +165,14 @@ a:hover {
 
 .sidebar-link:hover svg {
     opacity: 1;
+}
+
+/* AdminKit paints .sidebar-content its own dark slab, which sat on top of
+   whatever .sidebar was told to be and kept the rail dark no matter what
+   the tokens said. The children follow the same variable as the parent. */
+.sidebar-content,
+.sidebar-brand {
+    background: var(--s-sidebar-bg) !important;
 }
 
 /* ── Topbar ───────────────────────────────────────────────────────────────── */
