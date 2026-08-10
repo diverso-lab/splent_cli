@@ -16,11 +16,11 @@
     --s-text-secondary: #64748b;
     --s-text-muted:   #94a3b8;
 
-    --s-sidebar-bg:   #0f172a;
-    --s-sidebar-hover: rgba(255, 255, 255, 0.06);
-    --s-sidebar-active: rgba(99, 102, 241, 0.15);
-    --s-sidebar-text: #94a3b8;
-    --s-sidebar-text-active: #e2e8f0;
+    --s-sidebar-bg:   #ffffff;
+    --s-sidebar-hover: #f1f5f9;
+    --s-sidebar-active: rgba(99, 102, 241, 0.10);
+    --s-sidebar-text: #334155;
+    --s-sidebar-text-active: #0f172a;
     --s-sidebar-width: 260px;
 
     --s-primary:      #6366f1;
@@ -85,7 +85,7 @@ a:hover {
 
 .sidebar {
     background: var(--s-sidebar-bg) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-right: 1px solid var(--s-border) !important;
     width: var(--s-sidebar-width) !important;
 }
 
@@ -93,12 +93,12 @@ a:hover {
     font-weight: 700 !important;
     font-size: 1rem !important;
     letter-spacing: -0.03em !important;
-    color: #f8fafc !important;
+    color: var(--s-text) !important;
     padding: 1.4rem 1.5rem !important;
     display: flex !important;
     align-items: center !important;
     gap: 0.6rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--s-border);
     text-decoration: none !important;
 }
 
@@ -117,7 +117,7 @@ a:hover {
 }
 
 .sidebar-header {
-    color: var(--s-text-muted) !important;
+    color: var(--s-text-secondary) !important;
     font-size: 0.65rem !important;
     font-weight: 600 !important;
     letter-spacing: 0.08em !important;
@@ -133,7 +133,7 @@ a:hover {
 .sidebar-link {
     color: var(--s-sidebar-text) !important;
     font-size: 0.84rem !important;
-    font-weight: 400 !important;
+    font-weight: 500 !important;
     padding: 0.55rem 0.75rem !important;
     border-radius: var(--s-radius-sm) !important;
     transition: all var(--s-transition) !important;
@@ -149,7 +149,7 @@ a:hover {
 
 .sidebar-item.active > .sidebar-link,
 .sidebar-link.active {
-    color: #fff !important;
+    color: var(--s-primary) !important;
     background: var(--s-sidebar-active) !important;
 }
 
@@ -158,11 +158,78 @@ a:hover {
     width: 17px !important;
     height: 17px !important;
     stroke-width: 1.8 !important;
-    opacity: 0.7;
+    opacity: 1;
 }
 
 .sidebar-link:hover svg {
     opacity: 1;
+}
+
+/* ── Topbar ───────────────────────────────────────────────────────────────── */
+
+.topbar {
+    gap: 0.25rem;
+}
+
+.topbar-site {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: 0.5rem;
+    color: var(--s-text-secondary);
+    font-size: 0.84rem;
+    font-weight: 500;
+    transition: color var(--s-transition);
+}
+
+.topbar-site:hover {
+    color: var(--s-text);
+}
+
+.topbar-site svg {
+    width: 15px;
+    height: 15px;
+}
+
+.topbar-lang {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-right: 0.75rem;
+}
+
+.topbar-lang__opt {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--s-radius-sm);
+    color: var(--s-text-secondary);
+}
+
+.topbar-lang__opt:hover {
+    color: var(--s-text);
+    background: var(--s-surface-hover);
+}
+
+.topbar-lang__opt.is-active {
+    color: var(--s-primary);
+    background: var(--s-primary-soft);
+}
+
+.topbar-user {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.topbar-user svg {
+    width: 16px;
+    height: 16px;
+}
+
+.topbar-user__name {
+    font-size: 0.82rem;
+    font-weight: 500;
 }
 
 /* ── Main Content Area ─────────────────────────────────────────────────── */
@@ -446,8 +513,8 @@ a:hover {
 
 .table-dark thead th,
 .thead-dark th {
-    background: var(--s-sidebar-bg) !important;
-    color: var(--s-sidebar-text-active) !important;
+    background: #0f172a !important;
+    color: #e2e8f0 !important;
     border: none !important;
 }
 
