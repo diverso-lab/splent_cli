@@ -46,8 +46,8 @@ def feature_add(full_name, env_scope):
 
     \b
     Examples:
-      splent feature:add drorganvidez/notepad
-      splent feature:add splent-io/splent_feature_admin --dev
+      splent feature:add splent-io/splent_feature_admin
+      splent feature:add drorganvidez/notepad --dev
     """
 
     if "/" not in full_name:
