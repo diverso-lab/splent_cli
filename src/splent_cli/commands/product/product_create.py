@@ -248,6 +248,7 @@ def make_product(name, spl_name, spl_doi, features_file, force):
         f"src/{name}/static/css/app.css": "product/product_app.css",
         f"src/{name}/static/css/dropzone.css": "product/product_dropzone.css",
         f"src/{name}/static/css/own.css": "product/product_own.css",
+        f"src/{name}/static/favicon.svg": "product/product_favicon.svg",
         f"src/{name}/static/js/app.js": "product/product_app.js",
         f"src/{name}/templates/400.html": "product/product_400.html",
         f"src/{name}/templates/401.html": "product/product_401.html",
