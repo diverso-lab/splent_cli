@@ -69,6 +69,14 @@ def ensure_git_main(path: str, ns_git: str, name: str):
     else:
         _git_check(path, "remote", "add", "origin", remote_url)
 
+    # The cached snapshot was cloned with a tag-only fetch refspec, and that
+    # config survives into the editable copy. Left alone, every later plain
+    # `git fetch` skips the branches, origin/main goes stale, and the release
+    # pipeline refuses to tag. Persist the standard refspec instead.
+    _git_check(
+        path, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"
+    )
+
     _git_check(path, "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*")
 
     r = _git_out(path, "branch", "--list", "main")
