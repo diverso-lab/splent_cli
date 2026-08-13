@@ -3,6 +3,8 @@ import re
 import subprocess
 
 import click
+
+from splent_cli.utils.io_utils import env_line
 import yaml
 from splent_cli.services import compose, context
 from splent_cli.commands.product.product_build import (
@@ -263,7 +265,7 @@ def product_deploy(down, ci):
         for k, v in env_vars.items():
             if k in tunable_keys:
                 f.write(f"{USER_TUNABLE_COMMENT}\n")
-            f.write(f"{k}={v}\n")
+            f.write(env_line(k, v))
 
     # ---------------------------------------------------------
     # Warn about write directories no volume preserves

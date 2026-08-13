@@ -6,7 +6,7 @@ import click
 from splent_cli.services import context, compose
 from splent_cli.services.preflight import run_preflight
 from splent_cli.utils.feature_utils import read_features_from_data
-from splent_cli.utils.io_utils import load_toml
+from splent_cli.utils.io_utils import load_toml, env_line
 from splent_cli.commands.product.product_env import (
     _declared_config,
     _feature_pyproject,
@@ -492,7 +492,7 @@ def product_build(no_image, skip_preflight):
         for k, v in env_result.items():
             if k in tunable_keys:
                 f.write(f"{USER_TUNABLE_COMMENT}\n")
-            f.write(f"{k}={v}\n")
+            f.write(env_line(k, v))
 
     click.echo(f"✅ Created: {env_deploy_path}")
 

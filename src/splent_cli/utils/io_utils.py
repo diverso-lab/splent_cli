@@ -87,3 +87,18 @@ def atomic_write(
         except OSError:
             pass
         raise
+
+
+def env_line(key: str, value: str) -> str:
+    """One ``KEY=value`` line for a generated .env file.
+
+    A value with whitespace or a ``#`` must be quoted or a shell sourcing
+    the file stops right there (``LABEL=Quiénes somos`` runs ``somos`` as a
+    command), while docker compose and python-dotenv both strip matching
+    double quotes. Values without those characters stay bare, so existing
+    files do not churn.
+    """
+    if any(c.isspace() for c in value) or "#" in value:
+        escaped = value.replace('"', '\\"')
+        return f'{key}="{escaped}"\n'
+    return f"{key}={value}\n"

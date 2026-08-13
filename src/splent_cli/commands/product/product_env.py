@@ -5,7 +5,7 @@ import shutil
 import click
 from splent_cli.services import context, compose
 from splent_cli.utils.feature_utils import read_features_from_data
-from splent_cli.utils.io_utils import atomic_write
+from splent_cli.utils.io_utils import atomic_write, env_line
 
 
 def _parse_env_line(line: str):
@@ -414,7 +414,7 @@ def product_env(generate, merge, env_name, process_all):
 
         atomic_write(
             target_env,
-            "".join(f"{k}={v}\n" for k, v in merged.items()),
+            "".join(env_line(k, v) for k, v in merged.items()),
         )
 
         if product_replaced:
