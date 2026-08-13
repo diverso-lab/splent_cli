@@ -250,10 +250,10 @@ def make_product(name, spl_name, spl_doi, features_file, force):
         f"src/{name}/static/css/own.css": "product/product_own.css",
         f"src/{name}/static/favicon.svg": "product/product_favicon.svg",
         f"src/{name}/static/js/app.js": "product/product_app.js",
+        # 400/401 are the framework fallback's lookups; 404/500 come from the
+        # theme (errors/404.html, errors/500.html) so they wear the skin.
         f"src/{name}/templates/400.html": "product/product_400.html",
         f"src/{name}/templates/401.html": "product/product_401.html",
-        f"src/{name}/templates/404.html": "product/product_404.html",
-        f"src/{name}/templates/500.html": "product/product_500.html",
         f"src/{name}/templates/base_template.html": "product/product_base_template.html",
     }
 
