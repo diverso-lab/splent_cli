@@ -41,6 +41,52 @@ def _resolve_feature_order(features_raw: list[str]) -> list[str]:
     return FeatureLoadOrderResolver().resolve(features_raw, uvl_path)
 
 
+def _collect_seeders(module_name):
+    """Import a module and return instances of its BaseSeeder subclasses."""
+    seeder_module = importlib.import_module(module_name)
+    importlib.reload(seeder_module)
+
+    found = []
+    for attr in dir(seeder_module):
+        obj = getattr(seeder_module, attr)
+        if (
+            inspect.isclass(obj)
+            and issubclass(obj, BaseSeeder)
+            and obj is not BaseSeeder
+        ):
+            found.append(obj())
+    return found
+
+
+def _product_seeders(specific_module=None):
+    """Seeders shipped by the PRODUCT package itself (src/<product>/seeders.py).
+
+    Features seed the content every product of the line shares; anything a
+    single product decides for itself (its about page, its own copy) belongs
+    to the product. A product seeder class may declare
+
+        replaces = ("splent_io.splent_feature_about",)
+
+    and the seeders of those feature modules are then skipped entirely, so
+    a product can take over a feature's content without forking the feature.
+    """
+    product = os.getenv("SPLENT_APP", "")
+    if not product:
+        return []
+    if specific_module and not product.endswith(specific_module):
+        return []
+    try:
+        return _collect_seeders(f"{product}.seeders")
+    except ModuleNotFoundError:
+        return []
+    except Exception as e:
+        click.echo(
+            click.style(f"❌ Error loading product seeders: {e}", fg="red"),
+            err=True,
+        )
+        return []
+
+
 def get_installed_seeders(specific_module=None):
     features_raw = get_features_from_pyproject()
     if not features_raw:
@@ -48,6 +94,13 @@ def get_installed_seeders(specific_module=None):
         return []
 
     ordered = _resolve_feature_order(features_raw)
+
+    product_seeders = _product_seeders(specific_module)
+    replaced = tuple(
+        prefix
+        for seeder in product_seeders
+        for prefix in getattr(seeder, "replaces", ())
+    )
 
     seeders = []
     for feature in ordered:
@@ -62,20 +115,17 @@ def get_installed_seeders(specific_module=None):
 
         if specific_module and not base_name.endswith(specific_module):
             continue
+        if replaced and module_name.startswith(replaced):
+            click.echo(
+                click.style(
+                    f"  ↷ {base_name}: seeder replaced by the product",
+                    fg="bright_black",
+                )
+            )
+            continue
 
         try:
-            seeder_module = importlib.import_module(module_name)
-            importlib.reload(seeder_module)
-
-            for attr in dir(seeder_module):
-                obj = getattr(seeder_module, attr)
-                if (
-                    inspect.isclass(obj)
-                    and issubclass(obj, BaseSeeder)
-                    and obj is not BaseSeeder
-                ):
-                    seeders.append(obj())
-
+            seeders.extend(_collect_seeders(module_name))
         except ModuleNotFoundError:
             # feature simply has no seeders.py
             continue
@@ -87,8 +137,9 @@ def get_installed_seeders(specific_module=None):
                 err=True,
             )
 
-    # Order is already topological — no sort needed
-    return seeders
+    # Feature order is already topological; the product seeds last, once the
+    # shared content it builds on is in place.
+    return seeders + product_seeders
 
 
 def _truncate_data():
