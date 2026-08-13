@@ -28,12 +28,19 @@ def runner():
 
 
 def read_env(workspace):
-    """The generated .env, as a dict."""
+    """The generated .env, as a dict.
+
+    Strips matching double quotes the way every real consumer (shell,
+    docker compose, python-dotenv) does, since the writer quotes values
+    that contain whitespace.
+    """
     text = (workspace / "test_app" / "docker" / ".env").read_text()
     out = {}
     for line in text.splitlines():
         if "=" in line and not line.startswith("#"):
             key, value = line.split("=", 1)
+            if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+                value = value[1:-1].replace('\\"', '"')
             out[key] = value
     return out
 
