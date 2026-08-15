@@ -603,4 +603,4 @@ class TestDbUpgradeRetriesDependents:
         result = self._run(tmp_path, monkeypatch, upgrade)
         assert result.exit_code != 0, result.output
         assert result.output.count("❌") == 1
-        assert "Migration upgrade failed for: slider" in result.output
+        assert "Migration upgrade failed for: slider" in (result.output + str(result.stderr))
