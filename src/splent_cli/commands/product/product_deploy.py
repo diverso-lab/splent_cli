@@ -508,7 +508,7 @@ def product_deploy(down, ci):
                     "  deployed but app may not be healthy. Check logs with:",
                     fg="yellow",
                 )
-                click.echo(f"    docker logs {product}_web")
+                click.echo(f"    docker logs {product}_web_deploy")
         else:
             click.secho("  done.", fg="green")
     except subprocess.CalledProcessError as e:
