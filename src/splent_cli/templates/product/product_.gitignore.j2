@@ -48,8 +48,12 @@ src/instance/
 # Node.js dependencies
 node_modules/
 
-# Features symlinks
-features
+# Feature symlinks at the product root, filled by product:resolve. Anchored,
+# because docker/features/ is a deploy artifact (product:build copies the
+# Dockerfiles and templates of features that build their own image there)
+# and a host that clones the product has to find it, or docker compose
+# cannot build those images.
+/features
 
 # Per-machine lifecycle state, written by the CLI: it records when each
 # feature was installed and migrated ON THIS MACHINE. Sharing it between
