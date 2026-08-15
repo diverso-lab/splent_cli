@@ -14,6 +14,29 @@ from splent_cli.commands.product.product_build import (
 )
 from splent_cli.utils.proc import require_docker
 
+
+# Suffixes that mark a value nobody has to choose: a random string is the
+# right answer. TURNSTILE_SITE_KEY and friends end in _KEY too, but they are
+# issued by a third party, so only the generic secret words qualify.
+_GENERATED_SUFFIXES = ("_PASSWORD", "_SECRET", "_ROOT_PASSWORD")
+_DATABASE_DEFAULTS = {
+    "MARIADB_DATABASE": "{product}_db",
+    "MARIADB_USER": "{product}_db_user",
+    "MARIADB_TEST_DATABASE": "{product}_db_test",
+}
+
+
+def suggest_value(key: str, product: str) -> str | None:
+    """A default for a ``<SET>`` variable, or None when only the operator
+    knows the answer."""
+    import secrets
+
+    if key in _DATABASE_DEFAULTS:
+        return _DATABASE_DEFAULTS[key].format(product=product)
+    if key == "SECRET_KEY" or key.endswith(_GENERATED_SUFFIXES):
+        return secrets.token_urlsafe(24)
+    return None
+
 # Env vars whose value is a directory the running app writes to. Their contents
 # only survive a redeploy if a volume in the compose file mounts that exact
 # path, so product:deploy warns when one is set without a matching mount.
@@ -257,8 +280,18 @@ def product_deploy(down, ci):
                 else:
                     missing_vars.append(key)
             else:
+                # Offer an answer wherever one can be made up, so the ordinary
+                # deploy is Enter, Enter, Enter: random strings for anything
+                # that smells like a secret, the product's conventional names
+                # for the database. What only the operator knows (a mail
+                # host, a proxy address, an API key issued elsewhere) is
+                # asked without a default.
+                suggested = suggest_value(key, product)
                 new_value = click.prompt(
-                    f"  Value required for {key}", hide_input=False
+                    f"  Value required for {key}",
+                    default=suggested,
+                    show_default=suggested is not None,
+                    hide_input=False,
                 )
                 env_vars[key] = new_value
 

@@ -461,3 +461,28 @@ class TestPersistenceDirWarning:
 
         assert result.exit_code == 0
         assert "lost on every redeploy" not in result.output
+
+
+class TestSuggestedValues:
+    """product:deploy offers an answer for every <SET> it can make up, so the
+    ordinary deploy is Enter, Enter, Enter."""
+
+    def test_database_names_follow_the_product(self):
+        from splent_cli.commands.product.product_deploy import suggest_value
+
+        assert suggest_value("MARIADB_DATABASE", "my_app") == "my_app_db"
+        assert suggest_value("MARIADB_USER", "my_app") == "my_app_db_user"
+
+    def test_secrets_are_random_and_fresh_each_time(self):
+        from splent_cli.commands.product.product_deploy import suggest_value
+
+        first = suggest_value("MARIADB_PASSWORD", "my_app")
+        second = suggest_value("MARIADB_ROOT_PASSWORD", "my_app")
+        assert first and second and first != second
+        assert len(first) >= 24
+
+    def test_operator_knowledge_has_no_default(self):
+        from splent_cli.commands.product.product_deploy import suggest_value
+
+        for key in ("MAIL_HOST", "NGINX_TRUSTED_PROXY_CIDRS", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"):
+            assert suggest_value(key, "my_app") is None
