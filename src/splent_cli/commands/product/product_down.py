@@ -3,6 +3,7 @@ import subprocess
 import click
 import tomllib
 from splent_cli.services import compose, context
+from splent_cli.commands.product.product_build import host_docker_dir_env
 from splent_cli.utils.feature_utils import read_features_from_data
 
 
@@ -69,7 +70,12 @@ def product_down(dev, prod, v):
         args = ["docker", "compose", "-f", deploy_compose, "down"]
         if remove_volumes:
             args += ["-v"]
-        subprocess.run(args, check=False, cwd=docker_dir)
+        subprocess.run(
+            args,
+            check=False,
+            cwd=docker_dir,
+            env={**os.environ, **host_docker_dir_env(workspace, product)},
+        )
         click.secho("🛑 Production deployment stopped.", fg="green")
         return
 

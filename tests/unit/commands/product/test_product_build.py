@@ -15,6 +15,7 @@ from splent_cli.commands.product.product_build import (
     merge_env_dicts,
     load_compose_file,
     merge_compose,
+    host_docker_dir_env,
 )
 
 
@@ -103,6 +104,43 @@ class TestMergeCompose:
         assert "vol1" in result["volumes"]
         assert "vol2" in result["volumes"]
 
+    def test_deploy_bind_mounts_are_portable(self):
+        """The deploy compose is versioned and cloned onto hosts that only
+        have git and docker, so a feature bind mount must not carry the
+        absolute path of the machine that built it. It is addressed through
+        SPLENT_HOST_DOCKER_DIR, defaulting to the compose file's directory."""
+        override = {
+            "services": {
+                "splent_feature_nginx": {
+                    "image": "nginx",
+                    "volumes": [
+                        "letsencrypt:/etc/letsencrypt:ro",
+                        "${NGINX_FEATURE_HOST_DIR}/docker/nginx/locations:/etc/nginx/conf.d/locations:ro",
+                    ],
+                }
+            }
+        }
+        result = merge_compose({}, override, rewrite_mounts=True)
+        vols = result["services"]["splent_feature_nginx"]["volumes"]
+        assert vols[0] == "letsencrypt:/etc/letsencrypt:ro"
+        assert vols[1] == (
+            "${SPLENT_HOST_DOCKER_DIR:-.}/features/splent_feature_nginx"
+            "/nginx/locations:/etc/nginx/conf.d/locations:ro"
+        )
+        assert "/Users/" not in vols[1] and "/home/" not in vols[1]
+
+
+class TestHostDockerDirEnv:
+    def test_unset_outside_the_cli_container(self, monkeypatch):
+        monkeypatch.delenv("SPLENT_HOST_PROJECT_DIR", raising=False)
+        assert host_docker_dir_env("/workspace", "my_app") == {}
+
+    def test_host_path_inside_the_cli_container(self, monkeypatch):
+        monkeypatch.setenv("SPLENT_HOST_PROJECT_DIR", "/Users/dev/splent_workspace")
+        assert host_docker_dir_env("/workspace", "my_app") == {
+            "SPLENT_HOST_DOCKER_DIR": "/Users/dev/splent_workspace/my_app/docker"
+        }
+
 
 # ---------------------------------------------------------------------------
 # Integration: full CLI command
@@ -184,6 +222,28 @@ class TestProductBuildCommand:
         assert result.exit_code == 0
         content = (docker_dir / ".env.deploy.example").read_text()
         assert "AUTH_SECRET=abc" in content
+
+    def test_web_placeholder_names_the_prod_container(self, runner, product_workspace):
+        """A feature that talks to the product's web server writes
+        __PRODUCT___web, which is the dev container. In production the web
+        container is <product>_web_deploy, and dev and prod share the product
+        network, so the deploy env must name the prod container or nginx
+        starts against an upstream that does not resolve."""
+        docker_dir = self._product_with_feature(
+            product_workspace,
+            product_value="",
+            feature_value=(
+                "NGINX_UPSTREAM_HOST=__PRODUCT___web\n"
+                "NGINX_SERVER_NAME=__PRODUCT__.local\n"
+            ),
+        )
+
+        result = runner.invoke(product_build, ["--skip-preflight"], input="y\n")
+
+        assert result.exit_code == 0
+        content = (docker_dir / ".env.deploy.example").read_text()
+        assert "NGINX_UPSTREAM_HOST=test_app_web_deploy" in content
+        assert "NGINX_SERVER_NAME=test_app.local" in content
 
     def _product_with_feature(self, workspace, product_value, feature_value):
         """A product that sets a key the feature also declares."""

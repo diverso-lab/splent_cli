@@ -99,13 +99,34 @@ def load_compose_file(path):
     return _load_yaml_file(path)
 
 
+# Interpolation variable the deploy compose uses to locate the product's
+# docker/ directory on the docker host. Unset means "next to the compose
+# file", the ordinary case on a production host.
+HOST_DOCKER_DIR_VAR = "SPLENT_HOST_DOCKER_DIR"
+
+
+def host_docker_dir_env(workspace: str, product: str) -> dict:
+    """Environment for running the deploy compose from the CLI container.
+
+    Inside the container the compose file sits under /workspace/<product>/docker
+    but the daemon binds host paths, so relative mounts would point at a
+    directory the host does not have. SPLENT_HOST_PROJECT_DIR (the workspace
+    path on the host) is what makes them resolvable; when it is not set the
+    caller is not in the container and the compose file's own directory is the
+    right answer, so nothing is exported.
+    """
+    host_project_dir = os.getenv("SPLENT_HOST_PROJECT_DIR")
+    if not host_project_dir:
+        return {}
+    return {HOST_DOCKER_DIR_VAR: os.path.join(host_project_dir, product, "docker")}
+
+
 def merge_compose(
     base,
     override,
     label="",
     build_services=None,
     rewrite_mounts=False,
-    product_host_docker_dir="",
 ):
     """Merge two docker-compose YAML dicts. Reports conflicts via warnings.
 
@@ -113,8 +134,16 @@ def merge_compose(
     copied Dockerfile in the product's docker/features/ directory.
 
     When ``rewrite_mounts`` is True (deploy builds), bind mounts that
-    reference ``${*FEATURE_HOST_DIR}`` are rewritten to use the host-side
-    absolute path to the product's docker/features/ directory.
+    reference ``${*FEATURE_HOST_DIR}`` are rewritten to the copy under the
+    product's docker/features/ directory, addressed as
+    ``${SPLENT_HOST_DOCKER_DIR:-.}/features/...``. The artifact is versioned
+    and cloned onto hosts that have nothing but git and docker, so it must
+    not carry the absolute path of the machine that built it: with the
+    variable unset Compose resolves ``.`` against the compose file, which is
+    right on any host that runs Compose natively. Only ``product:deploy``
+    from inside the CLI container sets SPLENT_HOST_DOCKER_DIR, because there
+    the compose file lives at /workspace/... while the daemon mounts host
+    paths (see ``host_docker_dir_env``).
     """
     if build_services is None:
         build_services = set()
@@ -165,12 +194,9 @@ def merge_compose(
                                     if "/" in host_path
                                     else host_path
                                 )
-                            if product_host_docker_dir:
-                                new_vols.append(
-                                    f"{product_host_docker_dir}/features/{svc}/{relative}{rest}"
-                                )
-                            else:
-                                new_vols.append(f"./features/{svc}/{relative}{rest}")
+                            new_vols.append(
+                                f"${{{HOST_DOCKER_DIR_VAR}:-.}}/features/{svc}/{relative}{rest}"
+                            )
                         else:
                             new_vols.append(vol)
                     svc_def["volumes"] = new_vols
@@ -460,10 +486,17 @@ def product_build(no_image, skip_preflight):
     env_result = merge_env_dicts(feature_defaults, _declared_config(pyproject_path))
     env_result = merge_env_dicts(env_result, product_env)
 
-    # Resolve __PRODUCT__ placeholder
+    # Resolve the product placeholders. A feature that talks to the product's
+    # web server writes ``__PRODUCT___web`` (the dev container is
+    # ``<product>_web``), but the production container is named
+    # ``<product>_web_deploy`` by the prod compose template, and dev and prod
+    # share the product network, so the prod service cannot simply take the
+    # dev name as an alias. The CLI owns both names, so it owns the mapping.
     for k, v in env_result.items():
         if "__PRODUCT__" in v:
-            env_result[k] = v.replace("__PRODUCT__", product)
+            env_result[k] = v.replace(
+                "__PRODUCT___web", f"{product}_web_deploy"
+            ).replace("__PRODUCT__", product)
 
     # Remove __FEATURE_HOST_DIR__ variables — not needed in prod
     # (templates are baked into Docker images, no bind mounts)
@@ -529,9 +562,6 @@ def product_build(no_image, skip_preflight):
 
     compose_result = load_compose_file(product_compose_file)
 
-    host_project_dir = os.getenv("SPLENT_HOST_PROJECT_DIR", workspace)
-    product_host_docker_dir = os.path.join(host_project_dir, product, "docker")
-
     seen_compose: set[str] = set()
     for feat in declared_features:
         clean = compose.normalize_feature_ref(feat)
@@ -557,7 +587,6 @@ def product_build(no_image, skip_preflight):
             label=label,
             build_services=build_services,
             rewrite_mounts=True,
-            product_host_docker_dir=product_host_docker_dir,
         )
 
     # Check for port conflicts in merged result
@@ -581,7 +610,7 @@ def product_build(no_image, skip_preflight):
     # Inject .env.deploy volume mount into the web service so the
     # entrypoint can sync deploy vars over the baked dev .env.
     env_deploy_mount = (
-        f"{host_project_dir}/{product}/docker/.env.deploy"
+        f"${{{HOST_DOCKER_DIR_VAR}:-.}}/.env.deploy"
         f":/workspace/{product}/docker/.env.deploy:ro"
     )
     for svc_name, svc_def in compose_result.get("services", {}).items():

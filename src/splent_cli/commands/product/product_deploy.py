@@ -9,6 +9,7 @@ import yaml
 from splent_cli.services import compose, context
 from splent_cli.commands.product.product_build import (
     USER_TUNABLE_COMMENT,
+    host_docker_dir_env,
     load_env_file_with_markers,
 )
 from splent_cli.utils.proc import require_docker
@@ -105,7 +106,8 @@ def product_deploy(down, ci):
     Use --down to stop a running deployment.
     """
     product = context.require_app()
-    product_path = str(context.workspace() / product)
+    workspace = str(context.workspace())
+    product_path = os.path.join(workspace, product)
     docker_dir = os.path.join(product_path, "docker")
 
     compose_path = os.path.join(docker_dir, "docker-compose.deploy.yml")
@@ -136,6 +138,7 @@ def product_deploy(down, ci):
                 check=True,
                 capture_output=True,
                 cwd=docker_dir,
+                env={**os.environ, **host_docker_dir_env(workspace, product)},
             )
             click.secho("  done.", fg="green")
         except subprocess.CalledProcessError:
@@ -236,6 +239,17 @@ def product_deploy(down, ci):
     missing_vars = []
     for key, value in env_vars.items():
         if value.strip() == "<SET>":
+            if key == "SECRET_KEY":
+                # Nobody should have to invent this one; a random value is
+                # the right answer every time, and it stays put on redeploys
+                # because a filled-in key is never asked for again.
+                import secrets
+
+                env_vars[key] = secrets.token_urlsafe(48)
+                click.echo(
+                    click.style("  secret   ", dim=True) + "SECRET_KEY generated"
+                )
+                continue
             if ci:
                 env_value = os.getenv(key)
                 if env_value:
@@ -374,6 +388,11 @@ def product_deploy(down, ci):
             capture_output=True,
             text=True,
             cwd=docker_dir,
+            # The deploy compose addresses its bind mounts through
+            # SPLENT_HOST_DOCKER_DIR. From inside the CLI container that has
+            # to be the host path of <product>/docker; on a plain host it
+            # stays unset and Compose resolves them next to the compose file.
+            env={**os.environ, **host_docker_dir_env(workspace, product)},
         )
 
         # Show access URL
