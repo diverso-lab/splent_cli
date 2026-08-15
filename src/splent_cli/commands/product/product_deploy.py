@@ -37,6 +37,7 @@ def suggest_value(key: str, product: str) -> str | None:
         return secrets.token_urlsafe(24)
     return None
 
+
 # Env vars whose value is a directory the running app writes to. Their contents
 # only survive a redeploy if a volume in the compose file mounts that exact
 # path, so product:deploy warns when one is set without a matching mount.

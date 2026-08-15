@@ -484,5 +484,10 @@ class TestSuggestedValues:
     def test_operator_knowledge_has_no_default(self):
         from splent_cli.commands.product.product_deploy import suggest_value
 
-        for key in ("MAIL_HOST", "NGINX_TRUSTED_PROXY_CIDRS", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"):
+        for key in (
+            "MAIL_HOST",
+            "NGINX_TRUSTED_PROXY_CIDRS",
+            "TURNSTILE_SITE_KEY",
+            "TURNSTILE_SECRET_KEY",
+        ):
             assert suggest_value(key, "my_app") is None
