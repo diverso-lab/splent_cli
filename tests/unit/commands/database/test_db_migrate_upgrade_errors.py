@@ -534,3 +534,73 @@ class TestDbUpgradeOutOfSync:
 
         assert result.exit_code != 0
         assert "Target database is not up to date" in result.output
+
+
+class TestDbUpgradeRetriesDependents:
+    """A branch that creates a foreign key onto another feature's table fails
+    on a fresh database when it runs first (slider before media). Whatever
+    failed is retried once the rest has migrated, and only a failure that
+    survives a pass with no progress is reported."""
+
+    def _run(self, tmp_path, monkeypatch, upgrade_side_effect):
+        monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+        monkeypatch.setenv("SPLENT_APP", "test_app")
+        dirs = {
+            "slider": _make_versions_dir(tmp_path, "slider"),
+            "media": _make_versions_dir(tmp_path, "media"),
+        }
+        fake_app = MagicMock()
+        with (
+            patch("splent_cli.commands.database.db_upgrade.current_app", fake_app),
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.get_all_feature_migration_dirs",
+                return_value=dirs,
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.get_features_from_pyproject",
+                return_value=[],
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade.alembic_upgrade",
+                side_effect=upgrade_side_effect,
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.get_current_feature_revision",
+                return_value="head1",
+            ),
+            patch(
+                "splent_cli.commands.database.db_upgrade."
+                "MigrationManager.update_feature_status",
+                return_value=None,
+            ),
+        ):
+            return CliRunner(mix_stderr=False).invoke(db_upgrade, [])
+
+    def test_dependent_succeeds_on_the_second_pass(self, tmp_path, monkeypatch):
+        migrated = set()
+
+        def upgrade(directory):
+            feature = os.path.basename(os.path.dirname(directory))
+            if feature == "slider" and "media" not in migrated:
+                raise RuntimeError("Foreign key constraint is incorrectly formed")
+            migrated.add(feature)
+
+        result = self._run(tmp_path, monkeypatch, upgrade)
+        assert result.exit_code == 0, result.output
+        assert "retrying slider" in result.output
+        assert "slider -> head1" in result.output
+        assert "Foreign key" not in result.output
+
+    def test_a_failure_that_never_recovers_is_reported_once(
+        self, tmp_path, monkeypatch
+    ):
+        def upgrade(directory):
+            if os.path.basename(os.path.dirname(directory)) == "slider":
+                raise RuntimeError("Foreign key constraint is incorrectly formed")
+
+        result = self._run(tmp_path, monkeypatch, upgrade)
+        assert result.exit_code != 0, result.output
+        assert result.output.count("❌") == 1
+        assert "Migration upgrade failed for: slider" in result.output

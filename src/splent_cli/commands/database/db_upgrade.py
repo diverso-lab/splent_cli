@@ -168,8 +168,9 @@ def db_upgrade(feature):
     logging.getLogger("alembic").setLevel(logging.WARNING)
     logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
 
-    failures = []
-    for feat, mdir in dirs.items():
+    def _upgrade_one(feat: str, mdir: str) -> str | None:
+        """Run one feature's upgrade. Returns None on success, else the
+        message that explains the failure (printed only when final)."""
         try:
             logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
             with _collect_alembic_errors() as logged:
@@ -179,16 +180,9 @@ def db_upgrade(feature):
                     # flask_migrate swallows alembic's CommandError and calls
                     # sys.exit(1), so catching the exit is the only way to say
                     # anything at all instead of failing in silence.
-                    click.echo(
-                        click.style(
-                            _diagnose_upgrade_failure(
-                                app, feat, mdir, "; ".join(logged) or None
-                            ),
-                            fg="red",
-                        )
+                    return _diagnose_upgrade_failure(
+                        app, feat, mdir, "; ".join(logged) or None
                     )
-                    failures.append(feat)
-                    continue
             revision = MigrationManager.get_current_feature_revision(
                 feat, app.extensions["migrate"].db.engine
             )
@@ -208,17 +202,42 @@ def db_upgrade(feature):
                     name=name,
                     version=version,
                 )
+            return None
         except ImportError as e:
             if "models" in str(e):
                 # Feature has migrations/ dir but no models module — skip silently
-                continue
-            click.echo(click.style(f"  ❌ {feat}: {e}", fg="red"))
-            failures.append(feat)
+                return None
+            return f"  ❌ {feat}: {e}"
         except Exception as e:
-            click.echo(
-                click.style(_diagnose_upgrade_failure(app, feat, mdir, e), fg="red")
+            return _diagnose_upgrade_failure(app, feat, mdir, e)
+
+    # Features migrate one Alembic branch each, and a branch may create a
+    # foreign key onto a table another feature's branch creates (slider and
+    # partners reference media_item). The declaration order in pyproject is
+    # not a dependency order, so on a fresh database the first pass can fail
+    # for the dependents and succeed for their dependencies. Whatever failed
+    # is retried while a pass still makes progress; only what fails when
+    # nothing else can move is reported.
+    pending = dict(dirs)
+    failures: dict[str, str] = {}
+    while pending:
+        failures = {}
+        for feat, mdir in pending.items():
+            message = _upgrade_one(feat, mdir)
+            if message is not None:
+                failures[feat] = message
+        if not failures or len(failures) == len(pending):
+            break
+        click.echo(
+            click.style(
+                f"    retrying {', '.join(failures)} now that the rest has migrated",
+                dim=True,
             )
-            failures.append(feat)
+        )
+        pending = {feat: dirs[feat] for feat in failures}
+
+    for message in failures.values():
+        click.echo(click.style(message, fg="red"))
 
     if failures:
         raise click.ClickException(
