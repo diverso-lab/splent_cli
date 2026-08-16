@@ -138,7 +138,12 @@ def _extract_templates(src_dir: Path) -> list[str]:
 
 
 def _extract_template_hook_slots(src_dir: Path) -> list[str]:
-    """Extract hook slot names declared in templates via get_template_hooks(...)."""
+    """Extract hook slot names declared in templates.
+
+    A template opens a slot either by iterating ``get_template_hooks(name)``
+    or by asking for the joined output with ``render_template_hooks(name)``
+    (the form used when the template keeps a fallback for an empty slot).
+    """
     templates_dir = src_dir / "templates"
     if not templates_dir.exists():
         return []
@@ -146,7 +151,9 @@ def _extract_template_hook_slots(src_dir: Path) -> list[str]:
     for html_file in templates_dir.rglob("*.html"):
         text = html_file.read_text()
         slots.update(
-            re.findall(r"""get_template_hooks\s*\(\s*['"]([^'"]+)['"]""", text)
+            re.findall(
+                r"""(?:get|render)_template_hooks\s*\(\s*['"]([^'"]+)['"]""", text
+            )
         )
     return sorted(slots)
 
